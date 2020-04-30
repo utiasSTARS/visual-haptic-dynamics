@@ -13,7 +13,7 @@ class ImgCached(data.Dataset):
        (image, action) or (image, action, gtstate). 
        Images assumed to be of shape (n, t, w, h, c).
     """
-    def __init__(self, dir, loader=pickle_loader, transform=None, img_shape=(64,64,3)):
+    def __init__(self, dir, loader=pickle_loader, transform=None, img_shape=(1,64,64)):
         """
         Args:
             dir (string): Directory of the cache.
@@ -37,10 +37,10 @@ class ImgCached(data.Dataset):
         t = cached_data_raw.shape[1]
         c = cached_data_raw.shape[4]
 
-        cached_data_raw = cached_data_raw.reshape(n, t, img_shape[0], img_shape[1], c)
+        cached_data_raw = cached_data_raw.reshape(n, t, img_shape[1], img_shape[2], c)
         cached_data_raw = np.moveaxis(cached_data_raw, -1, 2)
 
-        self.cached_data = torch.zeros(n, t, img.shape[2], img_shape[0], img_shape[1])
+        self.cached_data = torch.zeros(n, t, img.shape[0], img_shape[1], img_shape[2])
         for ii in range(n):
             for tt in range(t):
                 self.cached_data[ii, tt, :, :, :] = transform(cached_data_raw[ii, tt, :, :, :])

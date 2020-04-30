@@ -11,7 +11,7 @@ import time
 class FullyConvEncoderVAE(nn.Module):
     def __init__(self, input=1, latent_size=12, bn=True, 
                  drop=False, nl=nn.ReLU(), stochastic=True, img_dim="64"):
-        super(FullyConvEncoderVAE, self).__init__()    
+        super(FullyConvEncoderVAE, self).__init__()
         self.stochastic = stochastic
         self.layers = nn.ModuleList()
         self.latent_size = latent_size
@@ -225,8 +225,8 @@ class LinearMixRNN(nn.Module):
         bidirectional: Use bidirectional version
         net_type: Use the LSTM or GRU variation
     """
-    def __init__(self, input_size, dim_z, dim_u, 
-                 hidden_size=128, K=1, layers=1, bidirectional=False, net_type="lstm"):
+    def __init__(self, input_size, dim_z, dim_u, hidden_size=128, 
+                 K=1, layers=1, bidirectional=False, net_type="lstm"):
         super(LinearMixRNN, self).__init__()
         self.K = K
         self.dim_z = dim_z
@@ -283,6 +283,12 @@ class LinearMixRNN(nn.Module):
         B_t = B_t.reshape(-1, self.dim_z, self.dim_u) # (l*bs, dim_z, dim_u)
 
         z_t1 = torch.bmm(A_t, z.reshape(-1, self.dim_z).unsqueeze(-1)) + torch.bmm(B_t, u.reshape(-1, self.dim_u).unsqueeze(-1))
-        z_t1 = z_t1.squeeze(-1).reshape(L, N, dim_z)
+        z_t1 = z_t1.squeeze(-1).reshape(L, N, d)
         return z_t1, h
-        
+
+
+class LinearRNN(nn.module):
+    pass
+
+class NonLinearRNN(nn.module):
+    pass

@@ -4,7 +4,17 @@ General util methods used.
 import torch
 import torch.nn as nn
 import torch.nn.init as init
+import torch
+import numpy as np
+import random
 
+def set_seed_torch(seed):
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed) 
+    random.seed(seed)
+        
 def to_img(x, shape):
     assert len(shape) == 2
     sig = nn.Sigmoid()
