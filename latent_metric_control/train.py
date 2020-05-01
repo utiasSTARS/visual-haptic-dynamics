@@ -20,7 +20,7 @@ from models import (FullyConvEncoderVAE,
                     LinearMixRNN)
 from datasets import ImgCached
 
-def loop(args):
+def train(args):
     assert 0 <= args.opt_vae_epochs <= args.opt_vae_base_epochs <= args.n_epoch
     device = torch.device(args.device)
     torch.backends.cudnn.deterministic = args.cudnn_deterministic
@@ -205,15 +205,20 @@ def loop(args):
             u = data['actions'].float().to(device=device)[:, (s_idx + 1):e_idx]
 
             # Encode & Decode sample
-            z, z_mu, z_logvar = enc(x)
-            x_hat = dec(z)
-            loss_rec = loss_REC(x_hat, x)
-            loss_rec = loss_rec.view(n, l, -1).sum(-1)
+            z_t, z_mu_t, z_logvar_t = enc(x)
+            x_hat = dec(z_t)
+            #TODO: Check z_t/z_mu_t/z_logvar_t shape here... (n*l, dim_z)?
+            loss_rec = torch.sum(loss_REC(x_hat, x))
 
             # Dynamics loss with KL
-            z = z.reshape(n, l, args.dim_z)
-            
+            z_var_t = torch.diag_embed(torch.exp(z_logvar_t))
+            z_t1, z_mu_t1, z_var_t1, _ = dyn(z_t=z_t, mu_t=z_mu_t, var_t=z_var_t)
 
+            #TODO: Calculate KL analytically between N(z_mu_t, z_logvar_t) and N(z_mu_t1, z_logvar_t1) 
+            # (seq_len * batch_size, dim_z), (seq_len * batch_size, dim_z, dim_z)
+
+            #TODO: Reward prediction
+            
             total_loss = (args.lam_rec * loss_rec + 
                           args.lam_kl * loss_KL) / n
 
@@ -292,7 +297,7 @@ def loop(args):
 
 def main():
     args = parse_training_args()
-    loop(args)
+    train(args)
 
 if __name__ == "__main__":
     main()
