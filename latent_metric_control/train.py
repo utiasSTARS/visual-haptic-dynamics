@@ -205,14 +205,17 @@ def loop(args):
             u = data['actions'].float().to(device=device)[:, (s_idx + 1):e_idx]
 
             # Encode & Decode sample
-            z, _, _ = enc(x)
+            z, z_mu, z_logvar = enc(x)
             x_hat = dec(z)
+            loss_rec = loss_REC(x_hat, x)
+            loss_rec = loss_rec.view(n, l, -1).sum(-1)
 
+            # Dynamics loss with KL
             z = z.reshape(n, l, args.dim_z)
+            
 
-            #TODO: Forward loss w/ analytical KL
             total_loss = (args.lam_rec * loss_rec + 
-                            annealing_factor_beta * args.lam_kl * loss_KL) / N
+                          args.lam_kl * loss_KL) / n
 
             avg_l.append((loss_rec.item() + loss_KL.item()) / N)
 
