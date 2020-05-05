@@ -1,4 +1,4 @@
-from utils import (set_seed_torch, common_init_weights)
+from utils import (set_seed_torch, common_init_weights, Normalize)
 set_seed_torch(3)
 def _init_fn(worker_id):
     np.random.seed(int(3))
@@ -12,6 +12,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
+from torchvision import transforms
 
 from models import (FullyConvEncoderVAE,
                     FullyConvDecoderVAE,
@@ -19,6 +20,7 @@ from models import (FullyConvEncoderVAE,
                     FCNDecoderVAE,
                     LinearMixRNN)
 from datasets import ImgCached
+from losses import kl
 
 def train(args):
     assert 0 <= args.opt_vae_epochs <= args.opt_vae_base_epochs <= args.n_epoch
@@ -84,14 +86,13 @@ def train(args):
                                     output_nl=output_nl).to(device=device)
 
     # Dynamics network
-    dyn = LinearMixRNN(input_size=args.dim_alpha,
-                        dim_z=args.dim_z,
-                        dim_u=args.dim_u
+    dyn = LinearMixRNN(dim_z=args.dim_z,
+                        dim_u=args.dim_u,
                         hidden_size=args.rnn_hidden_size,
                         bidirectional=args.use_bidirectional,
                         net_type=args.rnn_net,
                         K=args.K)
-    base_matrices_param = [dyn.A, dyn.B, dyn.C]
+    base_matrices_params = [dyn.A, dyn.B]
 
     if args.opt == "adam":
         opt_vae = torch.optim.Adam(list(enc.parameters()) + 
@@ -99,7 +100,7 @@ def train(args):
                                    lr=args.lr)
         opt_vae_base = torch.optim.Adam(list(enc.parameters()) + 
                                         list(dec.parameters()) + 
-                                        base_matrices_param, 
+                                        base_matrices_params, 
                                         lr=args.lr)
         opt_all = torch.optim.Adam(list(enc.parameters()) + 
                                    list(dec.parameters()) +
@@ -114,7 +115,7 @@ def train(args):
                                   nesterov=True)
         opt_vae_base = torch.optim.SGD(list(enc.parameters()) + 
                                      list(dec.parameters()) + 
-                                     base_matrices_param,
+                                     base_matrices_params,
                                      lr=args.lr, 
                                      momentum=0.9, 
                                      nesterov=True)
@@ -131,9 +132,7 @@ def train(args):
     if args.weight_init == 'custom':
         enc.apply(common_init_weights)
         dec.apply(common_init_weights)
-        lgssm.apply(common_init_weights)
-        if args.measurement_uncertainty == 'feature': 
-            R_net.apply(common_init_weights)
+        dyn.apply(common_init_weights)
     
     # Loss functions
     if args.use_binary_ce:
@@ -154,22 +153,22 @@ def train(args):
     # Dataset
     ds = ImgCached(args.dataset,
                    transform=transform,
-                   img_shape=args_dim_x)
+                   img_shape=args.dim_x)
     ds_size = len(ds)
     idx = list(range(ds_size))
     split = int(np.floor(args.val_split * ds_size))
     train_idx, val_idx = idx[split:], idx[:split]
-    train_spler = SubsetRandomSampler(train_idx)
-    valid_spler = SubsetRandomSampler(val_idx)
+    train_sampler = SubsetRandomSampler(train_idx)
+    valid_sampler = SubsetRandomSampler(val_idx)
     train_loader = DataLoader(ds,
                               batch_size=args.n_batch,
                               num_workers=args.n_worker,
-                              sampler=train_spler,
+                              sampler=train_sampler,
                               worker_init_fn=_init_fn)
     val_loader = DataLoader(ds,
                             batch_size=args.n_batch,
                             num_workers=args.n_worker,
-                            sampler=valid_spler,
+                            sampler=valid_sampler,
                             worker_init_fn=_init_fn)
 
     def opt_iter(epoch, opt=None):
@@ -193,45 +192,54 @@ def train(args):
             # Load and shape trajectory data
             # XXX: all trajectories have same length
             x_full = data['images'].float().to(device=device)
-            # Sample random range of traj_len
-            s_idx = np.random.randint(x_full.shape[1] - args.traj_len + 1)
-            e_idx = s_idx + args.traj_len
-            x = x_full[:, s_idx:(e_idx - 1)]
-            x_dim = x.shape
-            n = x_dim[0]
-            l = x_dim[1]
-            # Reshape to (n * l, 1, height, width)
-            x = x.reshape(n * l, *x_dim[2:])
-            u = data['actions'].float().to(device=device)[:, (s_idx + 1):e_idx]
+            start_idx = np.random.randint(x_full.shape[1] - args.traj_len + 1) # sample random range of traj_len
+            end_idx = start_idx + args.traj_len
+            x = x_full[:, start_idx:end_idx]
+            n = x.shape[0]
+            l = x.shape[1]
+            x = x.reshape(n * l, *x.shape[2:]) # reshape to (n * l, 1, height, width)
+            u = data['actions'][:, start_idx:end_idx].float().to(device=device)
 
-            # Encode & Decode sample
-            z_t, z_mu_t, z_logvar_t = enc(x)
-            x_hat = dec(z_t)
-            #TODO: Check z_t/z_mu_t/z_logvar_t shape here... (n*l, dim_z)?
+            # Encode & Decode all samples
+            z, z_mu, z_logvar = enc(x)
+            x_hat = dec(z)
             loss_rec = torch.sum(loss_REC(x_hat, x))
 
-            # Dynamics loss with KL
-            z_var_t = torch.diag_embed(torch.exp(z_logvar_t))
-            z_t1, z_mu_t1, z_var_t1, _ = dyn(z_t=z_t, mu_t=z_mu_t, var_t=z_var_t)
+            # Dynamics constraint with KL
+            z = z.reshape(n, l, *z.shape[1:])
+            z_mu = z_mu.reshape(n, l, *z_mu.shape[1:])
+            z_logvar = z_logvar.reshape(n, l, *z_logvar.shape[1:])
+            z_var = torch.diag_embed(torch.exp(z_logvar))
 
-            #TODO: Calculate KL analytically between N(z_mu_t, z_logvar_t) and N(z_mu_t1, z_logvar_t1) 
-            # (seq_len * batch_size, dim_z), (seq_len * batch_size, dim_z, dim_z)
+            z_t1_hat, z_mu_t1_hat, z_var_t1_hat, _ = dyn(z_t=z[:, :-1], mu_t=z_mu[:, :-1], 
+                                                         var_t=z_var[:, :-1], u=u[:, 1:])
 
-            #TODO: Reward prediction
+            # Initial distribution 
+            z_mu_i = torch.zeros(args.dim_z, requires_grad=False, device=device)
+            z_var_i = 20.00 * torch.eye(args.dim_z, requires_grad=False, device=device)
+            z_mu_i = z_mu_i.repeat(n, 1, 1) # (n, l, dim_z)
+            z_var_i = z_var_i.repeat(n, 1, 1, 1) # (n, l, dim_z, dim_z)
+
+            z_mu_hat = torch.cat((z_mu_i, z_mu_t1_hat), 1)
+            z_var_hat = torch.cat((z_var_i, z_var_t1_hat), 1)
+
+            loss_kl = torch.sum(kl(mu0=z_mu.reshape(n * l, *z_mu.shape[2:]), 
+                                   cov0=z_var.reshape(n * l, *z_var.shape[2:]), 
+                                   mu1=z_mu_hat.reshape(n * l, *z_mu_hat.shape[2:]), 
+                                   cov1=z_var_hat.reshape(n * l, *z_var_hat.shape[2:])))
             
-            total_loss = (args.lam_rec * loss_rec + 
-                          args.lam_kl * loss_KL) / n
+            #TODO: Reward prediction
 
-            avg_l.append((loss_rec.item() + loss_KL.item()) / N)
+            total_loss = (args.lam_rec * loss_rec + 
+                          args.lam_kl * loss_kl) / n
+            avg_l.append((loss_rec.item() + loss_kl.item()) / n)
 
             # Jointly optimize everything
             if opt:
                 opt.zero_grad()
                 total_loss.backward()
                 # clip for stable RNN training
-                if args.measurement_uncertainty == 'feature':  
-                    torch.nn.utils.clip_grad_norm_(R_net.parameters(), 0.5)
-                torch.nn.utils.clip_grad_norm_(lgssm.parameters(), 0.5)
+                torch.nn.utils.clip_grad_norm_(dyn.parameters(), 0.5)
                 torch.nn.utils.clip_grad_norm_(enc.parameters(), 0.5)
                 torch.nn.utils.clip_grad_norm_(dec.parameters(), 0.5)
                 opt.step()
@@ -246,12 +254,8 @@ def train(args):
             tic = time.time()
             if epoch >= args.opt_vae_base_epochs:
                 opt = opt_all
-                if args.scheduler != 'none':
-                    lr_scheduler = lr_scheduler_all
             elif epoch >= args.opt_vae_epochs:
                 opt = opt_vae_base
-                if args.scheduler != 'none':
-                    lr_scheduler = lr_scheduler_vae_kf
             
             # Train for one epoch        
             avg_train_loss = opt_iter(epoch=epoch, opt=opt)
@@ -266,8 +270,7 @@ def train(args):
 
             print("Epoch {}/{}: Avg train loss: {}, \
                    Avg val loss: {}, Time per epoch: {}"
-                   .format(epoch + 1, ini_epoch + args.n_epoch, 
-                   avg_train_loss, avg_val_loss, epoch_time))
+                   .format(epoch + 1, args.n_epoch, avg_train_loss, avg_val_loss, epoch_time))
             
             # Tensorboard
             if not args.debug:

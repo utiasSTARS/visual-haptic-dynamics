@@ -2,7 +2,7 @@
 Test environment with simple inputs.
 """
 import os, sys, time
-sys.path.append('../env/')
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../env/')))
 
 from pendulum import Pendulum
 import numpy as np

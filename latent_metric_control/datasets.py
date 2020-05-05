@@ -1,6 +1,9 @@
 """
 PyTorch wrappers for datasets.
 """
+import torch.utils.data as data
+import torch
+import pickle
 
 def pickle_loader(path):
     """A data loader for pickle files."""
@@ -11,7 +14,7 @@ def pickle_loader(path):
 class ImgCached(data.Dataset):
     """Image Dataset from a single cached tuple file of np.arrays
        (image, action) or (image, action, gtstate). 
-       Images assumed to be of shape (n, t, w, h, c).
+       Raw cached images assumed to be of shape (n, t, w, h, c=3).
     """
     def __init__(self, dir, loader=pickle_loader, transform=None, img_shape=(1,64,64)):
         """
@@ -35,12 +38,11 @@ class ImgCached(data.Dataset):
         print("Formating dataset")
         n = cached_data_raw.shape[0]
         t = cached_data_raw.shape[1]
-        c = cached_data_raw.shape[4]
 
-        cached_data_raw = cached_data_raw.reshape(n, t, img_shape[1], img_shape[2], c)
-        cached_data_raw = np.moveaxis(cached_data_raw, -1, 2)
+        cached_data_raw = cached_data_raw.reshape(n, t, img_shape[1], img_shape[2], 3)
 
-        self.cached_data = torch.zeros(n, t, img.shape[0], img_shape[1], img_shape[2])
+        self.cached_data = torch.zeros(n, t, img_shape[0], img_shape[1], img_shape[2])
+
         for ii in range(n):
             for tt in range(t):
                 self.cached_data[ii, tt, :, :, :] = transform(cached_data_raw[ii, tt, :, :, :])

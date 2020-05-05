@@ -8,6 +8,17 @@ import torch
 import numpy as np
 import random
 
+class Normalize:
+    def __init__(self, mean, var):
+        self.mean = mean
+        self.var = var
+
+    def __call__(self, x):
+        return (x - self.mean) / self.var
+
+    def __repr__(self):
+        return self.__class__.__name__ + '(mean={self.mean}, var={self.var})'
+        
 def set_seed_torch(seed):
     np.random.seed(seed)
     torch.manual_seed(seed)
