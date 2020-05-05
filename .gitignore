@@ -1,0 +1,10 @@
+bullet3/
+*.egg-info/
+__pycache__/
+.vscode/
+*.pyc
+.ipynb_checkpoints
+*.db
+.DS_store
+*.swp
+saved_models/

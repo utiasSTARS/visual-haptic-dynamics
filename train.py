@@ -5,6 +5,8 @@ def _init_fn(worker_id):
 import numpy as np
 from args.parser import parse_training_args
 from collections import OrderedDict
+from datetime import datetime
+from tensorboardX import SummaryWriter
 import json
 import os, sys, time
 
@@ -91,7 +93,7 @@ def train(args):
                         hidden_size=args.rnn_hidden_size,
                         bidirectional=args.use_bidirectional,
                         net_type=args.rnn_net,
-                        K=args.K)
+                        K=args.K).to(device=device)
     base_matrices_params = [dyn.A, dyn.B]
 
     if args.opt == "adam":
@@ -230,9 +232,11 @@ def train(args):
             
             #TODO: Reward prediction
 
-            total_loss = (args.lam_rec * loss_rec + 
+            print(f"Loss rec: {loss_rec.item()}")
+            print(f"Loss KL: {loss_kl.item()}")
+            total_loss = (args.lam_rec * loss_rec - 
                           args.lam_kl * loss_kl) / n
-            avg_l.append((loss_rec.item() + loss_kl.item()) / n)
+            avg_l.append(total_loss.item())
 
             # Jointly optimize everything
             if opt:
@@ -268,9 +272,10 @@ def train(args):
                 avg_val_loss = 0
             epoch_time = time.time() - tic
 
-            print("Epoch {}/{}: Avg train loss: {}, \
-                   Avg val loss: {}, Time per epoch: {}"
-                   .format(epoch + 1, args.n_epoch, avg_train_loss, avg_val_loss, epoch_time))
+            print(f"Epoch {epoch + 1}/{args.n_epoch}: \
+                    Avg train loss: {avg_train_loss}, \
+                    Avg val loss: {avg_val_loss}, \
+                    Time per epoch: {epoch_time}")
             
             # Tensorboard
             if not args.debug:
@@ -293,9 +298,9 @@ def train(args):
         if not args.debug:
             if not np.isnan(avg_train_loss):
                 # Save models
-                torch.save(dyn.state_dict(), data_dir + '/dyn.pth')
-                torch.save(enc.state_dict(), data_dir + '/enc.pth')
-                torch.save(dec.state_dict(), data_dir + '/dec.pth')
+                torch.save(dyn.state_dict(), save_dir + '/dyn.pth')
+                torch.save(enc.state_dict(), save_dir + '/enc.pth')
+                torch.save(dec.state_dict(), save_dir + '/dec.pth')
             writer.close()
 
 def main():

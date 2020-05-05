@@ -1,7 +1,7 @@
-device="cpu"
-dataset="/Users/oliver/Datasets/pendulum-srl-sim/pendulum64_total_2048_traj_16_repeat_2_with_angle_train.pkl"
+device="cuda"
+dataset="/media/m2-drive/datasets/pendulum-srl-sim/pendulum64_total_2048_traj_16_repeat_2_with_angle_train.pkl"
 comment=('traj32_base_latent')
-storage_base_path="/Users/oliver/latent-metric-control/latent_metric_control/saved_models/${comment}/"
+storage_base_path="/home/olimoyo/latent-metric-control/saved_models/"
 
 n_batches=(32)
 learning_rates=(3e-4)
@@ -15,13 +15,14 @@ opt=('adam')
 enc_dec_nets=('cnn')
 debug=('True')
 nl=('relu')
-traj_len=(16)
+traj_len=(32)
+n_epochs=(4096)
 
 for n in {1..1}; do
     lam_rec=1.00
-    lam_kl=1.00
+    lam_kl=0.80
     opt_vae_epoch=0
-    opt_vae_base_epoch=2048
+    opt_vae_base_epoch=1024
     for batch_norm in ${batch_norms[@]}; do
         for K in ${Ks[@]}; do
             for weight_init in ${weight_inits[@]}; do

@@ -96,6 +96,8 @@ def parse_training_args():
                         help='Weight of kl loss')
     parser.add_argument('--use_binary_ce', type=str2bool, default=False,
                         help='Use Binary Cross Entropy loss insted of default Mean Squared Error loss')
+    parser.add_argument('--with_reward_prediction', type=str2bool, default=False,
+                        help='Learn a reward predictor jointly.')
 
     args = parse_common_training_args(parser=parser)
     return args
