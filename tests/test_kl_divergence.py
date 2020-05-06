@@ -8,11 +8,11 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
 import torch
 from losses import kl
 
-def test_KL(bs=1):
-    mu0 = -torch.rand((bs,3))
-    var0 = torch.eye(3).repeat(bs,1,1)
-    mu1 = -torch.rand((bs,3))
-    var1 = torch.eye(3).repeat(bs,1,1)
+def test_KL(bs=10):
+    mu0 = torch.rand((bs,3))
+    var0 = 3*torch.eye(3).repeat(bs,1,1)
+    mu1 = torch.rand((bs,3))
+    var1 = 2.5*torch.eye(3).repeat(bs,1,1)
     
     # Test Pytorch's KL divergence
     tic = time.time()
