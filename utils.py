@@ -11,7 +11,7 @@ from models import (FullyConvEncoderVAE,
                     FCNEncoderVAE,
                     FCNDecoderVAE,
                     LinearMixRNN)
-                    
+
 class Normalize:
     def __init__(self, mean, var):
         self.mean = mean
@@ -22,7 +22,26 @@ class Normalize:
 
     def __repr__(self):
         return self.__class__.__name__ + '(mean={self.mean}, var={self.var})'
-        
+
+def frame_stack(x, frames=1):
+    """
+    Given a trajectory images with shape (n, l, c, h, w) convert to 
+    (n, l - frames, (frames + 1) * c, h, w), where the channel dimension 
+    contains the extra frames added.
+    
+    e.g. visualization of frames=2:
+    x_{0} x_{1} x_{2} x_{3} ... x_{l}
+    0     x_{0} x_{1} x_{2} ... x_{l-1} x_{l}   
+    """
+    n, l, c, h, w = x.shape
+    x_stacked = torch.zeros((n, l, (frames + 1) * c, h, w))
+    x_stacked[:, :, :c] = x
+    for ii in (_ + 1 for _ in range(frames)):
+        x_stacked[:, :, ((ii) * c):((ii+1) * c)] = \
+            torch.cat((torch.zeros((n, ii, c, h, w)), x), dim=1)[:, :l]
+    x_stacked = x_stacked[:, frames:] # slice off the initial part of the traj w/ no history
+    return x_stacked
+
 def set_seed_torch(seed):
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -129,24 +148,22 @@ def load_models(path, args, mode='eval', device='cuda:0'):
         print(e)            
 
     # Dynamics network
-    lgssm = LGSSM(dim_z=args.dim_z,
-                    dim_a=args.dim_a,
-                    dim_u=args.dim_u,
-                    alpha_net=alpha_net,
-                    K=args.k,
-                    transition_noise=args.transition_noise,
-                    emission_noise=args.emission_noise,
-                    device=device).to(device=device)    
+    dyn = LinearMixRNN(dim_z=args.dim_z,
+                        dim_u=args.dim_u,
+                        hidden_size=args.rnn_hidden_size,
+                        bidirectional=args.use_bidirectional,
+                        net_type=args.rnn_net,
+                        K=args.K).to(device=device) 
         
     try:
-        lgssm.load_state_dict(torch.load(path + "/lgssm.pth", map_location=device))
+        dyn.load_state_dict(torch.load(path + "/dyn.pth", map_location=device))
         if mode == 'eval':
-            lgssm.eval()
+            dyn.eval()
         elif mode == 'train':
-            lgssm.train()
+            dyn.train()
         else:
             raise NotImplementedError()
     except Exception as e: 
         print(e)             
     
-    return enc, dec, lgssm
+    return enc, dec, dyn

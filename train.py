@@ -1,4 +1,7 @@
-from utils import (set_seed_torch, common_init_weights, Normalize)
+from utils import (set_seed_torch, 
+                    common_init_weights, 
+                    Normalize,
+                    frame_stack)
 set_seed_torch(3)
 def _init_fn(worker_id):
     np.random.seed(int(3))
@@ -57,7 +60,8 @@ def train(args):
 
     # Encoder and decoder
     if args.enc_dec_net == 'fcn':
-        enc = FCNEncoderVAE(dim_in=int(np.product(args.dim_x)),
+        true_dim_x = args.dim_x[0] + args.frame_stacks, args.dim_x[1], args.dim_x[2]
+        enc = FCNEncoderVAE(dim_in=int(np.product(true_dim_x)),
                             dim_out=args.dim_z,
                             bn=args.use_batch_norm,
                             drop=args.use_dropout,
@@ -65,21 +69,21 @@ def train(args):
                             hidden_size=args.fc_hidden_size,
                             stochastic=True).to(device=device)
         dec = FCNDecoderVAE(dim_in=args.dim_z,
-                            dim_out=args.dim_x,
+                            dim_out=true_dim_x,
                             bn=args.use_batch_norm,
                             drop=args.use_dropout,
                             nl=nl,
                             output_nl=output_nl,
                             hidden_size=args.fc_hidden_size).to(device=device)
     elif args.enc_dec_net == 'cnn':
-        enc = FullyConvEncoderVAE(input=1,
+        enc = FullyConvEncoderVAE(input=args.dim_x[0] + args.frame_stacks,
                                     latent_size=args.dim_z,
                                     bn=args.use_batch_norm,
                                     drop=args.use_dropout,
                                     nl=nl,
                                     img_dim=str(args.dim_x[1]),
                                     stochastic=True).to(device=device)
-        dec = FullyConvDecoderVAE(input=1,
+        dec = FullyConvDecoderVAE(input=args.dim_x[0] + args.frame_stacks,
                                     latent_size=args.dim_z,
                                     bn=args.use_batch_norm,
                                     drop=args.use_dropout,
@@ -191,7 +195,9 @@ def train(args):
             
             # Load and shape trajectory data
             # XXX: all trajectories have same length
-            x_full = data['images'].float().to(device=device)
+            x_full = data['images'].float().to(device=device) # (n, l, 1, h, w)
+            x_full = frame_stack(x_full, frames=args.frame_stacks) # (n, l - frames, 1 * frames, h, w)
+
             start_idx = np.random.randint(x_full.shape[1] - args.traj_len + 1) # sample random range of traj_len
             end_idx = start_idx + args.traj_len
             x = x_full[:, start_idx:end_idx]

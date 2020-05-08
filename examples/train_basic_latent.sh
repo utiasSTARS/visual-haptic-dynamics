@@ -8,14 +8,15 @@ batch_norms=('True')
 bi_directionals=('False')
 weight_inits=('custom')
 Ks=(15)
-rnn_nets=('lstm' 'gru')
+rnn_nets=('lstm')
 n_epochs=(4096)
 opt=('adam')
 enc_dec_nets=('cnn')
-debug=('False')
+debug=('True')
 nl=('relu')
 traj_len=(32)
 n_epochs=(4096)
+frame_stacks=(1)
 
 for n in {1..1}; do
     lam_rec=1.00
@@ -41,7 +42,7 @@ for n in {1..1}; do
                                                             --n_epoch $n_epoch \
                                                             --n_batch $n_batch \
                                                             --debug $debug \
-                                                            --comment "traj${traj_len}_base_latent_bn${batch_norm}_dyn${rnn_net}" \
+                                                            --comment "traj${traj_len}_base_latent_bn${batch_norm}_dyn${rnn_net}_frame${frame_stacks}" \
                                                             --device $device \
                                                             --lr $lr \
                                                             --weight_init $weight_init \
@@ -61,7 +62,8 @@ for n in {1..1}; do
                                                             --task "pendulum64" \
                                                             --val_split 0 \
                                                             --non_linearity $nl \
-                                                            --traj_len $traj_len 
+                                                            --traj_len $traj_len \
+                                                            --frame_stacks $frame_stacks
                                     done
                                 done
                             done
