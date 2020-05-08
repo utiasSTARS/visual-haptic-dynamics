@@ -79,7 +79,7 @@ def parse_training_args():
     parser.add_argument('--enc_dec_net', choices=['fcn', 'cnn'], default='cnn',
                         help='Network architecture for measurement representation') 
     parser.add_argument('--non_linearity', choices=['relu', 'elu'], default='relu',
-                        help='Activation used for neural network')
+                        help='Activation used for decoder neural network')
 
     # Training Settings
     parser.add_argument('--lr', type=float, default= 3e-4,

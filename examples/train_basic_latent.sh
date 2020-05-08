@@ -1,26 +1,25 @@
 device="cuda"
 dataset="/media/m2-drive/datasets/pendulum-srl-sim/pendulum64_total_2048_traj_16_repeat_2_with_angle_train.pkl"
-comment=('traj32_base_latent')
 storage_base_path="/home/olimoyo/latent-metric-control/saved_models/"
 
 n_batches=(32)
 learning_rates=(3e-4)
-batch_norms=('False')
+batch_norms=('True')
 bi_directionals=('False')
 weight_inits=('custom')
 Ks=(15)
-rnn_nets=('lstm')
+rnn_nets=('lstm' 'gru')
 n_epochs=(4096)
 opt=('adam')
 enc_dec_nets=('cnn')
-debug=('True')
+debug=('False')
 nl=('relu')
 traj_len=(32)
 n_epochs=(4096)
 
 for n in {1..1}; do
     lam_rec=1.00
-    lam_kl=0.80
+    lam_kl=1.00
     opt_vae_epoch=0
     opt_vae_base_epoch=1024
     for batch_norm in ${batch_norms[@]}; do
@@ -32,7 +31,7 @@ for n in {1..1}; do
                             for lr in ${learning_rates[@]}; do
                                 for bi_directional in ${bi_directionals[@]}; do
                                     for n_epoch in ${n_epochs[@]}; do
-                                        python3 ../train.py \
+                                        python ../train.py \
                                                             --K $K \
                                                             --dim_u 1 \
                                                             --dim_z 3 \
@@ -42,7 +41,7 @@ for n in {1..1}; do
                                                             --n_epoch $n_epoch \
                                                             --n_batch $n_batch \
                                                             --debug $debug \
-                                                            --comment $comment \
+                                                            --comment "traj${traj_len}_base_latent_bn${batch_norm}_dyn${rnn_net}" \
                                                             --device $device \
                                                             --lr $lr \
                                                             --weight_init $weight_init \

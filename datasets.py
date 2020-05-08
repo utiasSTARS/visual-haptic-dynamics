@@ -3,12 +3,12 @@ PyTorch wrappers for datasets.
 """
 import torch.utils.data as data
 import torch
-import pickle
+import _pickle as pkl
 
-def pickle_loader(path):
+def pkl_loader(path):
     """A data loader for pickle files."""
     with open(path, 'rb') as f:
-        data = pickle.load(f)
+        data = pkl.load(f)
     return data
 
 class ImgCached(data.Dataset):
@@ -16,7 +16,7 @@ class ImgCached(data.Dataset):
        (image, action) or (image, action, gtstate). 
        Raw cached images assumed to be of shape (n, t, w, h, c=3).
     """
-    def __init__(self, dir, loader=pickle_loader, transform=None, img_shape=(1,64,64)):
+    def __init__(self, dir, loader=pkl_loader, transform=None, img_shape=(1,64,64)):
         """
         Args:
             dir (string): Directory of the cache.

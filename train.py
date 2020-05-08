@@ -106,8 +106,7 @@ def train(args):
                                         lr=args.lr)
         opt_all = torch.optim.Adam(list(enc.parameters()) + 
                                    list(dec.parameters()) +
-                                   list(dyn.parameters()) + 
-                                   base_matrices_params, 
+                                   list(dyn.parameters()), 
                                    lr=args.lr)
     elif args.opt == "sgd":
         opt_vae = torch.optim.SGD(list(enc.parameters()) + 
@@ -123,8 +122,7 @@ def train(args):
                                      nesterov=True)
         opt_all = torch.optim.SGD(list(enc.parameters()) + 
                                   list(dec.parameters()) +
-                                  list(dyn.parameters()) + 
-                                  base_matrices_params, 
+                                  list(dyn.parameters()), 
                                   lr=args.lr, 
                                   momentum=0.9, 
                                   nesterov=True)
@@ -226,16 +224,14 @@ def train(args):
             z_var_hat = torch.cat((z_var_i, z_var_t1_hat), 1)
 
             loss_kl = torch.sum(kl(mu0=z_mu.reshape(n * l, *z_mu.shape[2:]), 
-                                   cov0=z_var.reshape(n * l, *z_var.shape[2:]), 
-                                   mu1=z_mu_hat.reshape(n * l, *z_mu_hat.shape[2:]), 
-                                   cov1=z_var_hat.reshape(n * l, *z_var_hat.shape[2:])))
-            
-            #TODO: Reward prediction
+                                    cov0=z_var.reshape(n * l, *z_var.shape[2:]), 
+                                    mu1=z_mu_hat.reshape(n * l, *z_mu_hat.shape[2:]), 
+                                    cov1=z_var_hat.reshape(n * l, *z_var_hat.shape[2:])))
 
-            print(f"Loss rec: {loss_rec.item()}")
-            print(f"Loss KL: {loss_kl.item()}")
-            total_loss = (args.lam_rec * loss_rec - 
-                          args.lam_kl * loss_kl) / n
+            #TODO: Reward prediction
+            total_loss = args.lam_rec * loss_rec + args.lam_kl * loss_kl
+
+            total_loss = torch.sum(total_loss) / n
             avg_l.append(total_loss.item())
 
             # Jointly optimize everything
@@ -272,10 +268,7 @@ def train(args):
                 avg_val_loss = 0
             epoch_time = time.time() - tic
 
-            print(f"Epoch {epoch + 1}/{args.n_epoch}: \
-                    Avg train loss: {avg_train_loss}, \
-                    Avg val loss: {avg_val_loss}, \
-                    Time per epoch: {epoch_time}")
+            print(f"Epoch {epoch + 1}/{args.n_epoch}: Avg train loss: {avg_train_loss}, Avg val loss: {avg_val_loss}, Time per epoch: {epoch_time}")
             
             # Tensorboard
             if not args.debug:
