@@ -14,7 +14,7 @@ opt=('adam')
 enc_dec_nets=('cnn')
 debug=('True')
 nl=('relu')
-traj_len=(32)
+traj_len=(31)
 n_epochs=(4096)
 frame_stacks=(1)
 

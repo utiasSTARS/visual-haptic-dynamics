@@ -34,12 +34,16 @@ def frame_stack(x, frames=1):
     0     x_{0} x_{1} x_{2} ... x_{l-1} x_{l}   
     """
     n, l, c, h, w = x.shape
-    x_stacked = torch.zeros((n, l, (frames + 1) * c, h, w))
+    x_stacked = torch.zeros((n, l, (frames + 1) * c, h, w), 
+                                dtype=x.dtype, device=x.device)
     x_stacked[:, :, :c] = x
     for ii in (_ + 1 for _ in range(frames)):
+        pad = torch.zeros((n, ii, c, h, w), 
+                            dtype=x.dtype, device=x.device)
         x_stacked[:, :, ((ii) * c):((ii+1) * c)] = \
-            torch.cat((torch.zeros((n, ii, c, h, w)), x), dim=1)[:, :l]
-    x_stacked = x_stacked[:, frames:] # slice off the initial part of the traj w/ no history
+            torch.cat((pad, x), dim=1)[:, :l]
+    # slice off the initial part of the traj w/ no history
+    x_stacked = x_stacked[:, frames:]
     return x_stacked
 
 def set_seed_torch(seed):

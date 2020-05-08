@@ -197,9 +197,9 @@ def train(args):
             # XXX: all trajectories have same length
             x_full = data['images'].float().to(device=device) # (n, l, 1, h, w)
             x_full = frame_stack(x_full, frames=args.frame_stacks) # (n, l - frames, 1 * frames, h, w)
-
             start_idx = np.random.randint(x_full.shape[1] - args.traj_len + 1) # sample random range of traj_len
             end_idx = start_idx + args.traj_len
+
             x = x_full[:, start_idx:end_idx]
             n = x.shape[0]
             l = x.shape[1]
