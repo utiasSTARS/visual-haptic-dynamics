@@ -2,10 +2,8 @@ from utils import (set_seed_torch,
                     common_init_weights, 
                     Normalize,
                     frame_stack)
-set_seed_torch(3)
-def _init_fn(worker_id):
-    np.random.seed(int(3))
 import numpy as np
+import random
 from args.parser import parse_training_args
 from collections import OrderedDict
 from datetime import datetime
@@ -15,9 +13,9 @@ import os, sys, time
 
 import torch
 import torch.nn as nn
+import torchvision as tv
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
-from torchvision import transforms
 
 from models import (FullyConvEncoderVAE,
                     FullyConvDecoderVAE,
@@ -26,6 +24,10 @@ from models import (FullyConvEncoderVAE,
                     LinearMixRNN)
 from datasets import ImgCached
 from losses import kl
+
+set_seed_torch(3)
+def _init_fn(worker_id):
+    np.random.seed(int(3))
 
 def train(args):
     assert 0 <= args.opt_vae_epochs <= args.opt_vae_base_epochs <= args.n_epoch
@@ -36,7 +38,8 @@ def train(args):
     # Keeping track of results and hyperparameters
     if not args.debug:
         time_tag = datetime.strftime(datetime.now(), '%m-%d-%y_%H:%M:%S')
-        save_dir = args.storage_base_path + time_tag + '_' + args.comment
+        model_tag = time_tag + '_' + args.comment
+        save_dir = args.storage_base_path + model_tag
         os.makedirs(save_dir, exist_ok=True)
 
         if args.n_epoch > args.n_checkpoint_epoch:
@@ -145,10 +148,10 @@ def train(args):
         loss_REC = nn.MSELoss(reduction='none').to(device=device)
 
     if args.task == "pendulum64":
-        transform = transforms.Compose([
-            transforms.ToPILImage(),
-            transforms.Grayscale(num_output_channels=1),
-            transforms.ToTensor(),
+        transform = tv.transforms.Compose([
+            tv.transforms.ToPILImage(),
+            tv.transforms.Grayscale(num_output_channels=1),
+            tv.transforms.ToTensor(),
             Normalize(mean=0.27, var=1.0 - 0.27) # 64x64
             ])
     else:
@@ -187,8 +190,9 @@ def train(args):
             dec.eval()
             dyn.eval()
             loader = val_loader
+        
+        running_stats = {"total_l": [], "kl_l": [], "rec_l": []}
 
-        avg_l = []
         for idx, data in enumerate(loader):
             if idx == args.n_example:
                 break
@@ -209,7 +213,7 @@ def train(args):
             # Encode & Decode all samples
             z, z_mu, z_logvar = enc(x)
             x_hat = dec(z)
-            loss_rec = torch.sum(loss_REC(x_hat, x))
+            loss_rec = args.lam_rec * torch.sum(loss_REC(x_hat, x)) / n
 
             # Dynamics constraint with KL
             z = z.reshape(n, l, *z.shape[1:])
@@ -229,16 +233,17 @@ def train(args):
             z_mu_hat = torch.cat((z_mu_i, z_mu_t1_hat), 1)
             z_var_hat = torch.cat((z_var_i, z_var_t1_hat), 1)
 
-            loss_kl = torch.sum(kl(mu0=z_mu.reshape(n * l, *z_mu.shape[2:]), 
-                                    cov0=z_var.reshape(n * l, *z_var.shape[2:]), 
-                                    mu1=z_mu_hat.reshape(n * l, *z_mu_hat.shape[2:]), 
-                                    cov1=z_var_hat.reshape(n * l, *z_var_hat.shape[2:])))
+            loss_kl = args.lam_kl * torch.sum(kl(mu0=z_mu.reshape(n * l, *z_mu.shape[2:]), 
+                                                    cov0=z_var.reshape(n * l, *z_var.shape[2:]), 
+                                                    mu1=z_mu_hat.reshape(n * l, *z_mu_hat.shape[2:]), 
+                                                    cov1=z_var_hat.reshape(n * l, *z_var_hat.shape[2:]))) / n
 
             #TODO: Reward prediction
-            total_loss = args.lam_rec * loss_rec + args.lam_kl * loss_kl
+            total_loss = loss_rec + loss_kl
 
-            total_loss = torch.sum(total_loss) / n
-            avg_l.append(total_loss.item())
+            running_stats['total_l'].append(total_loss.item())
+            running_stats['rec_l'].append(loss_rec.item())
+            running_stats['kl_l'].append(loss_kl.item())
 
             # Jointly optimize everything
             if opt:
@@ -250,8 +255,16 @@ def train(args):
                 torch.nn.utils.clip_grad_norm_(dec.parameters(), 0.5)
                 opt.step()
 
-        avg_loss = sum(avg_l) / len(avg_l)
-        return avg_loss
+        # Summary stats from epoch
+        summary_stats = {f'avg_{key}':sum(stats)/len(stats) for (key, stats) in running_stats.items()}
+        n_images = 16 # random sample of images to visualize reconstruction quality
+        rng = random.randint(0, x.shape[0] - n_images)
+        x_plt = x[rng:(rng + n_images), np.newaxis, -1].detach()
+        x_hat_plt = x_hat[rng:(rng + n_images), np.newaxis, -1].detach()
+        summary_stats['og_imgs'] = x_plt
+        summary_stats['rec_imgs'] = x_hat_plt
+
+        return summary_stats
 
     # Training loop
     opt = opt_vae
@@ -264,25 +277,34 @@ def train(args):
                 opt = opt_vae_base
             
             # Train for one epoch        
-            avg_train_loss = opt_iter(epoch=epoch, opt=opt)
+            summary_train = opt_iter(epoch=epoch, opt=opt)
 
             # Calculate validtion loss
             if args.val_split > 0:
                 with torch.no_grad():
-                    avg_val_loss = opt_iter(epoch=epoch)
-            else:
-                avg_val_loss = 0
+                    summary_val = opt_iter(epoch=epoch)
             epoch_time = time.time() - tic
 
-            print(f"Epoch {epoch + 1}/{args.n_epoch}: Avg train loss: {avg_train_loss}, Avg val loss: {avg_val_loss}, Time per epoch: {epoch_time}")
+            print((f"Epoch {epoch + 1}/{args.n_epoch}: " 
+                   f"Avg train loss: {summary_train['avg_total_l']}, " 
+                   f"Avg val loss: {summary_val['avg_total_l'] if args.val_split > 0 else 'N/A'}, "
+                   f"Time per epoch: {epoch_time}"))
             
             # Tensorboard
             if not args.debug:
-                writer.add_scalars("Loss", 
-                                   {'train': avg_train_loss, 
-                                   'val': avg_val_loss}, 
-                                   epoch)
-            
+                writer.add_scalar("loss/total/train", summary_train['avg_total_l'], epoch)
+                writer.add_scalar("loss/kl/train", summary_train['avg_kl_l'], epoch)
+                writer.add_scalar("loss/rec/train", summary_train['avg_rec_l'], epoch)
+                writer.add_images(f'reconstructed_images/{model_tag}/train/original', summary_train['og_imgs'])
+                writer.add_images(f'reconstructed_images/{model_tag}/train/reconstructed', summary_train['rec_imgs'])
+
+                if args.val_split > 0:
+                    writer.add_scalar("loss/total/val",summary_val['avg_total_l'], epoch)
+                    writer.add_scalar("loss/kl/val", summary_val['avg_kl_l'], epoch)
+                    writer.add_scalar("loss/rec/val", summary_val['avg_rec_l'], epoch)
+                    writer.add_images(f'reconstructed_images/{model_tag}/val/original', summary_val['og_imgs'])
+                    writer.add_images(f'reconstructed_images/{model_tag}/val/reconstructed', summary_val['rec_imgs'])
+
             # Save model at intermittent checkpoints 
             if (epoch + 1) % args.n_checkpoint_epoch == 0:
                 checkpoint_i_path = os.path.join(checkpoint_dir, str((epoch + 1) // args.n_checkpoint_epoch))
@@ -295,7 +317,7 @@ def train(args):
 
     finally:
         if not args.debug:
-            if not np.isnan(avg_train_loss):
+            if not np.isnan(summary_train['avg_total_l']):
                 # Save models
                 torch.save(dyn.state_dict(), save_dir + '/dyn.pth')
                 torch.save(enc.state_dict(), save_dir + '/enc.pth')

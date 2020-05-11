@@ -4,19 +4,20 @@ storage_base_path="/home/olimoyo/latent-metric-control/saved_models/"
 
 n_batches=(32)
 learning_rates=(3e-4)
-batch_norms=('True')
+batch_norms=('False' 'True')
 bi_directionals=('False')
 weight_inits=('custom')
 Ks=(15)
-rnn_nets=('lstm')
+rnn_nets=('lstm' 'gru')
 n_epochs=(4096)
 opt=('adam')
 enc_dec_nets=('cnn')
-debug=('True')
+debug=('False')
 nl=('relu')
-traj_len=(31)
+traj_len=(16)
 n_epochs=(4096)
-frame_stacks=(1)
+frame_stacks=(0 1)
+val_split=(0)
 
 for n in {1..1}; do
     lam_rec=1.00
@@ -37,12 +38,12 @@ for n in {1..1}; do
                                                             --dim_u 1 \
                                                             --dim_z 3 \
                                                             --dim_x "1,64,64" \
-                                                            --n_worker 4 \
+                                                            --n_worker 8 \
                                                             --use_binary_ce "False" \
                                                             --n_epoch $n_epoch \
                                                             --n_batch $n_batch \
                                                             --debug $debug \
-                                                            --comment "traj${traj_len}_base_latent_bn${batch_norm}_dyn${rnn_net}_frame${frame_stacks}" \
+                                                            --comment "traj${traj_len}_base_latent_bn${batch_norm}_dyn${rnn_net}_framestacks${frame_stacks}" \
                                                             --device $device \
                                                             --lr $lr \
                                                             --weight_init $weight_init \
@@ -60,7 +61,7 @@ for n in {1..1}; do
                                                             --opt $opt \
                                                             --rnn_net $rnn_net \
                                                             --task "pendulum64" \
-                                                            --val_split 0 \
+                                                            --val_split $val_split \
                                                             --non_linearity $nl \
                                                             --traj_len $traj_len \
                                                             --frame_stacks $frame_stacks
