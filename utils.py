@@ -90,7 +90,8 @@ def load_models(path, args, mode='eval', device='cuda:0'):
         raise NotImplementedError()
 
     if args.enc_dec_net == "fcn":
-        enc = FCNEncoderVAE(dim_in=obs_flatten_dim,
+        true_dim_x = args.dim_x[0] + args.frame_stacks, args.dim_x[1], args.dim_x[2]
+        enc = FCNEncoderVAE(dim_in=int(np.product(true_dim_x)),
                             dim_out=args.dim_z,
                             bn=args.use_batch_norm,
                             drop=args.use_dropout,
@@ -98,7 +99,7 @@ def load_models(path, args, mode='eval', device='cuda:0'):
                             hidden_size=args.fc_hidden_size,
                             stochastic=True).to(device=device)
     elif args.enc_dec_net == "cnn":
-        enc = FullyConvEncoderVAE(input=1,
+        enc = FullyConvEncoderVAE(input=args.dim_x[0] + args.frame_stacks,
                                     latent_size=args.dim_z,
                                     bn=args.use_batch_norm,
                                     drop=args.use_dropout,
@@ -123,14 +124,14 @@ def load_models(path, args, mode='eval', device='cuda:0'):
     
     if args.enc_dec_net == "fcn":
         dec = FCNDecoderVAE(dim_in=args.dim_z,
-                            dim_out=args.dim_x,
+                            dim_out=true_dim_x,
                             bn=args.use_batch_norm,
                             drop=args.use_dropout,
                             nl=nl,
                             output_nl=output_nl,
                             hidden_size=args.fc_hidden_size).to(device=device)
     elif args.enc_dec_net == "cnn":
-        dec = FullyConvDecoderVAE(input=1,
+        dec = FullyConvDecoderVAE(input=args.dim_x[0] + args.frame_stacks,
                                   latent_size=args.dim_z,
                                   bn=args.use_batch_norm,
                                   drop=args.use_dropout,
