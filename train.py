@@ -211,32 +211,32 @@ def train(args):
             u = data['actions'][:, start_idx:end_idx].float().to(device=device)
 
             # Encode & Decode all samples
-            z, z_mu, z_logvar = enc(x)
+            z, mu_z, logvar_z = enc(x)
             x_hat = dec(z)
-            loss_rec = args.lam_rec * torch.sum(loss_REC(x_hat, x)) / n
+            loss_rec = (args.lam_rec * torch.sum(loss_REC(x_hat, x))) / n
 
             # Dynamics constraint with KL
             z = z.reshape(n, l, *z.shape[1:])
-            z_mu = z_mu.reshape(n, l, *z_mu.shape[1:])
-            z_logvar = z_logvar.reshape(n, l, *z_logvar.shape[1:])
-            z_var = torch.diag_embed(torch.exp(z_logvar))
+            mu_z = mu_z.reshape(n, l, *mu_z.shape[1:])
+            logvar_z = logvar_z.reshape(n, l, *logvar_z.shape[1:])
+            var_z = torch.diag_embed(torch.exp(logvar_z))
 
-            z_t1_hat, z_mu_t1_hat, z_var_t1_hat, _ = dyn(z_t=z[:, :-1], mu_t=z_mu[:, :-1], 
-                                                         var_t=z_var[:, :-1], u=u[:, 1:])
+            z_t1_hat, mu_z_t1_hat, var_z_t1_hat, _ = dyn(z_t=z[:, :-1], mu_t=mu_z[:, :-1], 
+                                                         var_t=var_z[:, :-1], u=u[:, 1:])
 
             # Initial distribution 
-            z_mu_i = torch.zeros(args.dim_z, requires_grad=False, device=device)
-            z_var_i = 20.00 * torch.eye(args.dim_z, requires_grad=False, device=device)
-            z_mu_i = z_mu_i.repeat(n, 1, 1) # (n, l, dim_z)
-            z_var_i = z_var_i.repeat(n, 1, 1, 1) # (n, l, dim_z, dim_z)
+            mu_z_i = torch.zeros(args.dim_z, requires_grad=False, device=device)
+            var_z_i = 20.00 * torch.eye(args.dim_z, requires_grad=False, device=device)
+            mu_z_i = mu_z_i.repeat(n, 1, 1) # (n, l, dim_z)
+            var_z_i = var_z_i.repeat(n, 1, 1, 1) # (n, l, dim_z, dim_z)
 
-            z_mu_hat = torch.cat((z_mu_i, z_mu_t1_hat), 1)
-            z_var_hat = torch.cat((z_var_i, z_var_t1_hat), 1)
+            mu_z_hat = torch.cat((mu_z_i, mu_z_t1_hat), 1)
+            var_z_hat = torch.cat((var_z_i, var_z_t1_hat), 1)
 
-            loss_kl = args.lam_kl * torch.sum(kl(mu0=z_mu.reshape(n * l, *z_mu.shape[2:]), 
-                                                    cov0=z_var.reshape(n * l, *z_var.shape[2:]), 
-                                                    mu1=z_mu_hat.reshape(n * l, *z_mu_hat.shape[2:]), 
-                                                    cov1=z_var_hat.reshape(n * l, *z_var_hat.shape[2:]))) / n
+            loss_kl = (args.lam_kl * torch.sum(kl(mu0=mu_z.reshape(n * l, *mu_z.shape[2:]), 
+                                                    cov0=var_z.reshape(n * l, *var_z.shape[2:]), 
+                                                    mu1=mu_z_hat.reshape(n * l, *mu_z_hat.shape[2:]), 
+                                                    cov1=var_z_hat.reshape(n * l, *var_z_hat.shape[2:])))) / n
 
             #TODO: Reward prediction
             total_loss = loss_rec + loss_kl

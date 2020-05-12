@@ -9,20 +9,20 @@ bi_directionals=('False')
 weight_inits=('custom')
 Ks=(15)
 rnn_nets=('lstm')
-n_epochs=(4096)
+n_epochs=(1)
 opt=('adam')
 enc_dec_nets=('cnn')
 debug=('False')
 nl=('relu')
 traj_len=(31)
-frame_stacks=(0 1)
+frame_stacks=(1)
 val_split=(0)
 
 for n in {1..1}; do
     lam_rec=1.00
     lam_kl=1.00
     opt_vae_epoch=0
-    opt_vae_base_epoch=1024
+    opt_vae_base_epoch=0
     for batch_norm in ${batch_norms[@]}; do
         for K in ${Ks[@]}; do
             for weight_init in ${weight_inits[@]}; do
@@ -42,7 +42,7 @@ for n in {1..1}; do
                                                             --n_epoch $n_epoch \
                                                             --n_batch $n_batch \
                                                             --debug $debug \
-                                                            --comment "traj${traj_len}_base_latent_bn${batch_norm}_dyn${rnn_net}_framestacks${frame_stacks}" \
+                                                            --comment "untrained" \
                                                             --device $device \
                                                             --lr $lr \
                                                             --weight_init $weight_init \

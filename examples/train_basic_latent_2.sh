@@ -5,17 +5,17 @@ storage_base_path="/home/olimoyo/latent-metric-control/saved_models/"
 n_batches=(32)
 learning_rates=(3e-4)
 batch_norms=('True')
-bi_directionals=('False')
+bi_directionals=('True' 'False')
 weight_inits=('custom')
 Ks=(15)
-rnn_nets=('lstm')
+rnn_nets=('gru')
 n_epochs=(4096)
 opt=('adam')
 enc_dec_nets=('cnn')
 debug=('False')
 nl=('relu')
 traj_len=(31)
-frame_stacks=(0 1)
+frame_stacks=(1)
 val_split=(0)
 
 for n in {1..1}; do
@@ -42,7 +42,7 @@ for n in {1..1}; do
                                                             --n_epoch $n_epoch \
                                                             --n_batch $n_batch \
                                                             --debug $debug \
-                                                            --comment "traj${traj_len}_base_latent_bn${batch_norm}_dyn${rnn_net}_framestacks${frame_stacks}" \
+                                                            --comment "traj${traj_len}_base_latent_bn${batch_norm}_dyn${rnn_net}_framestacks${frame_stacks}_bi${bi_directional}" \
                                                             --device $device \
                                                             --lr $lr \
                                                             --weight_init $weight_init \

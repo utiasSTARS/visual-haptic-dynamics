@@ -251,7 +251,7 @@ class LinearMixRNN(nn.Module):
 
         self.softmax = nn.Softmax(dim=-1)
     
-    def forward(self, z_t, mu_t, var_t, u, h=None):
+    def forward(self, z_t, mu_t, var_t, u, h=None, single=False):
         """
         Forward call to produce the subsequent state.
 
@@ -262,12 +262,19 @@ class LinearMixRNN(nn.Module):
             u: control input (seq_len, batch_size, dim_u)
             h: hidden state of the LSTM (num_layers * num_directions, batch_size, hidden_size) or None. 
                If None, h is defaulted as 0-tensor
+            single: If seq_len=1 then remove the need for a placeholder unsqueezed dimension
         Returns:
             z_t1: next sampled stats (seq_len, batch_size, dim_z)
             mu_t1: next state input mean (seq_len, batch_size, dim_z)
             var_t1: next state input covariance (seq_len, batch_size, dim_z, dim_z)
             h: hidden state of the LSTM
         """
+        if single:
+            z_t = z_t.unsqueeze(0)
+            mu_t = mu_t.unsqueeze(0)
+            var_t = var_t.unsqueeze(0)
+            u = u.unsqueeze(0)
+
         l, n, _ = z_t.shape
 
         if h is None:
