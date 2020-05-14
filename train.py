@@ -207,7 +207,7 @@ def train(args):
             x = x_full[:, start_idx:end_idx]
             n = x.shape[0]
             l = x.shape[1]
-            x = x.reshape(n * l, *x.shape[2:]) # reshape to (n * l, 1, height, width)
+            x = x.reshape(-1, *x.shape[2:]) # reshape to (-1, 1, height, width)
             u = data['actions'][:, start_idx:end_idx].float().to(device=device)
 
             # Encode & Decode all samples
@@ -233,10 +233,10 @@ def train(args):
             mu_z_hat = torch.cat((mu_z_i, mu_z_t1_hat), 1)
             var_z_hat = torch.cat((var_z_i, var_z_t1_hat), 1)
 
-            loss_kl = (args.lam_kl * torch.sum(kl(mu0=mu_z.reshape(n * l, *mu_z.shape[2:]), 
-                                                    cov0=var_z.reshape(n * l, *var_z.shape[2:]), 
-                                                    mu1=mu_z_hat.reshape(n * l, *mu_z_hat.shape[2:]), 
-                                                    cov1=var_z_hat.reshape(n * l, *var_z_hat.shape[2:])))) / n
+            loss_kl = (args.lam_kl * torch.sum(kl(mu0=mu_z.reshape(-1, *mu_z.shape[2:]), 
+                                                    cov0=var_z.reshape(-1, *var_z.shape[2:]), 
+                                                    mu1=mu_z_hat.reshape(-1, *mu_z_hat.shape[2:]), 
+                                                    cov1=var_z_hat.reshape(-1, *var_z_hat.shape[2:])))) / n
 
             #TODO: Reward prediction
             total_loss = loss_rec + loss_kl
@@ -259,8 +259,8 @@ def train(args):
         summary_stats = {f'avg_{key}':sum(stats)/len(stats) for (key, stats) in running_stats.items()}
         n_images = 16 # random sample of images to visualize reconstruction quality
         rng = random.randint(0, x.shape[0] - n_images)
-        x_plt = x[rng:(rng + n_images), np.newaxis, -1].detach()
-        x_hat_plt = x_hat[rng:(rng + n_images), np.newaxis, -1].detach()
+        x_plt = x[rng:(rng + n_images), np.newaxis, -1].detach().cpu()
+        x_hat_plt = x_hat[rng:(rng + n_images), np.newaxis, -1].detach().cpu()
         summary_stats['og_imgs'] = x_plt
         summary_stats['rec_imgs'] = x_hat_plt
 
@@ -292,16 +292,14 @@ def train(args):
             
             # Tensorboard
             if not args.debug:
-                writer.add_scalar("loss/total/train", summary_train['avg_total_l'], epoch)
-                writer.add_scalar("loss/kl/train", summary_train['avg_kl_l'], epoch)
-                writer.add_scalar("loss/rec/train", summary_train['avg_rec_l'], epoch)
+                for loss in ['total', 'kl', 'rec']:
+                    writer.add_scalar(f"loss/{loss}/val", summary_train[f'avg_{loss}_l'], epoch)
                 writer.add_images(f'reconstructed_images/{model_tag}/train/original', summary_train['og_imgs'])
                 writer.add_images(f'reconstructed_images/{model_tag}/train/reconstructed', summary_train['rec_imgs'])
 
                 if args.val_split > 0:
-                    writer.add_scalar("loss/total/val",summary_val['avg_total_l'], epoch)
-                    writer.add_scalar("loss/kl/val", summary_val['avg_kl_l'], epoch)
-                    writer.add_scalar("loss/rec/val", summary_val['avg_rec_l'], epoch)
+                    for loss in ['total', 'kl', 'rec']:
+                        writer.add_scalar(f"loss/{loss}/val", summary_val[f'avg_{loss}_l'], epoch)
                     writer.add_images(f'reconstructed_images/{model_tag}/val/original', summary_val['og_imgs'])
                     writer.add_images(f'reconstructed_images/{model_tag}/val/reconstructed', summary_val['rec_imgs'])
 

@@ -269,10 +269,9 @@ class LinearMixRNN(nn.Module):
             var_t1: next state input covariance (seq_len, batch_size, dim_z, dim_z)
             h: hidden state of the LSTM
         """
+        
         if single:
             z_t = z_t.unsqueeze(0)
-            mu_t = mu_t.unsqueeze(0)
-            var_t = var_t.unsqueeze(0)
             u = u.unsqueeze(0)
 
         l, n, _ = z_t.shape
@@ -283,16 +282,15 @@ class LinearMixRNN(nn.Module):
             x, h = self.rnn(z_t, h)
         
         if self.bidirectional:
-            x = x.reshape(l * n, 2*self.hidden_size) # (seq_len * batch_size, 2 * hidden_size)
+            x = x.reshape(-1, 2*self.hidden_size) # (seq_len * batch_size, 2 * hidden_size)
         else:
-            x = x.reshape(l * n, self.hidden_size) # (seq_len * batch_size, hidden_size)
+            x = x.reshape(-1, self.hidden_size) # (seq_len * batch_size, hidden_size)
 
         alpha = self.softmax(self.linear(x)) # (seq_len * batch_size, k)
 
-        z_t = z_t.reshape(l * n, *z_t.shape[2:])
-        mu_t = mu_t.reshape(l * n, *mu_t.shape[2:])
-        var_t = var_t.reshape(l * n, *var_t.shape[2:])
-        u = u.reshape(l * n, *u.shape[2:])
+        z_t = z_t.reshape(-1, *z_t.shape[2:])
+
+        u = u.reshape(-1, *u.shape[2:])
 
         # Mixture of A
         A_t = torch.mm(alpha, self.A.reshape(-1, self.dim_z * self.dim_z)) # (l*bs, k) x (k, dim_z*dim_z) 
@@ -304,18 +302,23 @@ class LinearMixRNN(nn.Module):
 
         # Transition sample
         z_t1 = torch.bmm(A_t, z_t.unsqueeze(-1)) + torch.bmm(B_t, u.unsqueeze(-1))
+        z_t1 = z_t1.reshape(l, n, *z_t1.shape[1:]).squeeze(-1)
+
+        if single:
+            mu_t = mu_t.unsqueeze(0)
+            var_t = var_t.unsqueeze(0)
+
+        mu_t = mu_t.reshape(-1, *mu_t.shape[2:])
+        var_t = var_t.reshape(-1, *var_t.shape[2:])
 
         # Transition mean
         mu_t1 = torch.bmm(A_t, mu_t.unsqueeze(-1)) + torch.bmm(B_t, u.unsqueeze(-1))
+        mu_t1 = mu_t1.reshape(l, n, *mu_t1.shape[1:]).squeeze(-1)
+
         # Transition covariance
         A_t_tr = torch.transpose(A_t, 1, 2)
-
-        # Noise matrix
         I = torch.eye(self.dim_z, requires_grad=False, device=z_t.device) 
         var_t1 = torch.bmm(torch.bmm(A_t, var_t), A_t_tr) + I
-
-        z_t1 = z_t1.reshape(l, n, *z_t1.shape[1:]).squeeze(-1)
-        mu_t1 = mu_t1.reshape(l, n, *mu_t1.shape[1:]).squeeze(-1)
         var_t1 = var_t1.reshape(l, n, *var_t1.shape[1:])
 
         return z_t1, mu_t1, var_t1, h
