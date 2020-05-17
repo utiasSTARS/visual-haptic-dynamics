@@ -50,7 +50,8 @@ def parse_training_args():
     parser.add_argument('--rnn_hidden_size', type=int, default=128, help='The number of hidden units for each GRU or LSTM layer')
     parser.add_argument('--use_bidirectional', type=str2bool, default=False, help='Use bidirectional RNN')
     parser.add_argument('--rnn_net', choices=['gru', 'lstm'], default='gru',  help='RNN network type')
-    parser.add_argument('--enc_dec_net', choices=['fcn', 'cnn'], default='cnn', help='Network architecture for measurement representation') 
+    parser.add_argument('--enc_dec_net', choices=['fcn', 'cnn'], default='cnn', help='Network architecture for encoder/decoder representation') 
+    parser.add_argument('--dyn_net', choices=['linearmix', 'linearrank1', 'nonlinear'], default='linearmix', help='Network architecture for dynamics')     
     parser.add_argument('--non_linearity', choices=['relu', 'elu'], default='relu', help='Activation used for decoder neural network')
     parser.add_argument('--frame_stacks', type=int, default=0, help="Number of frames to stack")
     

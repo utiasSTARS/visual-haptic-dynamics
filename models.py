@@ -237,7 +237,6 @@ class LinearMixRNN(nn.Module):
         self.B = nn.Parameter(torch.rand((K, dim_z, dim_u)))
         self.hidden_size = hidden_size
         self.bidirectional = bidirectional
-        self.layers = layers
         if net_type == "gru":
             self.rnn = nn.GRU(input_size=dim_z, hidden_size=hidden_size, 
                                 num_layers=layers, bidirectional=bidirectional)
@@ -262,17 +261,18 @@ class LinearMixRNN(nn.Module):
             u: control input (seq_len, batch_size, dim_u)
             h: hidden state of the LSTM (num_layers * num_directions, batch_size, hidden_size) or None. 
                If None, h is defaulted as 0-tensor
-            single: If seq_len=1 then remove the need for a placeholder unsqueezed dimension
+            single: If True then remove the need for a placeholder unsqueezed dimension
         Returns:
             z_t1: next sampled stats (seq_len, batch_size, dim_z)
             mu_t1: next state input mean (seq_len, batch_size, dim_z)
             var_t1: next state input covariance (seq_len, batch_size, dim_z, dim_z)
             h: hidden state of the LSTM
         """
-        
         if single:
             z_t = z_t.unsqueeze(0)
             u = u.unsqueeze(0)
+            mu_t = mu_t.unsqueeze(0)
+            var_t = var_t.unsqueeze(0)
 
         l, n, _ = z_t.shape
 
@@ -289,7 +289,8 @@ class LinearMixRNN(nn.Module):
         alpha = self.softmax(self.linear(x)) # (seq_len * batch_size, k)
 
         z_t = z_t.reshape(-1, *z_t.shape[2:])
-
+        mu_t = mu_t.reshape(-1, *mu_t.shape[2:])
+        var_t = var_t.reshape(-1, *var_t.shape[2:])
         u = u.reshape(-1, *u.shape[2:])
 
         # Mixture of A
@@ -304,28 +305,119 @@ class LinearMixRNN(nn.Module):
         z_t1 = torch.bmm(A_t, z_t.unsqueeze(-1)) + torch.bmm(B_t, u.unsqueeze(-1))
         z_t1 = z_t1.reshape(l, n, *z_t1.shape[1:]).squeeze(-1)
 
-        if single:
-            mu_t = mu_t.unsqueeze(0)
-            var_t = var_t.unsqueeze(0)
-
-        mu_t = mu_t.reshape(-1, *mu_t.shape[2:])
-        var_t = var_t.reshape(-1, *var_t.shape[2:])
-
         # Transition mean
         mu_t1 = torch.bmm(A_t, mu_t.unsqueeze(-1)) + torch.bmm(B_t, u.unsqueeze(-1))
         mu_t1 = mu_t1.reshape(l, n, *mu_t1.shape[1:]).squeeze(-1)
 
         # Transition covariance
-        A_t_tr = torch.transpose(A_t, 1, 2)
         I = torch.eye(self.dim_z, requires_grad=False, device=z_t.device) 
-        var_t1 = torch.bmm(torch.bmm(A_t, var_t), A_t_tr) + I
+        var_t1 = torch.bmm(torch.bmm(A_t, var_t), A_t.transpose(1, 2)) + I
         var_t1 = var_t1.reshape(l, n, *var_t1.shape[1:])
 
         return z_t1, mu_t1, var_t1, h
 
 
 class LinearRNN(nn.Module):
-    pass
+    """
+    This class defines the GRU-based or LSTM-based rank-1 approximation 
+    linear dynamics network inspired by https://arxiv.org/abs/1506.07365. 
+
+    Args:
+        input_size: Input dimension
+        dim_z: Dimension of state
+        dim_u: Dimension of action
+        hidden_size: Hidden state dimension
+        layers: Number of layers
+        bidirectional: Use bidirectional version
+        net_type: Use the LSTM or GRU variation
+    """
+    def __init__(self, dim_z, dim_u, hidden_size=128,
+                layers=1, bidirectional=False, net_type="lstm"):
+        super(LinearRNN, self).__init__()
+        self.dim_z = dim_z
+        self.dim_u = dim_u
+        self.hidden_size = hidden_size
+        self.bidirectional = bidirectional
+        n_outputs = 2 * dim_z + dim_z * dim_u + dim_z 
+
+        if net_type == "gru":
+            self.rnn = nn.GRU(input_size=dim_z, hidden_size=hidden_size, 
+                                num_layers=layers, bidirectional=bidirectional)
+        elif net_type =="lstm":
+            self.rnn = nn.LSTM(input_size=dim_z, hidden_size=hidden_size, 
+                                num_layers=layers, bidirectional=bidirectional)
+        if bidirectional:
+            self.linear = nn.Linear(in_features=2*hidden_size, out_features=n_outputs)
+        else:
+            self.linear = nn.Linear(in_features=hidden_size, out_features=n_outputs)
+
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, z_t, mu_t, var_t, u, h=None, single=False):
+        """
+        Forward call to produce the subsequent state.
+
+        Args:
+            z_t: sampled state (seq_len, batch_size, dim_z)
+            mu_t: state input mean (seq_len, batch_size, dim_z)
+            var_t: state input covariance (seq_len, batch_size, dim_z, dim_z)
+            u: control input (seq_len, batch_size, dim_u)
+            h: hidden state of the LSTM (num_layers * num_directions, batch_size, hidden_size) or None. 
+               If None, h is defaulted as 0-tensor
+            single: If True then remove the need for a placeholder unsqueezed dimension
+        Returns:
+            z_t1: next sampled stats (seq_len, batch_size, dim_z)
+            mu_t1: next state input mean (seq_len, batch_size, dim_z)
+            var_t1: next state input covariance (seq_len, batch_size, dim_z, dim_z)
+            h: hidden state of the LSTM
+        """
+        if single:
+            z_t = z_t.unsqueeze(0)
+            u = u.unsqueeze(0)
+            mu_t = mu_t.unsqueeze(0)
+            var_t = var_t.unsqueeze(0)
+
+        l, n, _ = z_t.shape
+
+        if h is None:
+            x, h = self.rnn(z_t)
+        else:
+            x, h = self.rnn(z_t, h)
+        
+        if self.bidirectional:
+            x = x.reshape(-1, 2*self.hidden_size) # (seq_len * batch_size, 2 * hidden_size)
+        else:
+            x = x.reshape(-1, self.hidden_size) # (seq_len * batch_size, hidden_size)
+
+        out = self.sigmoid(self.linear(x)) # (seq_len * batch_size, n_outputs)
+
+        I = torch.eye(self.dim_z, requires_grad=False, device=z_t.device) 
+
+        r = out[:, 0:self.dim_z]
+        v = out[:, self.dim_z:(2 * self.dim_z)]
+        A_t = I + torch.bmm(r.unsqueeze(2), v.unsqueeze(1))
+        B_t = out[:, (2 * self.dim_z):(2 * self.dim_z + self.dim_z * self.dim_u)]
+        B_t = B_t.view(-1, self.dim_z, self.dim_u) # reshape into matrix
+        o_t = out[:, (2 * self.dim_z + self.dim_z * self.dim_u):]
+
+        z_t = z_t.reshape(-1, *z_t.shape[2:])
+        mu_t = mu_t.reshape(-1, *mu_t.shape[2:])
+        var_t = var_t.reshape(-1, *var_t.shape[2:])
+        u = u.reshape(-1, *u.shape[2:])
+
+        # Transition sample
+        z_t1 = torch.bmm(A_t, z_t.unsqueeze(-1)) + torch.bmm(B_t, u.unsqueeze(-1)) + o_t.unsqueeze(-1)
+        z_t1 = z_t1.reshape(l, n, *z_t1.shape[1:]).squeeze(-1)
+
+        # Transition mean
+        mu_t1 = torch.bmm(A_t, mu_t.unsqueeze(-1)) + torch.bmm(B_t, u.unsqueeze(-1)) + o_t.unsqueeze(-1)
+        mu_t1 = mu_t1.reshape(l, n, *mu_t1.shape[1:]).squeeze(-1)
+
+        # Transition covariance
+        var_t1 = torch.bmm(torch.bmm(A_t, var_t), A_t.transpose(1, 2)) + I
+        var_t1 = var_t1.reshape(l, n, *var_t1.shape[1:])
+        return z_t1, mu_t1, var_t1, h
+
 
 class NonLinearRNN(nn.Module):
     #TODO: See NYU Deep SSM on how to transition covariance

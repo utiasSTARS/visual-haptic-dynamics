@@ -21,7 +21,8 @@ from models import (FullyConvEncoderVAE,
                     FullyConvDecoderVAE,
                     FCNEncoderVAE,
                     FCNDecoderVAE,
-                    LinearMixRNN)
+                    LinearMixRNN,
+                    LinearRNN)
 from datasets import ImgCached
 from losses import kl
 
@@ -95,13 +96,25 @@ def train(args):
                                     output_nl=output_nl).to(device=device)
 
     # Dynamics network
-    dyn = LinearMixRNN(dim_z=args.dim_z,
+    if args.dyn_net == "linearmix":
+        dyn = LinearMixRNN(dim_z=args.dim_z,
+                           dim_u=args.dim_u,
+                           hidden_size=args.rnn_hidden_size,
+                           bidirectional=args.use_bidirectional,
+                           net_type=args.rnn_net,
+                           K=args.K).to(device=device)
+        base_params = [dyn.A, dyn.B]
+    elif args.dyn_net == "linearrank1":
+        dyn = LinearRNN(dim_z=args.dim_z,
                         dim_u=args.dim_u,
                         hidden_size=args.rnn_hidden_size,
                         bidirectional=args.use_bidirectional,
-                        net_type=args.rnn_net,
-                        K=args.K).to(device=device)
-    base_matrices_params = [dyn.A, dyn.B]
+                        net_type=args.rnn_net).to(device=device)
+        base_params = []
+    elif args.dyn_net == "nonlinear":
+        pass
+    else:
+        raise NotImplementedError()
 
     if args.opt == "adam":
         opt_vae = torch.optim.Adam(list(enc.parameters()) + 
@@ -109,7 +122,7 @@ def train(args):
                                    lr=args.lr)
         opt_vae_base = torch.optim.Adam(list(enc.parameters()) + 
                                         list(dec.parameters()) + 
-                                        base_matrices_params, 
+                                        base_params, 
                                         lr=args.lr)
         opt_all = torch.optim.Adam(list(enc.parameters()) + 
                                    list(dec.parameters()) +
@@ -123,7 +136,7 @@ def train(args):
                                   nesterov=True)
         opt_vae_base = torch.optim.SGD(list(enc.parameters()) + 
                                      list(dec.parameters()) + 
-                                     base_matrices_params,
+                                     base_params,
                                      lr=args.lr, 
                                      momentum=0.9, 
                                      nesterov=True)
@@ -293,7 +306,7 @@ def train(args):
             # Tensorboard
             if not args.debug:
                 for loss in ['total', 'kl', 'rec']:
-                    writer.add_scalar(f"loss/{loss}/val", summary_train[f'avg_{loss}_l'], epoch)
+                    writer.add_scalar(f"loss/{loss}/train", summary_train[f'avg_{loss}_l'], epoch)
                 writer.add_images(f'reconstructed_images/{model_tag}/train/original', summary_train['og_imgs'])
                 writer.add_images(f'reconstructed_images/{model_tag}/train/reconstructed', summary_train['rec_imgs'])
 
