@@ -21,8 +21,9 @@ from models import (FullyConvEncoderVAE,
                     FullyConvDecoderVAE,
                     FCNEncoderVAE,
                     FCNDecoderVAE,
-                    LinearMixRNN,
-                    LinearRNN)
+                    LinearMixSSM,
+                    LinearSSM,
+                    NonLinearSSM)
 from datasets import ImgCached
 from losses import kl
 
@@ -97,7 +98,7 @@ def train(args):
 
     # Dynamics network
     if args.dyn_net == "linearmix":
-        dyn = LinearMixRNN(dim_z=args.dim_z,
+        dyn = LinearMixSSM(dim_z=args.dim_z,
                            dim_u=args.dim_u,
                            hidden_size=args.rnn_hidden_size,
                            bidirectional=args.use_bidirectional,
@@ -105,14 +106,19 @@ def train(args):
                            K=args.K).to(device=device)
         base_params = [dyn.A, dyn.B]
     elif args.dyn_net == "linearrank1":
-        dyn = LinearRNN(dim_z=args.dim_z,
+        dyn = LinearSSM(dim_z=args.dim_z,
                         dim_u=args.dim_u,
                         hidden_size=args.rnn_hidden_size,
                         bidirectional=args.use_bidirectional,
                         net_type=args.rnn_net).to(device=device)
         base_params = []
     elif args.dyn_net == "nonlinear":
-        pass
+        dyn = NonLinearSSM(dim_z=args.dim_z,
+                            dim_u=args.dim_u,
+                            hidden_size=args.rnn_hidden_size,
+                            bidirectional=args.use_bidirectional,
+                            net_type=args.rnn_net).to(device=device)
+        base_params = []
     else:
         raise NotImplementedError()
 
@@ -234,7 +240,7 @@ def train(args):
             logvar_z = logvar_z.reshape(n, l, *logvar_z.shape[1:])
             var_z = torch.diag_embed(torch.exp(logvar_z))
 
-            z_t1_hat, mu_z_t1_hat, var_z_t1_hat, _ = dyn(z_t=z[:, :-1], mu_t=mu_z[:, :-1], 
+            _, mu_z_t1_hat, var_z_t1_hat, _ = dyn(z_t=z[:, :-1], mu_t=mu_z[:, :-1], 
                                                          var_t=var_z[:, :-1], u=u[:, 1:])
 
             # Initial distribution 

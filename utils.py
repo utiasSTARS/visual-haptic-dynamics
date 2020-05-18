@@ -10,7 +10,7 @@ from models import (FullyConvEncoderVAE,
                     FullyConvDecoderVAE,
                     FCNEncoderVAE,
                     FCNDecoderVAE,
-                    LinearMixRNN)
+                    LinearMixSSM)
 
 class Normalize:
     def __init__(self, mean, var):
@@ -153,13 +153,28 @@ def load_models(path, args, mode='eval', device='cuda:0'):
         print(e)            
 
     # Dynamics network
-    dyn = LinearMixRNN(dim_z=args.dim_z,
+    if args.dyn_net == "linearmix":
+        dyn = LinearMixSSM(dim_z=args.dim_z,
+                           dim_u=args.dim_u,
+                           hidden_size=args.rnn_hidden_size,
+                           bidirectional=args.use_bidirectional,
+                           net_type=args.rnn_net,
+                           K=args.K).to(device=device)
+    elif args.dyn_net == "linearrank1":
+        dyn = LinearSSM(dim_z=args.dim_z,
                         dim_u=args.dim_u,
                         hidden_size=args.rnn_hidden_size,
                         bidirectional=args.use_bidirectional,
-                        net_type=args.rnn_net,
-                        K=args.K).to(device=device) 
-        
+                        net_type=args.rnn_net).to(device=device)
+    elif args.dyn_net == "nonlinear":
+        dyn = NonLinearSSM(dim_z=args.dim_z,
+                            dim_u=args.dim_u,
+                            hidden_size=args.rnn_hidden_size,
+                            bidirectional=args.use_bidirectional,
+                            net_type=args.rnn_net).to(device=device)
+    else:
+        raise NotImplementedError()
+
     try:
         dyn.load_state_dict(torch.load(path + "/dyn.pth", map_location=device))
         if mode == 'eval':
@@ -168,6 +183,7 @@ def load_models(path, args, mode='eval', device='cuda:0'):
             dyn.train()
         else:
             raise NotImplementedError()
+        
     except Exception as e: 
         print(e)             
     

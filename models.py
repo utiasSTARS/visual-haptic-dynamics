@@ -212,7 +212,7 @@ class FCNDecoderVAE(nn.Module):
         return x
 
 
-class LinearMixRNN(nn.Module):
+class LinearMixSSM(nn.Module):
     """
     This class defines the GRU-based or LSTM-based linear mixture dynamics network from
     https://github.com/simonkamronn/kvae/blob/master/kvae/filter.py.
@@ -229,7 +229,7 @@ class LinearMixRNN(nn.Module):
     """
     def __init__(self, dim_z, dim_u, hidden_size=128, 
                  K=1, layers=1, bidirectional=False, net_type="lstm"):
-        super(LinearMixRNN, self).__init__()
+        super(LinearMixSSM, self).__init__()
         self.K = K
         self.dim_z = dim_z
         self.dim_u = dim_u
@@ -317,7 +317,7 @@ class LinearMixRNN(nn.Module):
         return z_t1, mu_t1, var_t1, h
 
 
-class LinearRNN(nn.Module):
+class LinearSSM(nn.Module):
     """
     This class defines the GRU-based or LSTM-based rank-1 approximation 
     linear dynamics network inspired by https://arxiv.org/abs/1506.07365. 
@@ -333,7 +333,7 @@ class LinearRNN(nn.Module):
     """
     def __init__(self, dim_z, dim_u, hidden_size=128,
                 layers=1, bidirectional=False, net_type="lstm"):
-        super(LinearRNN, self).__init__()
+        super(LinearSSM, self).__init__()
         self.dim_z = dim_z
         self.dim_u = dim_u
         self.hidden_size = hidden_size
@@ -419,6 +419,88 @@ class LinearRNN(nn.Module):
         return z_t1, mu_t1, var_t1, h
 
 
-class NonLinearRNN(nn.Module):
-    #TODO: See NYU Deep SSM on how to transition covariance
-    pass
+class NonLinearSSM(nn.Module):
+    """
+    This class defines the GRU-based or LSTM-based non-linear
+    dynamics network inspired by https://arxiv.org/abs/1506.07365. 
+
+    Args:
+        input_size: Input dimension
+        dim_z: Dimension of state
+        dim_u: Dimension of action
+        hidden_size: Hidden state dimension
+        layers: Number of layers
+        bidirectional: Use bidirectional version
+        net_type: Use the LSTM or GRU variation
+    """
+    def __init__(self, dim_z, dim_u, hidden_size=128,
+                layers=1, bidirectional=False, net_type="lstm"):    
+        super(NonLinearSSM, self).__init__()
+        self.dim_z = dim_z
+        self.dim_u = dim_u
+        self.hidden_size = hidden_size
+        self.bidirectional = bidirectional
+
+        if net_type == "gru":
+            self.rnn = nn.GRU(input_size=dim_z, hidden_size=hidden_size, 
+                                num_layers=layers, bidirectional=bidirectional)
+        elif net_type =="lstm":
+            self.rnn = nn.LSTM(input_size=dim_z, hidden_size=hidden_size, 
+                                num_layers=layers, bidirectional=bidirectional)
+        if bidirectional:
+            self.fc_mu = nn.Linear(2*hidden_size, dim_z)
+            self.fc_logvar = nn.Linear(2*hidden_size, dim_z)
+        else:
+            self.fc_mu = nn.Linear(hidden_size, dim_z)
+            self.fc_logvar = nn.Linear(hidden_size, dim_z)
+
+    def forward(self, z_t, mu_t, var_t, u, h=None, single=False):
+            """
+            Forward call to produce the subsequent state.
+
+            Args:
+                z_t: sampled state (seq_len, batch_size, dim_z)
+                mu_t: state input mean (seq_len, batch_size, dim_z)
+                var_t: state input covariance (seq_len, batch_size, dim_z, dim_z)
+                u: control input (seq_len, batch_size, dim_u)
+                h: hidden state of the LSTM (num_layers * num_directions, batch_size, hidden_size) or None. 
+                If None, h is defaulted as 0-tensor
+                single: If True then remove the need for a placeholder unsqueezed dimension
+            Returns:
+                z_t1: next sampled stats (seq_len, batch_size, dim_z)
+                mu_t1: next state input mean (seq_len, batch_size, dim_z)
+                var_t1: next state input covariance (seq_len, batch_size, dim_z, dim_z)
+                h: hidden state of the LSTM
+            """
+            if single:
+                z_t = z_t.unsqueeze(0)
+                u = u.unsqueeze(0)
+                mu_t = mu_t.unsqueeze(0)
+                var_t = var_t.unsqueeze(0)
+
+            l, n, _ = z_t.shape
+
+            if h is None:
+                x, h = self.rnn(z_t)
+            else:
+                x, h = self.rnn(z_t, h)
+            
+            if self.bidirectional:
+                x = x.reshape(-1, 2*self.hidden_size) # (seq_len * batch_size, 2 * hidden_size)
+            else:
+                x = x.reshape(-1, self.hidden_size) # (seq_len * batch_size, hidden_size)
+
+            mu_t1 = self.fc_mu(x) # (seq_len * batch_size, dim_z)
+            logvar_t1 = self.fc_logvar(x) # (seq_len * batch_size, dim_z)
+            var_t1 = torch.diag_embed(torch.exp(logvar_t1)) # (seq_len * batch_size, dim_z, dim_z)
+
+            # Reparameterized sample
+            std_t1 = torch.exp(logvar_t1 / 2.0)
+            eps = torch.randn_like(std_t1)
+            z_t1 = mu_t1 + eps * std_t1
+
+            z_t1 = z_t1.reshape(l, n, *z_t1.shape[1:])
+            mu_t1 = mu_t1.reshape(l, n, *mu_t1.shape[1:])
+            var_t1 = var_t1.reshape(l, n, *var_t1.shape[1:])
+
+            return z_t1, mu_t1, var_t1, h
