@@ -4,11 +4,11 @@ Test environment with simple inputs.
 import os, sys, time
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../env/')))
 
-from pendulum import Pendulum
+from pendulum import VisualPendulum
 import numpy as np
 
 def test_actions():
-    env = Pendulum()
+    env = VisualPendulum()
     env.reset(np.array([np.pi,0]))
 
     for _ in range(100):
