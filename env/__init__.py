@@ -1,1 +1,1 @@
-from .pendulum import Pendulum
+from .pendulum import VisualPendulum

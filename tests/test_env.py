@@ -15,6 +15,8 @@ def test_actions():
         obs, _, _, _ = env.step(np.array([0]))
         env.reset()
         print(obs.shape)
+    
+    env.close()
 
 if __name__=="__main__":
     test_actions()

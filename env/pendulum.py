@@ -8,7 +8,6 @@ from skimage.transform import resize
 from skimage.util import img_as_ubyte
 from skimage.color import rgb2gray
 
-
 class VisualPendulum(gym.Env):
     metadata = {
         'render.modes' : ['human', 'rgb_array'],
@@ -85,7 +84,7 @@ class VisualPendulum(gym.Env):
         img = self._image_transforms(img)
         return img
 
-    def render(self, mode='human', close=False):
+    def render(self, mode='human'):
         if self.viewer is None:
             import rendering
             self.viewer = rendering.Viewer(500, 500)
