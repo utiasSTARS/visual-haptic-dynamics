@@ -238,11 +238,19 @@ class LinearMixSSM(nn.Module):
         self.hidden_size = hidden_size
         self.bidirectional = bidirectional
         if net_type == "gru":
-            self.rnn = nn.GRU(input_size=dim_z, hidden_size=hidden_size, 
-                                num_layers=layers, bidirectional=bidirectional)
+            self.rnn = nn.GRU(
+                input_size=dim_z, 
+                hidden_size=hidden_size, 
+                num_layers=layers, 
+                bidirectional=bidirectional
+            )
         elif net_type =="lstm":
-            self.rnn = nn.LSTM(input_size=dim_z, hidden_size=hidden_size, 
-                                num_layers=layers, bidirectional=bidirectional)
+            self.rnn = nn.LSTM(
+                input_size=dim_z, 
+                hidden_size=hidden_size, 
+                num_layers=layers, 
+                bidirectional=bidirectional
+            )
         if bidirectional:
             self.linear = nn.Linear(in_features=2*hidden_size, out_features=K)
         else:
@@ -341,11 +349,19 @@ class LinearSSM(nn.Module):
         n_outputs = 2 * dim_z + dim_z * dim_u + dim_z 
 
         if net_type == "gru":
-            self.rnn = nn.GRU(input_size=dim_z, hidden_size=hidden_size, 
-                                num_layers=layers, bidirectional=bidirectional)
+            self.rnn = nn.GRU(
+                input_size=dim_z, 
+                hidden_size=hidden_size, 
+                num_layers=layers, 
+                bidirectional=bidirectional
+            )
         elif net_type =="lstm":
-            self.rnn = nn.LSTM(input_size=dim_z, hidden_size=hidden_size, 
-                                num_layers=layers, bidirectional=bidirectional)
+            self.rnn = nn.LSTM(
+                input_size=dim_z, 
+                hidden_size=hidden_size, 
+                num_layers=layers, 
+                bidirectional=bidirectional
+            )
         if bidirectional:
             self.linear = nn.Linear(in_features=2*hidden_size, out_features=n_outputs)
         else:
@@ -406,11 +422,15 @@ class LinearSSM(nn.Module):
         u = u.reshape(-1, *u.shape[2:])
 
         # Transition sample
-        z_t1 = torch.bmm(A_t, z_t.unsqueeze(-1)) + torch.bmm(B_t, u.unsqueeze(-1)) + o_t.unsqueeze(-1)
+        z_t1 = torch.bmm(A_t, z_t.unsqueeze(-1)) \
+            + torch.bmm(B_t, u.unsqueeze(-1)) \
+            + o_t.unsqueeze(-1)
         z_t1 = z_t1.reshape(l, n, *z_t1.shape[1:]).squeeze(-1)
 
         # Transition mean
-        mu_t1 = torch.bmm(A_t, mu_t.unsqueeze(-1)) + torch.bmm(B_t, u.unsqueeze(-1)) + o_t.unsqueeze(-1)
+        mu_t1 = torch.bmm(A_t, mu_t.unsqueeze(-1)) \
+            + torch.bmm(B_t, u.unsqueeze(-1)) \
+            + o_t.unsqueeze(-1)
         mu_t1 = mu_t1.reshape(l, n, *mu_t1.shape[1:]).squeeze(-1)
 
         # Transition covariance
@@ -442,11 +462,19 @@ class NonLinearSSM(nn.Module):
         self.bidirectional = bidirectional
 
         if net_type == "gru":
-            self.rnn = nn.GRU(input_size=dim_z, hidden_size=hidden_size, 
-                                num_layers=layers, bidirectional=bidirectional)
+            self.rnn = nn.GRU(
+                input_size=dim_z, 
+                hidden_size=hidden_size, 
+                num_layers=layers, 
+                bidirectional=bidirectional
+            )
         elif net_type =="lstm":
-            self.rnn = nn.LSTM(input_size=dim_z, hidden_size=hidden_size, 
-                                num_layers=layers, bidirectional=bidirectional)
+            self.rnn = nn.LSTM(
+                input_size=dim_z, 
+                hidden_size=hidden_size, 
+                num_layers=layers, 
+                bidirectional=bidirectional
+            )
         if bidirectional:
             self.fc_mu = nn.Linear(2*hidden_size, dim_z)
             self.fc_logvar = nn.Linear(2*hidden_size, dim_z)

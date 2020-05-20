@@ -39,7 +39,10 @@ def train(args):
 
     # Keeping track of results and hyperparameters
     if not args.debug:
-        time_tag = datetime.strftime(datetime.now(), '%m-%d-%y_%H:%M:%S')
+        time_tag = datetime.strftime(
+            datetime.now(), 
+            '%m-%d-%y_%H:%M:%S'
+        )
         model_tag = time_tag + '_' + args.comment
         save_dir = args.storage_base_path + model_tag
         os.makedirs(save_dir, exist_ok=True)
@@ -48,7 +51,9 @@ def train(args):
             checkpoint_dir = os.path.join(save_dir, "checkpoints")
             os.makedirs(checkpoint_dir, exist_ok=True)
 
-        args.__dict__ = OrderedDict(sorted(args.__dict__.items(), key=lambda t: t[0]))
+        args.__dict__ = OrderedDict(
+            sorted(args.__dict__.items(), key=lambda t: t[0])
+        )
         with open(save_dir + '/hyperparameters.txt', 'w') as f:
             json.dump(args.__dict__, f, indent=2)
             
@@ -65,93 +70,123 @@ def train(args):
 
     # Encoder and decoder
     if args.enc_dec_net == 'fcn':
-        true_dim_x = args.dim_x[0] + args.frame_stacks, args.dim_x[1], args.dim_x[2]
-        enc = FCNEncoderVAE(dim_in=int(np.product(true_dim_x)),
-                            dim_out=args.dim_z,
-                            bn=args.use_batch_norm,
-                            drop=args.use_dropout,
-                            nl=nl,
-                            hidden_size=args.fc_hidden_size,
-                            stochastic=True).to(device=device)
-        dec = FCNDecoderVAE(dim_in=args.dim_z,
-                            dim_out=true_dim_x,
-                            bn=args.use_batch_norm,
-                            drop=args.use_dropout,
-                            nl=nl,
-                            output_nl=output_nl,
-                            hidden_size=args.fc_hidden_size).to(device=device)
+        true_dim_x = (
+            args.dim_x[0] + args.frame_stacks, 
+            args.dim_x[1], 
+            args.dim_x[2]
+        )
+        enc = FCNEncoderVAE(
+            dim_in=int(np.product(true_dim_x)),
+            dim_out=args.dim_z,
+            bn=args.use_batch_norm,
+            drop=args.use_dropout,
+            nl=nl,
+            hidden_size=args.fc_hidden_size,
+            stochastic=True
+        ).to(device=device)
+        dec = FCNDecoderVAE(
+            dim_in=args.dim_z,
+            dim_out=true_dim_x,
+            bn=args.use_batch_norm,
+            drop=args.use_dropout,
+            nl=nl,
+            output_nl=output_nl,
+            hidden_size=args.fc_hidden_size
+        ).to(device=device)
     elif args.enc_dec_net == 'cnn':
-        enc = FullyConvEncoderVAE(input=args.dim_x[0] + args.frame_stacks,
-                                    latent_size=args.dim_z,
-                                    bn=args.use_batch_norm,
-                                    drop=args.use_dropout,
-                                    nl=nl,
-                                    img_dim=str(args.dim_x[1]),
-                                    stochastic=True).to(device=device)
-        dec = FullyConvDecoderVAE(input=args.dim_x[0] + args.frame_stacks,
-                                    latent_size=args.dim_z,
-                                    bn=args.use_batch_norm,
-                                    drop=args.use_dropout,
-                                    nl=nl,
-                                    img_dim=str(args.dim_x[1]),
-                                    output_nl=output_nl).to(device=device)
+        enc = FullyConvEncoderVAE(
+            input=args.dim_x[0] + args.frame_stacks,
+            latent_size=args.dim_z,
+            bn=args.use_batch_norm,
+            drop=args.use_dropout,
+            nl=nl,
+            img_dim=str(args.dim_x[1]),
+            stochastic=True
+        ).to(device=device)
+        dec = FullyConvDecoderVAE(
+            input=args.dim_x[0] + args.frame_stacks,
+            latent_size=args.dim_z,
+            bn=args.use_batch_norm,
+            drop=args.use_dropout,
+            nl=nl,
+            img_dim=str(args.dim_x[1]),
+            output_nl=output_nl
+        ).to(device=device)
 
     # Dynamics network
     if args.dyn_net == "linearmix":
-        dyn = LinearMixSSM(dim_z=args.dim_z,
-                           dim_u=args.dim_u,
-                           hidden_size=args.rnn_hidden_size,
-                           bidirectional=args.use_bidirectional,
-                           net_type=args.rnn_net,
-                           K=args.K).to(device=device)
+        dyn = LinearMixSSM(
+            dim_z=args.dim_z,
+            dim_u=args.dim_u,
+            hidden_size=args.rnn_hidden_size,
+            bidirectional=args.use_bidirectional,
+            net_type=args.rnn_net,
+            K=args.K
+        ).to(device=device)
         base_params = [dyn.A, dyn.B]
     elif args.dyn_net == "linearrank1":
-        dyn = LinearSSM(dim_z=args.dim_z,
-                        dim_u=args.dim_u,
-                        hidden_size=args.rnn_hidden_size,
-                        bidirectional=args.use_bidirectional,
-                        net_type=args.rnn_net).to(device=device)
+        dyn = LinearSSM(
+            dim_z=args.dim_z,
+            dim_u=args.dim_u,
+            hidden_size=args.rnn_hidden_size,
+            bidirectional=args.use_bidirectional,
+            net_type=args.rnn_net
+        ).to(device=device)
         base_params = []
     elif args.dyn_net == "nonlinear":
-        dyn = NonLinearSSM(dim_z=args.dim_z,
-                            dim_u=args.dim_u,
-                            hidden_size=args.rnn_hidden_size,
-                            bidirectional=args.use_bidirectional,
-                            net_type=args.rnn_net).to(device=device)
+        dyn = NonLinearSSM(
+            dim_z=args.dim_z,
+            dim_u=args.dim_u,
+            hidden_size=args.rnn_hidden_size,
+            bidirectional=args.use_bidirectional,
+            net_type=args.rnn_net
+        ).to(device=device)
         base_params = []
     else:
         raise NotImplementedError()
 
     if args.opt == "adam":
-        opt_vae = torch.optim.Adam(list(enc.parameters()) + 
-                                   list(dec.parameters()), 
-                                   lr=args.lr)
-        opt_vae_base = torch.optim.Adam(list(enc.parameters()) + 
-                                        list(dec.parameters()) + 
-                                        base_params, 
-                                        lr=args.lr)
-        opt_all = torch.optim.Adam(list(enc.parameters()) + 
-                                   list(dec.parameters()) +
-                                   list(dyn.parameters()), 
-                                   lr=args.lr)
+        opt_vae = torch.optim.Adam(
+            list(enc.parameters()) + 
+            list(dec.parameters()), 
+            lr=args.lr
+        )
+        opt_vae_base = torch.optim.Adam(
+            list(enc.parameters()) + 
+            list(dec.parameters()) + 
+            base_params, 
+            lr=args.lr
+        )
+        opt_all = torch.optim.Adam(
+            list(enc.parameters()) + 
+            list(dec.parameters()) +
+            list(dyn.parameters()), 
+            lr=args.lr
+        )
     elif args.opt == "sgd":
-        opt_vae = torch.optim.SGD(list(enc.parameters()) + 
-                                  list(dec.parameters()), 
-                                  lr=args.lr, 
-                                  momentum=0.9, 
-                                  nesterov=True)
-        opt_vae_base = torch.optim.SGD(list(enc.parameters()) + 
-                                     list(dec.parameters()) + 
-                                     base_params,
-                                     lr=args.lr, 
-                                     momentum=0.9, 
-                                     nesterov=True)
-        opt_all = torch.optim.SGD(list(enc.parameters()) + 
-                                  list(dec.parameters()) +
-                                  list(dyn.parameters()), 
-                                  lr=args.lr, 
-                                  momentum=0.9, 
-                                  nesterov=True)
+        opt_vae = torch.optim.SGD(
+            list(enc.parameters()) + 
+            list(dec.parameters()), 
+            lr=args.lr, 
+            momentum=0.9, 
+            nesterov=True
+        )
+        opt_vae_base = torch.optim.SGD(
+            list(enc.parameters()) + 
+            list(dec.parameters()) + 
+            base_params,
+            lr=args.lr, 
+            momentum=0.9, 
+            nesterov=True
+        )
+        opt_all = torch.optim.SGD(
+            list(enc.parameters()) + 
+            list(dec.parameters()) +
+            list(dyn.parameters()), 
+            lr=args.lr, 
+            momentum=0.9, 
+            nesterov=True
+        )
     else:
         raise NotImplementedError()
 
@@ -172,30 +207,36 @@ def train(args):
             tv.transforms.Grayscale(num_output_channels=1),
             tv.transforms.ToTensor(),
             Normalize(mean=0.27, var=1.0 - 0.27) # 64x64
-            ])
+        ])
     else:
         raise NotImplementedError()
 
     # Dataset
-    ds = ImgCached(args.dataset,
-                   transform=transform,
-                   img_shape=args.dim_x)
-    ds_size = len(ds)
+    dataset = ImgCached(
+            args.dataset,
+            transform=transform,
+            img_shape=args.dim_x
+        )
+    ds_size = len(dataset)
     idx = list(range(ds_size))
     split = int(np.floor(args.val_split * ds_size))
     train_idx, val_idx = idx[split:], idx[:split]
     train_sampler = SubsetRandomSampler(train_idx)
     valid_sampler = SubsetRandomSampler(val_idx)
-    train_loader = DataLoader(ds,
-                              batch_size=args.n_batch,
-                              num_workers=args.n_worker,
-                              sampler=train_sampler,
-                              worker_init_fn=_init_fn)
-    val_loader = DataLoader(ds,
-                            batch_size=args.n_batch,
-                            num_workers=args.n_worker,
-                            sampler=valid_sampler,
-                            worker_init_fn=_init_fn)
+    train_loader = DataLoader(
+        dataset,
+        batch_size=args.n_batch,
+        num_workers=args.n_worker,
+        sampler=train_sampler,
+        worker_init_fn=_init_fn
+    )
+    val_loader = DataLoader(
+        dataset,
+        batch_size=args.n_batch,
+        num_workers=args.n_worker,
+        sampler=valid_sampler,
+        worker_init_fn=_init_fn
+    )
 
     def opt_iter(epoch, opt=None):
         """Single training epoch."""
@@ -240,8 +281,8 @@ def train(args):
             logvar_z = logvar_z.reshape(n, l, *logvar_z.shape[1:])
             var_z = torch.diag_embed(torch.exp(logvar_z))
 
-            _, mu_z_t1_hat, var_z_t1_hat, _ = dyn(z_t=z[:, :-1], mu_t=mu_z[:, :-1], 
-                                                         var_t=var_z[:, :-1], u=u[:, 1:])
+            _, mu_z_t1_hat, var_z_t1_hat, _ = 
+                dyn(z_t=z[:, :-1], mu_t=mu_z[:, :-1], var_t=var_z[:, :-1], u=u[:, 1:])
 
             # Initial distribution 
             mu_z_i = torch.zeros(args.dim_z, requires_grad=False, device=device)
@@ -252,10 +293,12 @@ def train(args):
             mu_z_hat = torch.cat((mu_z_i, mu_z_t1_hat), 1)
             var_z_hat = torch.cat((var_z_i, var_z_t1_hat), 1)
 
-            loss_kl = (args.lam_kl * torch.sum(kl(mu0=mu_z.reshape(-1, *mu_z.shape[2:]), 
-                                                    cov0=var_z.reshape(-1, *var_z.shape[2:]), 
-                                                    mu1=mu_z_hat.reshape(-1, *mu_z_hat.shape[2:]), 
-                                                    cov1=var_z_hat.reshape(-1, *var_z_hat.shape[2:])))) / n
+            loss_kl = (
+                args.lam_kl * torch.sum(kl(mu0=mu_z.reshape(-1, *mu_z.shape[2:]), 
+                cov0=var_z.reshape(-1, *var_z.shape[2:]), 
+                mu1=mu_z_hat.reshape(-1, *mu_z_hat.shape[2:]), 
+                cov1=var_z_hat.reshape(-1, *var_z_hat.shape[2:])))
+            ) / n
 
             #TODO: Reward prediction
             total_loss = loss_rec + loss_kl
@@ -275,7 +318,8 @@ def train(args):
                 opt.step()
 
         # Summary stats from epoch
-        summary_stats = {f'avg_{key}':sum(stats)/len(stats) for (key, stats) in running_stats.items()}
+        summary_stats = {f'avg_{key}':sum(stats)/len(stats) 
+            for (key, stats) in running_stats.items()}
         n_images = 16 # random sample of images to visualize reconstruction quality
         rng = random.randint(0, x.shape[0] - n_images)
         x_plt = x[rng:(rng + n_images), np.newaxis, -1].detach().cpu()
@@ -305,9 +349,9 @@ def train(args):
             epoch_time = time.time() - tic
 
             print((f"Epoch {epoch + 1}/{args.n_epoch}: " 
-                   f"Avg train loss: {summary_train['avg_total_l']}, " 
-                   f"Avg val loss: {summary_val['avg_total_l'] if args.val_split > 0 else 'N/A'}, "
-                   f"Time per epoch: {epoch_time}"))
+                f"Avg train loss: {summary_train['avg_total_l']}, " 
+                f"Avg val loss: {summary_val['avg_total_l'] if args.val_split > 0 else 'N/A'}, "
+                f"Time per epoch: {epoch_time}"))
             
             # Tensorboard
             if not args.debug:
