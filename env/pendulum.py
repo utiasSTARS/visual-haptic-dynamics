@@ -98,18 +98,13 @@ class VisualPendulum(gym.Env):
             axle = rendering.make_circle(.05)
             axle.set_color(0, 0, 0)
             self.viewer.add_geom(axle)
-            # fname = path.join(path.dirname(__file__), "assets/clockwise.png")
-            # self.img = rendering.Image(fname, 1., 1.)
             self.imgtrans = rendering.Transform()
-            # self.img.add_attr(self.imgtrans)
-
-        self.viewer.add_onetime(self.img)
 
         self.pole_transform.set_rotation(self.state[0] + np.pi / 2)
         if self.last_u:
             self.imgtrans.scale = (-self.last_u / 2, np.abs(self.last_u) / 2)
 
-        return self.viewer.render(return_rgb_array=mode=='rgb_array')
+        return self.viewer.render(return_rgb_array=mode == 'rgb_array')
 
     def close(self):
         if self.viewer:

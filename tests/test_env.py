@@ -11,9 +11,10 @@ def test_actions():
     env = VisualPendulum()
     env.reset(np.array([np.pi,0]))
 
-    for _ in range(100):
+    for _ in range(5):
         obs, _, _, _ = env.step(np.array([0]))
         env.reset()
+        print(obs.shape)
 
 if __name__=="__main__":
     test_actions()
