@@ -1,7 +1,9 @@
 """
 2D rendering framework
 """
+from __future__ import division
 import os
+import six
 import sys
 
 if "Apple" in sys.version:
@@ -9,27 +11,18 @@ if "Apple" in sys.version:
         os.environ['DYLD_FALLBACK_LIBRARY_PATH'] += ':/usr/lib'
         # (JDS 2016/04/15): avoid bug on Anaconda 2.3.0 / Yosemite
 
+from gym.utils import reraise
 from gym import error
 
 try:
     import pyglet
 except ImportError as e:
-    raise ImportError('''
-    Cannot import pyglet.
-    HINT: you can install pyglet directly via 'pip install pyglet'.
-    But if you really just want to install all Gym dependencies and not have to think about it,
-    'pip install -e .[all]' or 'pip install gym[all]' will do it.
-    ''')
+    reraise(suffix="HINT: you can install pyglet directly via 'pip install pyglet'. But if you really just want to install all Gym dependencies and not have to think about it, 'pip install -e .[all]' or 'pip install gym[all]' will do it.")
 
 try:
     from pyglet.gl import *
 except ImportError as e:
-    raise ImportError('''
-    Error occurred while running `from pyglet.gl import *`
-    HINT: make sure you have OpenGL install. On Ubuntu, you can run 'apt-get install python-opengl'.
-    If you're running on a server, you may need a virtual frame buffer; something like this should work:
-    'xvfb-run -s \"-screen 0 1400x900x24\" python <your_script.py>'
-    ''')
+    reraise(prefix="Error occured while running `from pyglet.gl import *`",suffix="HINT: make sure you have OpenGL install. On Ubuntu, you can run 'apt-get install python-opengl'. If you're running on a server, you may need a virtual frame buffer; something like this should work: 'xvfb-run -s \"-screen 0 1400x900x24\" python <your_script.py>'")
 
 import math
 import numpy as np
@@ -39,34 +32,23 @@ RAD2DEG = 57.29577951308232
 def get_display(spec):
     """Convert a display specification (such as :0) into an actual Display
     object.
+
     Pyglet only supports multiple Displays on Linux.
     """
     if spec is None:
-        return pyglet.canvas.get_display()
-        # returns already available pyglet_display,
-        # if there is no pyglet display available then it creates one
-    elif isinstance(spec, str):
+        return None
+    elif isinstance(spec, six.string_types):
         return pyglet.canvas.Display(spec)
     else:
         raise error.Error('Invalid display specification: {}. (Must be a string like :0 or None.)'.format(spec))
 
-def get_window(width, height, display):
-    """
-    Will create a pyglet window from the display specification provided.
-    """
-    screen = display.get_screens() #available screens
-    config = screen[0].get_best_config() #selecting the first screen
-    context = config.create_context(None) #create GL context
-
-    return pyglet.window.Window(width=width, height=height, display=display, config=config, context=context)
-
 class Viewer(object):
-    def __init__(self, width, height, display=None):
+    def __init__(self, width, height, display=None, visible=True):
         display = get_display(display)
 
         self.width = width
         self.height = height
-        self.window = get_window(width=width, height=height, display=display)
+        self.window = pyglet.window.Window(width=width, height=height, display=display, visible=visible)
         self.window.on_close = self.window_closed_by_user
         self.isopen = True
         self.geoms = []
@@ -77,10 +59,7 @@ class Viewer(object):
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
 
     def close(self):
-        if self.isopen and sys.meta_path:
-            # ^^^ check sys.meta_path to avoid 'ImportError: sys.meta_path is None, Python is likely shutting down'
-            self.window.close()
-            self.isopen = False
+        self.window.close()
 
     def window_closed_by_user(self):
         self.isopen = False
@@ -114,7 +93,7 @@ class Viewer(object):
         if return_rgb_array:
             buffer = pyglet.image.get_buffer_manager().get_color_buffer()
             image_data = buffer.get_image_data()
-            arr = np.frombuffer(image_data.get_data(), dtype=np.uint8)
+            arr = np.fromstring(image_data.data, dtype=np.uint8, sep='')
             # In https://github.com/openai/gym-http-api/issues/2, we
             # discovered that someone using Xmonad on Arch was having
             # a window of size 598 x 398, though a 600 x 400 window
@@ -156,7 +135,7 @@ class Viewer(object):
         self.window.flip()
         image_data = pyglet.image.get_buffer_manager().get_color_buffer().get_image_data()
         self.window.flip()
-        arr = np.fromstring(image_data.get_data(), dtype=np.uint8, sep='')
+        arr = np.fromstring(image_data.data, dtype=np.uint8, sep='')
         arr = arr.reshape(self.height, self.width, 4)
         return arr[::-1,:,0:3]
 
@@ -336,7 +315,6 @@ class SimpleImageViewer(object):
         self.isopen = False
         self.display = display
         self.maxwidth = maxwidth
-        
     def imshow(self, arr):
         if self.window is None:
             height, width, _channels = arr.shape
@@ -344,8 +322,8 @@ class SimpleImageViewer(object):
                 scale = self.maxwidth / width
                 width = int(scale * width)
                 height = int(scale * height)
-            self.window = pyglet.window.Window(width=width, height=height,
-                display=self.display, vsync=False, resizable=True)
+            self.window = pyglet.window.Window(width=width, height=height, 
+                display=self.display, vsync=False, resizable=True)            
             self.width = width
             self.height = height
             self.isopen = True
@@ -360,9 +338,9 @@ class SimpleImageViewer(object):
                 self.isopen = False
 
         assert len(arr.shape) == 3, "You passed in an image with the wrong number shape"
-        image = pyglet.image.ImageData(arr.shape[1], arr.shape[0],
+        image = pyglet.image.ImageData(arr.shape[1], arr.shape[0], 
             'RGB', arr.tobytes(), pitch=arr.shape[1]*-3)
-        gl.glTexParameteri(gl.GL_TEXTURE_2D,
+        gl.glTexParameteri(gl.GL_TEXTURE_2D, 
             gl.GL_TEXTURE_MAG_FILTER, gl.GL_NEAREST)
         texture = image.get_texture()
         texture.width = self.width
@@ -372,10 +350,8 @@ class SimpleImageViewer(object):
         self.window.dispatch_events()
         texture.blit(0, 0) # draw
         self.window.flip()
-
     def close(self):
-        if self.isopen and sys.meta_path:
-            # ^^^ check sys.meta_path to avoid 'ImportError: sys.meta_path is None, Python is likely shutting down'
+        if self.isopen:
             self.window.close()
             self.isopen = False
 
