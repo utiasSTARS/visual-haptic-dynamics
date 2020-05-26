@@ -32,10 +32,10 @@ def frame_stack(x, frames=1):
     contains the extra frames added.
     
     e.g. visualization of frames=2:
-    x_{0} x_{1} x_{2} x_{3} ... x_{l}
-    0     x_{0} x_{1} x_{2} ... x_{l-1} x_{l}
+    x_{0} | x_{1} x_{2} x_{3} ... x_{l}   |
+    0     | x_{0} x_{1} x_{2} ... x_{l-1} | x_{l}
 
-    NOTE: "Index 0" is the most recent frame
+    NOTE: "Index 0" is the current frame, and index 1+ is the history
     """
     n, l, c, h, w = x.shape
     x_stacked = torch.zeros((n, l, (frames + 1) * c, h, w), 
