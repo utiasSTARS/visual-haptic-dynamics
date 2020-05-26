@@ -8,6 +8,9 @@ from skimage.transform import resize
 from skimage.util import img_as_ubyte
 from skimage.color import rgb2gray
 
+def angle_normalize(x):
+    return (((x + np.pi) % (2 * np.pi)) - np.pi)
+
 class VisualPendulum(gym.Env):
     metadata = {
         'render.modes' : ['human', 'rgb_array'],
@@ -36,7 +39,7 @@ class VisualPendulum(gym.Env):
         self.observation_space = spaces.Box(
             low=0, 
             high=1, 
-            shape=(render_w, render_h, 1), 
+            shape=(render_w, render_h, 3), 
             dtype=np.float32
         )
 
@@ -46,14 +49,17 @@ class VisualPendulum(gym.Env):
         self.np_random, seed = seeding.np_random(seed)
         return [seed]
 
-    def step(self,u):
+    def cost(self, th, thdot, u):
+        return angle_normalize(th) ** 2 \
+            + .1 * thdot ** 2 \
+            + .001 * (u ** 2) 
+
+    def step(self, u):
         th, thdot = self.state # th := theta
 
         u = np.clip(u, -self.max_torque, self.max_torque)[0]
         self.last_u = u # for rendering
-        costs = angle_normalize(th) ** 2 \
-            + .1 * thdot ** 2 \
-            + .001 * (u ** 2)
+        costs = self.cost(th=th, thdot=thdot, u=u)
 
         newthdot = thdot \
             + (-3 * self.g / (2 * self.l) * np.sin(th + np.pi)
@@ -110,5 +116,49 @@ class VisualPendulum(gym.Env):
             self.viewer.close()
             self.viewer = None
 
-def angle_normalize(x):
-    return (((x + np.pi) % (2 * np.pi)) - np.pi)
+
+class LatentPendulum(VisualPendulum):
+    """Wrap environment with latent dynamics model and reward function of choice."""
+    def __init__(self, models, device, img_transform=None):
+        super().__init__()
+        self.enc, self.dec, self.dyn = models
+        self.device = device
+        self.img_transform = img_transform
+        self.z_goal = self.encode(self.reset(np.array([0., 0.])))
+        self.reset()
+
+    def to(self, device):
+        self.device = device
+        self.enc.to(device=device).eval()
+        self.dec.to(device=device).eval()
+        self.dyn.to(device=device).eval()
+    
+    def encode(self, img):
+        if self.img_transform is None:
+            return self.enc(img)
+        else:
+            return self.enc(self.img_transform(img))
+
+    def rollout(self, actions):
+        H = actions.shape[0] # (H, dim_u)
+        img_t = self._get_obs() # (1, w, h)
+        z_t, mu_t, logvar_t = self.encode(img_t) # (1, dim_z)
+        var_t = torch.diag_embed(torch.exp(logvar_t)) # (1, dim_z, dim_z)
+        z = torch.zeros((h, z_t.shape[-1]))
+
+        for ii in range(H):
+            z_t1, mu_t1, var_t1, _ = self.dyn(
+                z_t=z_t, mu_t=mu_t, var_t=var_t, 
+                u=actions[ii].unsqueeze(0), single=True
+            )
+            z[h] = z_t1
+        
+        cost = self.euclidean_cost(z)
+        return cost
+
+    def euclidean_cost(self, z_current):
+        cost = (self.z_goal - z)**2
+        return cost.sum()
+
+    def manifold_cost(self, z_current):
+        pass

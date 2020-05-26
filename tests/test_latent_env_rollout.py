@@ -1,17 +1,18 @@
 """
-Test environment with simple inputs.
+Test latent environment with roll out.
 """
 import os, sys, time
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../env/')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
 
-from pendulum import VisualPendulum
+from pendulum import LatentPendulum
 import numpy as np
 
 def test_actions():
-    env = VisualPendulum()
+    env = LatentPendulum()
     env.reset(np.array([np.pi,0]))
 
-    for _ in range(5):
+    for _ in range(1):
         obs, _, _, _ = env.step(np.array([0]))
         img = env.reset()
         print("Obs received: ", obs.shape)

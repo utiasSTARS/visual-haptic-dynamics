@@ -269,7 +269,7 @@ class LinearMixSSM(nn.Module):
             u: control input (seq_len, batch_size, dim_u)
             h: hidden state of the LSTM (num_layers * num_directions, batch_size, hidden_size) or None. 
                If None, h is defaulted as 0-tensor
-            single: If True then remove the need for a placeholder unsqueezed dimension
+            single: If True then remove the need for a placeholder unsqueezed dimension for seq_len 
         Returns:
             z_t1: next sampled stats (seq_len, batch_size, dim_z)
             mu_t1: next state input mean (seq_len, batch_size, dim_z)
@@ -380,7 +380,7 @@ class LinearSSM(nn.Module):
             u: control input (seq_len, batch_size, dim_u)
             h: hidden state of the LSTM (num_layers * num_directions, batch_size, hidden_size) or None. 
                If None, h is defaulted as 0-tensor
-            single: If True then remove the need for a placeholder unsqueezed dimension
+            single: If True then remove the need for a placeholder unsqueezed dimension for seq_len
         Returns:
             z_t1: next sampled stats (seq_len, batch_size, dim_z)
             mu_t1: next state input mean (seq_len, batch_size, dim_z)
@@ -493,7 +493,7 @@ class NonLinearSSM(nn.Module):
                 u: control input (seq_len, batch_size, dim_u)
                 h: hidden state of the LSTM (num_layers * num_directions, batch_size, hidden_size) or None. 
                 If None, h is defaulted as 0-tensor
-                single: If True then remove the need for a placeholder unsqueezed dimension
+                single: If True then remove the need for a placeholder unsqueezed dimension for seq_len
             Returns:
                 z_t1: next sampled stats (seq_len, batch_size, dim_z)
                 mu_t1: next state input mean (seq_len, batch_size, dim_z)

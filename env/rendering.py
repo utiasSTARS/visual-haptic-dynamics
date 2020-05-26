@@ -1,5 +1,5 @@
 """
-2D rendering framework
+2D rendering framework.
 """
 import os
 import sys
