@@ -260,15 +260,13 @@ def train(args):
             # Load and shape trajectory data
             # XXX: all trajectories have same length
             x_full = data['images'].float().to(device=device) # (n, l, 1, h, w)
-            x_full = frame_stack(x_full, frames=args.frame_stacks) # (n, l - frames, 1 * frames, h, w)
+            x_full = frame_stack(x_full, frames=args.frame_stacks) # (n, l - frames, 1 + frames, h, w)
             start_idx = np.random.randint(x_full.shape[1] - args.traj_len + 1) # sample random range of traj_len
             end_idx = start_idx + args.traj_len
-
             x = x_full[:, start_idx:end_idx]
-            n = x.shape[0]
-            l = x.shape[1]
+            n, l = x.shape[0], x.shape[1]
             x = x.reshape(-1, *x.shape[2:]) # reshape to (-1, 1, height, width)
-            u = data['actions'][:, start_idx:end_idx].float().to(device=device)
+            u = data['actions'][:, (start_idx + args.frame_stacks):(end_idx+ args.frame_stacks)].float().to(device=device)
 
             # Encode & Decode all samples
             z, mu_z, logvar_z = enc(x)
@@ -280,7 +278,6 @@ def train(args):
             mu_z = mu_z.reshape(n, l, *mu_z.shape[1:])
             logvar_z = logvar_z.reshape(n, l, *logvar_z.shape[1:])
             var_z = torch.diag_embed(torch.exp(logvar_z))
-
             _, mu_z_t1_hat, var_z_t1_hat, _ = \
                 dyn(z_t=z[:, :-1], mu_t=mu_z[:, :-1], var_t=var_z[:, :-1], u=u[:, 1:])
 
