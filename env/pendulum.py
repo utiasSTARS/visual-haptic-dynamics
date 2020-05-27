@@ -3,6 +3,7 @@ from gym import spaces
 from gym.utils import seeding
 import numpy as np
 from os import path
+from collections import deque 
 
 from skimage.transform import resize
 from skimage.util import img_as_ubyte
@@ -17,7 +18,7 @@ class VisualPendulum(gym.Env):
         'video.frames_per_second' : 30
     }
 
-    def __init__(self, render_w=64, render_h=64, g=10.0, m=1., l=1.):
+    def __init__(self, render_w=64, render_h=64, g=10.0, m=1., l=1., frame_stack=0):
         self.max_speed=8
         self.max_torque=2.
         self.dt=.05
@@ -28,6 +29,8 @@ class VisualPendulum(gym.Env):
 
         self.render_w = render_w
         self.render_h = render_h
+        self.frame_stack = frame_stack
+        self.img_buffer = deque([], maxlen=1 + self.frame_stack)
 
         self.action_space = spaces.Box(
             low=-self.max_torque,
@@ -39,7 +42,7 @@ class VisualPendulum(gym.Env):
         self.observation_space = spaces.Box(
             low=0, 
             high=1, 
-            shape=(render_w, render_h, 3), 
+            shape=(1 + frame_stack, render_w, render_h, 3), 
             dtype=np.float32
         )
 
@@ -54,7 +57,7 @@ class VisualPendulum(gym.Env):
             + .1 * thdot ** 2 \
             + .001 * (u ** 2) 
 
-    def step(self, u):
+    def _step(self, u):
         th, thdot = self.state # th := theta
 
         u = np.clip(u, -self.max_torque, self.max_torque)[0]
@@ -68,7 +71,14 @@ class VisualPendulum(gym.Env):
         newthdot = np.clip(newthdot, -self.max_speed, self.max_speed) #pylint: disable=E1111
 
         self.state = np.array([newth, newthdot])
-        return self._get_obs(), -costs, False, {}
+        
+        return self._get_obs(), -costs
+
+    def step(self, u):
+        new_img, costs = self._step(u)
+        self.img_buffer.appendleft(new_img)
+        img = np.stack(list(self.img_buffer))
+        return img, costs, False, {}
     
     def reset(self, state=None):
         if state is not None:
@@ -77,7 +87,15 @@ class VisualPendulum(gym.Env):
             high = np.array([np.pi, 1])
             self.state = self.np_random.uniform(low=-high, high=high)
         self.last_u = None
-        return self._get_obs()
+
+        self.img_buffer.appendleft(self._get_obs())
+
+        # Let system evolve until we have enough history
+        for _ in range(self.frame_stack):
+            self.img_buffer.appendleft(self._step(np.array([0]))[0])
+
+        img = np.stack(list(self.img_buffer))
+        return img
 
     def _image_transforms(self, img):
         resized_img = resize(img, (self.render_w, self.render_h), anti_aliasing=True)
@@ -119,29 +137,31 @@ class VisualPendulum(gym.Env):
 
 class LatentPendulum(VisualPendulum):
     """Wrap environment with latent dynamics model and reward function of choice."""
-    def __init__(self, models, device, img_transform=None):
-        super().__init__()
+    def __init__(self, models, device, frame_stack=1, img_transform=None):
+        super().__init__(frame_stack=frame_stack)
         self.enc, self.dec, self.dyn = models
         self.device = device
         self.img_transform = img_transform
-        self.z_goal = self.encode(self.reset(np.array([0., 0.])))
-        self.reset()
+
+        # Encode goal image
+        goal_img = self.reset(np.array([0., 0.]))
+        self.z_goal = self.encode(goal_img)
 
     def to(self, device):
         self.device = device
         self.enc.to(device=device).eval()
         self.dec.to(device=device).eval()
         self.dyn.to(device=device).eval()
-    
+
     def encode(self, img):
-        if self.img_transform is None:
-            return self.enc(img)
-        else:
-            return self.enc(self.img_transform(img))
+        #TODO: Encode (self.frame_stack, 64, 64, 3) by using self.img_transform
+        pass
 
     def rollout(self, actions):
         H = actions.shape[0] # (H, dim_u)
-        img_t = self._get_obs() # (1, w, h)
+
+        #TODO: get img_t from self.img_buffer
+        # img_t = self._get_obs() # (1, 2, w, h)
         z_t, mu_t, logvar_t = self.encode(img_t) # (1, dim_z)
         var_t = torch.diag_embed(torch.exp(logvar_t)) # (1, dim_z, dim_z)
         z = torch.zeros((h, z_t.shape[-1]))
@@ -155,6 +175,16 @@ class LatentPendulum(VisualPendulum):
         
         cost = self.euclidean_cost(z)
         return cost
+    
+    def reset(self, state=None):
+        img = super().reset(state=state)
+
+        return img_h
+
+    def step(self, u):
+        img, _1, _2, _3 = super().step(u=u)
+        #TODO: Append to deque 
+        return img_h, _1, _2, _3
 
     def euclidean_cost(self, z_current):
         cost = (self.z_goal - z)**2

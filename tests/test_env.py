@@ -8,7 +8,7 @@ from pendulum import VisualPendulum
 import numpy as np
 
 def test_actions():
-    env = VisualPendulum()
+    env = VisualPendulum(frame_stack=0)
     env.reset(np.array([np.pi,0]))
 
     for _ in range(5):
