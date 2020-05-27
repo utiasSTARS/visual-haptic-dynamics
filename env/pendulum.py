@@ -165,27 +165,38 @@ class LatentPendulum(VisualPendulum):
         
         return self.enc(transformed_img)
 
-    def rollout(self, actions):
+    def rollout(self, actions, loss="euclidean"):
         H = actions.shape[0] # (H, dim_u)
         img_t = np.stack(list(self.img_buffer))        
         z_t, mu_t, logvar_t = self.encode(img_t) # (1, dim_z)
         var_t = torch.diag_embed(torch.exp(logvar_t)) # (1, dim_z, dim_z)
 
-        z = torch.zeros((H, z_t.shape[-1]))
+        z = torch.zeros((H + 1, z_t.shape[-1]))
+        z[0] = z_t
 
         for ii in range(H):
             z_t1, mu_t1, var_t1, _ = self.dyn(
                 z_t=z_t, mu_t=mu_t, var_t=var_t, 
                 u=actions[ii].unsqueeze(0), single=True
             )
-            z[ii] = z_t1
-        
-        cost = self.euclidean_cost(z)
+            z[ii + 1] = z_t1
+
+        if loss == "euclidean":
+            cost = self.euclidean_cost(z)
+        elif loss == "metric":
+            cost = self.manifold_curve_energy(z)
+        else:
+            raise NotImplementedError()
+
         return cost
 
-    def euclidean_cost(self, z_current):
-        cost = (self.z_goal - z_current)**2
+    def euclidean_cost(self, z):
+        cost = (self.z_goal - z)**2
         return cost.sum()
 
-    def manifold_cost(self, z_current):
-        pass
+    def manifold_curve_energy(self, z):
+        z_all = torch.cat((z, self.z_goal))
+        T = z.shape[0]
+        dt = 1. / T
+        energy = 0.5 * torch.sum(dt * torch.sum((z_all[1:] - z_all[:-1])**2, dim=-1))
+        return energy
