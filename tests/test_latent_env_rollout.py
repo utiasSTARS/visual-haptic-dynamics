@@ -11,6 +11,7 @@ import numpy as np
 from utils import load_models, frame_stack
 from argparse import Namespace
 import json
+import torch
 from torchvision import transforms
 from utils import (set_seed_torch, Normalize)
 set_seed_torch(3)
@@ -37,17 +38,13 @@ def test_actions():
         model_args = model['hyperparameters']
         trained_models = load_models(path, model_args, mode='eval', device='cpu')
         env = LatentPendulum(models=trained_models, device='cpu', img_transform=transform)
-    # env.reset(np.array([np.pi,0]))
 
-    # for _ in range(1):
-    #     obs, _, _, _ = env.step(np.array([0]))
-    #     img = env.reset()
-    #     print("Obs received: ", obs.shape)
-    #     print("Action dim: ", env.action_space.shape)
-    #     print("Obs dim: ", env.observation_space.shape)
-    #     print("Reset img output: ", img.shape)
+    img = env.reset(np.array([np.pi,0]))
+    initial_guess = torch.zeros((3, env.action_space.shape[0]))
 
-    # env.close()
+    cost = env.rollout(actions=initial_guess)
+    print("Cost of predicted roll out: ", cost)
+    env.close()
 
 if __name__=="__main__":
     test_actions()

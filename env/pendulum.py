@@ -9,6 +9,8 @@ from skimage.transform import resize
 from skimage.util import img_as_ubyte
 from skimage.color import rgb2gray
 
+import torch
+
 def angle_normalize(x):
     return (((x + np.pi) % (2 * np.pi)) - np.pi)
 
@@ -145,8 +147,9 @@ class LatentPendulum(VisualPendulum):
 
         # Encode goal image
         goal_img = self.reset(np.array([0., 0.]))
-        self.z_goal = self.encode(goal_img)
-
+        with torch.no_grad():
+            self.z_goal, _, _ = self.encode(goal_img)
+        
     def to(self, device):
         self.device = device
         self.enc.to(device=device).eval()
@@ -154,40 +157,34 @@ class LatentPendulum(VisualPendulum):
         self.dyn.to(device=device).eval()
 
     def encode(self, img):
-        #TODO: Encode (self.frame_stack, 64, 64, 3) by using self.img_transform
-        pass
+        """Encode image of dimension: (frame_stack, w, h, c)"""
+        transformed_img = torch.zeros((1, 2, 64, 64))
+        for ii in range(img.shape[0]):
+            out = self.img_transform(img[ii])
+            transformed_img[:, ii, :, :] = out
+        
+        return self.enc(transformed_img)
 
     def rollout(self, actions):
         H = actions.shape[0] # (H, dim_u)
-
-        #TODO: get img_t from self.img_buffer
-        # img_t = self._get_obs() # (1, 2, w, h)
+        img_t = np.stack(list(self.img_buffer))        
         z_t, mu_t, logvar_t = self.encode(img_t) # (1, dim_z)
         var_t = torch.diag_embed(torch.exp(logvar_t)) # (1, dim_z, dim_z)
-        z = torch.zeros((h, z_t.shape[-1]))
+
+        z = torch.zeros((H, z_t.shape[-1]))
 
         for ii in range(H):
             z_t1, mu_t1, var_t1, _ = self.dyn(
                 z_t=z_t, mu_t=mu_t, var_t=var_t, 
                 u=actions[ii].unsqueeze(0), single=True
             )
-            z[h] = z_t1
+            z[ii] = z_t1
         
         cost = self.euclidean_cost(z)
         return cost
-    
-    def reset(self, state=None):
-        img = super().reset(state=state)
-
-        return img_h
-
-    def step(self, u):
-        img, _1, _2, _3 = super().step(u=u)
-        #TODO: Append to deque 
-        return img_h, _1, _2, _3
 
     def euclidean_cost(self, z_current):
-        cost = (self.z_goal - z)**2
+        cost = (self.z_goal - z_current)**2
         return cost.sum()
 
     def manifold_cost(self, z_current):
