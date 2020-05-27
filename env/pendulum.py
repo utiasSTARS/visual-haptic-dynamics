@@ -165,7 +165,7 @@ class LatentPendulum(VisualPendulum):
         
         return self.enc(transformed_img)
 
-    def rollout(self, actions, loss="euclidean"):
+    def rollout(self, actions, loss="metric"):
         H = actions.shape[0] # (H, dim_u)
         img_t = np.stack(list(self.img_buffer))        
         z_t, mu_t, logvar_t = self.encode(img_t) # (1, dim_z)
@@ -196,7 +196,9 @@ class LatentPendulum(VisualPendulum):
 
     def manifold_curve_energy(self, z):
         z_all = torch.cat((z, self.z_goal))
-        T = z.shape[0]
+        T = z_all.shape[0]
+        g_z_all = self.dec(z_all)
+        g_z_all = g_z_all.view(g_z_all.size(0), -1)
         dt = 1. / T
-        energy = 0.5 * torch.sum(dt * torch.sum((z_all[1:] - z_all[:-1])**2, dim=-1))
+        energy = 0.5 * torch.sum(dt * torch.sum((g_z_all[1:] - g_z_all[:-1])**2, dim=-1))
         return energy
