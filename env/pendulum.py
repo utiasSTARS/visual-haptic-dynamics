@@ -165,7 +165,7 @@ class LatentPendulum(VisualPendulum):
         
         return self.enc(transformed_img)
 
-    def rollout(self, actions, loss="metric"):
+    def rollout(self, actions, loss="euclidean"):
         H = actions.shape[0] # (H, dim_u)
         img_t = np.stack(list(self.img_buffer))        
         z_t, mu_t, logvar_t = self.encode(img_t) # (1, dim_z)

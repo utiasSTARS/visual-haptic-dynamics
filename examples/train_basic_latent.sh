@@ -1,6 +1,9 @@
-device="cuda"
-dataset="/media/m2-drive/datasets/pendulum-srl-sim/pendulum64_total_2048_traj_16_repeat_2_with_angle_train.pkl"
-storage_base_path="/home/olimoyo/latent-metric-control/saved_models/"
+device="cpu"
+# dataset="/media/m2-drive/datasets/pendulum-srl-sim/pendulum64_total_2048_traj_16_repeat_2_with_angle_train.pkl"
+# storage_base_path="/home/olimoyo/latent-metric-control/saved_models/"
+
+dataset="/Users/oliver/Datasets/pendulum-srl-sim/pendulum64_total_2048_traj_16_repeat_2_with_angle_train.pkl"
+storage_base_path="/Users/oliver/latent-metric-control/saved_models"
 
 n_batches=(32)
 learning_rates=(3e-4)
@@ -10,17 +13,18 @@ weight_inits=('custom')
 Ks=(15)
 rnn_nets=('lstm')
 dyn_nets=('linearrank1')
-n_epochs=(4096)
+n_epochs=(10)
 opt=('adam')
 enc_dec_nets=('cnn')
+opt_vae_base_epochs=(0)
 debug=('False')
 nl=('relu')
-traj_len=(31)
-frame_stacks=(1)
+traj_len=(1)
+frame_stack=(1)
 val_split=(0)
-opt_vae_base_epochs=(0)
-lam_rec=1.00
-lam_kl=1.00
+lam_rec=(1.00)
+lam_kl=(1.00)
+n_checkpoint_epoch=(1)
 
 for n in {1..1}; do
     for dyn_net in ${dyn_nets[@]}; do
@@ -44,7 +48,7 @@ for n in {1..1}; do
                                                                     --n_epoch $n_epoch \
                                                                     --n_batch $n_batch \
                                                                     --debug $debug \
-                                                                    --comment "traj${traj_len}_base_latent_bn${batch_norm}_dyntype${dyn_net}_dynnet${rnn_net}_framestacks${frame_stacks}_optvaebaseepochs${opt_vae_base_epoch}_lamrec${lam_rec}_lamkl${lam_kl}" \
+                                                                    --comment "encdecnet-${enc_dec_net}_lr-${lr}_n_batch-${n_batch}_weightinit-${weight_init}_traj-${traj_len}_bn-${batch_norm}_dyntype-${dyn_net}_dynnet-${rnn_net}_framestacks-${frame_stack}_optvaebaseepochs-${opt_vae_base_epoch}_lamrec-${lam_rec}_lamkl-${lam_kl}" \
                                                                     --device $device \
                                                                     --lr $lr \
                                                                     --weight_init $weight_init \
@@ -66,7 +70,8 @@ for n in {1..1}; do
                                                                     --val_split $val_split \
                                                                     --non_linearity $nl \
                                                                     --traj_len $traj_len \
-                                                                    --frame_stacks $frame_stacks
+                                                                    --frame_stacks $frame_stack \
+                                                                    --n_checkpoint_epoch $n_checkpoint_epoch
                                             done
                                         done
                                     done

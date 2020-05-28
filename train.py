@@ -38,25 +38,17 @@ def train(args):
     torch.backends.cudnn.benchmark = args.cudnn_benchmark
 
     # Keeping track of results and hyperparameters
+    save_dir = os.path.join(args.storage_base_path, args.comment)
+    checkpoint_dir = os.path.join(save_dir, "checkpoints/")
+
     if not args.debug:
-        time_tag = datetime.strftime(
-            datetime.now(), 
-            '%m-%d-%y_%H:%M:%S'
-        )
-        model_tag = time_tag + '_' + args.comment
-        save_dir = args.storage_base_path + model_tag
         os.makedirs(save_dir, exist_ok=True)
-
-        if args.n_epoch > args.n_checkpoint_epoch:
-            checkpoint_dir = os.path.join(save_dir, "checkpoints")
-            os.makedirs(checkpoint_dir, exist_ok=True)
-
+        os.makedirs(checkpoint_dir, exist_ok=True)
         args.__dict__ = OrderedDict(
             sorted(args.__dict__.items(), key=lambda t: t[0])
         )
         with open(save_dir + '/hyperparameters.txt', 'w') as f:
             json.dump(args.__dict__, f, indent=2)
-            
         writer = SummaryWriter(logdir=save_dir)
 
     # Non-linearities for networks
@@ -238,6 +230,22 @@ def train(args):
         worker_init_fn=_init_fn
     )
 
+    #XXX: If a checkpoint exists, assumed preempted and resume training
+    checkpoint_epochs = 0
+    if os.path.exists(checkpoint_dir + "checkpoint.pth"):
+        checkpoint = torch.load(checkpoint_dir + "checkpoint.pth")
+        dyn.load_state_dict(checkpoint['dyn'])
+        enc.load_state_dict(checkpoint['enc'])
+        dec.load_state_dict(checkpoint['dec'])
+        opt_all.load_state_dict(checkpoint['opt_all'])
+        opt_vae.load_state_dict(checkpoint['opt_vae'])
+        opt_vae_base.load_state_dict(checkpoint['opt_vae_base'])
+        checkpoint_epochs = checkpoint['epoch']
+        print(f"Resuming training from checkpoint at epoch {checkpoint_epochs}")
+        assert (checkpoint_epochs < args.n_epoch), \
+            f"""The amount of epochs {args.n_epoch} should be greater 
+            than the already trained checkpoint epochs {checkpoint_epochs}"""
+
     def opt_iter(epoch, opt=None):
         """Single training epoch."""
         if opt:
@@ -329,7 +337,7 @@ def train(args):
     # Training loop
     opt = opt_vae
     try:
-        for epoch in range(0, args.n_epoch):
+        for epoch in range(1 + checkpoint_epochs, args.n_epoch + 1):
             tic = time.time()
             if epoch >= args.opt_vae_base_epochs:
                 opt = opt_all
@@ -345,7 +353,7 @@ def train(args):
                     summary_val = opt_iter(epoch=epoch)
             epoch_time = time.time() - tic
 
-            print((f"Epoch {epoch + 1}/{args.n_epoch}: " 
+            print((f"Epoch {epoch}/{args.n_epoch}: " 
                 f"Avg train loss: {summary_train['avg_total_l']}, " 
                 f"Avg val loss: {summary_val['avg_total_l'] if args.val_split > 0 else 'N/A'}, "
                 f"Time per epoch: {epoch_time}"))
@@ -354,24 +362,27 @@ def train(args):
             if not args.debug:
                 for loss in ['total', 'kl', 'rec']:
                     writer.add_scalar(f"loss/{loss}/train", summary_train[f'avg_{loss}_l'], epoch)
-                writer.add_images(f'reconstructed_images/{model_tag}/train/original', summary_train['og_imgs'])
-                writer.add_images(f'reconstructed_images/{model_tag}/train/reconstructed', summary_train['rec_imgs'])
+                writer.add_images(f'reconstructed_images/{args.comment}/train/original', summary_train['og_imgs'])
+                writer.add_images(f'reconstructed_images/{args.comment}/train/reconstructed', summary_train['rec_imgs'])
 
                 if args.val_split > 0:
                     for loss in ['total', 'kl', 'rec']:
                         writer.add_scalar(f"loss/{loss}/val", summary_val[f'avg_{loss}_l'], epoch)
-                    writer.add_images(f'reconstructed_images/{model_tag}/val/original', summary_val['og_imgs'])
-                    writer.add_images(f'reconstructed_images/{model_tag}/val/reconstructed', summary_val['rec_imgs'])
+                    writer.add_images(f'reconstructed_images/{args.comment}/val/original', summary_val['og_imgs'])
+                    writer.add_images(f'reconstructed_images/{args.comment}/val/reconstructed', summary_val['rec_imgs'])
 
-            # Save model at intermittent checkpoints 
-            if (epoch + 1) % args.n_checkpoint_epoch == 0:
-                checkpoint_i_path = os.path.join(checkpoint_dir, str((epoch + 1) // args.n_checkpoint_epoch))
-                os.makedirs(checkpoint_i_path, exist_ok=True)
-
-                # Save models
-                torch.save(dyn.state_dict(), checkpoint_i_path + '/dyn.pth')
-                torch.save(enc.state_dict(), checkpoint_i_path + '/enc.pth')
-                torch.save(dec.state_dict(), checkpoint_i_path + '/dec.pth')
+                # Save model at intermittent checkpoints 
+                if epoch % args.n_checkpoint_epoch == 0:
+                    torch.save({
+                        'epoch': epoch,
+                        'dyn': dyn.state_dict(),
+                        'enc': enc.state_dict(),
+                        'dec': dec.state_dict(),
+                        'opt_all': opt_all.state_dict(),
+                        'opt_vae': opt_vae.state_dict(),
+                        'opt_vae_base': opt_vae_base.state_dict()}, 
+                        checkpoint_dir + "checkpoint.pth"
+                    )
 
     finally:
         if not args.debug:

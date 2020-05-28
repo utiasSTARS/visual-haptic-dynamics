@@ -25,7 +25,7 @@ def parse_common_training_args(parser=None):
     parser.add_argument('--n_epoch', type=int, default=8096, help='Number of epochs')
     parser.add_argument('--n_checkpoint_epoch', type=int, default=2048, help='Save model every n epochs')
     parser.add_argument('--n_batch', type=int, default=32,  help='Batch size')
-    parser.add_argument('--n_example', type=int, default=10000000,  help='Maximum samples to train from the dataset')
+    parser.add_argument('--n_example', type=int, default=1,  help='Maximum samples to train from the dataset')
     parser.add_argument('--n_worker', type=int, default=4,  help='Amount of workers for dataloading.')
 
     # Network Settings                        
