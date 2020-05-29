@@ -175,6 +175,7 @@ class LatentPendulum(VisualPendulum):
         z[0] = z_t
 
         for ii in range(H):
+            #TODO: Clamp action here
             z_t1, mu_t1, var_t1, _ = self.dyn(
                 z_t=z_t, mu_t=mu_t, var_t=var_t, 
                 u=actions[ii].unsqueeze(0), single=True

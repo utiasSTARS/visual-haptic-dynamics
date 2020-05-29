@@ -45,6 +45,7 @@ class GradMPC():
 
         opt = optim.SGD([actions], lr=0.1, momentum=0)
 
+        #XXX: Every opt_iter is like an iteration of iterative MPC?
         for _ in range(self.opt_iters):
             cost = self.env.rollout(actions=actions)
             #TODO: Grad clip?
