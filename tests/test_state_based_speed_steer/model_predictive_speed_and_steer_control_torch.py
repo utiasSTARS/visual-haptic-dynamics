@@ -22,7 +22,7 @@ except:
 
 NX = 4  # x = x, y, v, yaw
 NU = 2  # a = [accel, steer]
-T = 5  # horizon length
+T = 6  # horizon length
 
 # mpc parameters
 R = torch.diag(torch.FloatTensor([0.01, 0.01]))  # input cost matrix
@@ -34,7 +34,7 @@ STOP_SPEED = 0.5 / 3.6  # stop speed
 MAX_TIME = 500.0  # max simulation time
 
 # iterative paramter
-MAX_ITER = 3  # Max iteration
+MAX_ITER = 50  # Max iteration
 DU_TH = 0.1  # iteration finish param
 
 TARGET_SPEED = 10.0 / 3.6  # [m/s] target speed
@@ -188,13 +188,12 @@ def update_state(state, a, delta):
 
 def update_state_torch(x, a, d):
     d = d.clamp(-MAX_STEER,MAX_STEER)
-    
-    x[0] = x[0] + x[2] * torch.cos(x[3]) * DT
-    x[1] = x[1] + x[2] * torch.sin(x[3]) * DT
-    x[3] = x[3] + (x[2] / WB) * torch.tan(d) * DT
-    x[2] = x[2] + a * DT
-
-    x[2] = x[2].clamp(MIN_SPEED, MAX_SPEED)    
+    x_prev = x.clone()
+    x[0] = x_prev[0] + x_prev[2] * torch.cos(x_prev[3]) * DT
+    x[1] = x_prev[1] + x_prev[2] * torch.sin(x_prev[3]) * DT
+    x[3] = x_prev[3] + (x_prev[2] / WB) * torch.tan(d) * DT
+    x[2] = x_prev[2]+ a * DT
+    x[2] = x_prev[2].clamp(MIN_SPEED, MAX_SPEED)    
     return x
 
 def rollout(x0, oa, od, xref):
@@ -203,31 +202,32 @@ def rollout(x0, oa, od, xref):
         a = a.unsqueeze(-1)
         return (a.transpose(0,1)).mm(B.mm(a))
 
-    xbar = torch.empty_like(xref)
-    xbar[:, 0] = x0
+    x = torch.empty_like(xref)
+    x[:, 0] = x0
     u = torch.stack((oa, od))
     cost = 0.0
 
     # Roll out
     for ii in range(1, T+1):
-        xbar[:, ii] = update_state_torch(xbar[:, ii-1], oa[ii-1], od[ii-1])
-    
+        out = update_state_torch(x[:, ii-1], oa[ii-1], od[ii-1])
+        x[:, ii] = out.clone()
+
     # Calculate cost
     for tt in range(T):
-        cost += quad_form(u[:, tt], R)
+        cost = cost + quad_form(u[:, tt], R)
         if tt != 0:
-            cost += quad_form(xref[:, tt] - xbar[:, tt], Q) 
+            cost = cost + quad_form(xref[:, tt] - x[:, tt], Q) 
 
-    cost += quad_form(xref[:, T] - xbar[:, T], Q) 
+    cost = cost + quad_form(xref[:, T] - x[:, T], Q) 
 
-    return cost, xbar
+    return cost, x
 
 def sgd_mpc_control(xref, x0, _, oa, od):
     """
     MPC control with SGD.
     """
     if oa is None or od is None:
-        oa = [0.0] * T
+        oa = [0.0 + 1] * T 
         od = [0.0] * T
 
     device = torch.device('cpu')
@@ -237,17 +237,13 @@ def sgd_mpc_control(xref, x0, _, oa, od):
     od_t = torch.tensor(od, device=device, requires_grad=True, dtype=torch.float32) 
     x_t = torch.zeros((xref_t.shape), device=device, requires_grad=False, dtype=torch.float32)
 
-    opt = optim.SGD([oa_t, od_t], lr=0.1, momentum=0)
+    opt = optim.SGD([oa_t, od_t], lr=.1)
 
     for i in range(MAX_ITER):
-        poa, pod = oa_t.detach(), od_t.detach()
         cost, xbar = rollout(x0_t, oa_t, od_t, xref_t)
         opt.zero_grad()
-        (-cost).backward()
+        cost.backward()
         opt.step()
-        du = sum(abs(oa_t - poa)) + sum(abs(od_t - pod))  # calc u change value
-        if du <= DU_TH:
-            break
     else:
         print("Iterative is max iter")
 
@@ -255,8 +251,8 @@ def sgd_mpc_control(xref, x0, _, oa, od):
     od = od_t.tolist()
     ox = x_t[0,:].tolist()
     oy = x_t[1,:].tolist()
-    oyaw = x_t[2,:].tolist()
-    ov = x_t[3,:].tolist()
+    ov = x_t[2,:].tolist()
+    oyaw = x_t[3,:].tolist()
     return oa, od, ox, oy, oyaw, ov
 
 def calc_ref_trajectory(state, cx, cy, cyaw, ck, sp, dl, pind):
