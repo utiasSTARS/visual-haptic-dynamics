@@ -34,8 +34,8 @@ STOP_SPEED = 0.5 / 3.6  # stop speed
 MAX_TIME = 500.0  # max simulation time
 
 # iterative paramter
-MAX_ITER = 50  # Max iteration
-DU_TH = 0.1  # iteration finish param
+MAX_ITER = 200  # Max iteration
+DU_TH = 1e-4  # iteration finish param
 
 TARGET_SPEED = 10.0 / 3.6  # [m/s] target speed
 N_IND_SEARCH = 10  # Search index number
@@ -227,8 +227,8 @@ def sgd_mpc_control(xref, x0, _, oa, od):
     MPC control with SGD.
     """
     if oa is None or od is None:
-        oa = [0.0 + 1] * T 
-        od = [0.0] * T
+        oa = [0.0 + 5] * T 
+        od = [0.0 + 1e-1] * T
 
     device = torch.device('cpu')
     xref_t = torch.tensor(xref, device=device, requires_grad=False, dtype=torch.float32)
@@ -240,13 +240,20 @@ def sgd_mpc_control(xref, x0, _, oa, od):
     opt = optim.SGD([oa_t, od_t], lr=.1)
 
     for i in range(MAX_ITER):
+        poa = oa_t[:].cpu().detach().clone().numpy()
+        pod = od_t[:].cpu().detach().clone().numpy()
         cost, xbar = rollout(x0_t, oa_t, od_t, xref_t)
         opt.zero_grad()
         cost.backward()
         opt.step()
+        coa = oa_t[:].cpu().detach().clone().numpy()
+        cod = od_t[:].cpu().detach().clone().numpy()
+        du = sum(abs(coa - poa)) + sum(abs(cod - pod))  # calc u change value
+        if du <= DU_TH:
+            print(f"Converged at iteration {i}")
+            break
     else:
         print("Iterative is max iter")
-
     oa = oa_t.tolist() 
     od = od_t.tolist()
     ox = x_t[0,:].tolist()
@@ -505,8 +512,8 @@ def main():
     # cx, cy, cyaw, ck = get_straight_course(dl)
     # cx, cy, cyaw, ck = get_straight_course2(dl)
     # cx, cy, cyaw, ck = get_straight_course3(dl)
-    # cx, cy, cyaw, ck = get_forward_course(dl)
-    cx, cy, cyaw, ck = get_switch_back_course(dl)
+    cx, cy, cyaw, ck = get_forward_course(dl)
+    # cx, cy, cyaw, ck = get_switch_back_course(dl)
 
     sp = calc_speed_profile(cx, cy, cyaw, TARGET_SPEED)
 
