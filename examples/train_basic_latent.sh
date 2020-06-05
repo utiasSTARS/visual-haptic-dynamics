@@ -1,30 +1,30 @@
-device="cpu"
-# dataset="/media/m2-drive/datasets/pendulum-srl-sim/pendulum64_total_2048_traj_16_repeat_2_with_angle_train.pkl"
-# storage_base_path="/home/olimoyo/latent-metric-control/saved_models/"
+device="cuda:0"
+dataset="/media/m2-drive/datasets/pendulum-srl-sim/pendulum64_total_2048_traj_16_repeat_2_with_angle_train.pkl"
+storage_base_path="/home/olimoyo/latent-metric-control/saved_models/"
 
-dataset="/Users/oliver/Datasets/pendulum-srl-sim/pendulum64_total_2048_traj_16_repeat_2_with_angle_train.pkl"
-storage_base_path="/Users/oliver/latent-metric-control/saved_models"
+# dataset="/Users/oliver/Datasets/pendulum-srl-sim/pendulum64_total_2048_traj_16_repeat_2_with_angle_train.pkl"
+# storage_base_path="/Users/oliver/latent-metric-control/saved_models"
 
-n_batches=(32)
+n_batches=(64)
 learning_rates=(3e-4)
 batch_norms=('True')
 bi_directionals=('False')
 weight_inits=('custom')
 Ks=(15)
 rnn_nets=('lstm')
-dyn_nets=('linearrank1')
-n_epochs=(10)
+dyn_nets=('linearmix')
+n_epochs=(4096)
 opt=('adam')
 enc_dec_nets=('cnn')
-opt_vae_base_epochs=(0)
+opt_vae_base_epochs=(1024)
 debug=('False')
 nl=('relu')
-traj_len=(1)
+traj_len=(16)
 frame_stack=(1)
 val_split=(0)
 lam_rec=(1.00)
 lam_kl=(1.00)
-n_checkpoint_epoch=(1)
+n_checkpoint_epoch=(1048)
 
 for n in {1..1}; do
     for dyn_net in ${dyn_nets[@]}; do
@@ -57,7 +57,7 @@ for n in {1..1}; do
                                                                     --lam_kl $lam_kl \
                                                                     --storage_base_path $storage_base_path \
                                                                     --fc_hidden_size 128 \
-                                                                    --rnn_hidden_size 128 \
+                                                                    --rnn_hidden_size 256 \
                                                                     --use_bidirectional $bi_directional \
                                                                     --use_batch_norm $batch_norm \
                                                                     --enc_dec_net $enc_dec_net \

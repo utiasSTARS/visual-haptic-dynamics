@@ -305,7 +305,6 @@ def train(args):
                 cov1=var_z_hat.reshape(-1, *var_z_hat.shape[2:])))
             ) / n
 
-            #TODO: Reward prediction
             total_loss = loss_rec + loss_kl
 
             running_stats['total_l'].append(total_loss.item())
