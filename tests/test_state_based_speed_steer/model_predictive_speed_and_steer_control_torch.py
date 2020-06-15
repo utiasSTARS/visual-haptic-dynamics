@@ -227,8 +227,8 @@ def sgd_mpc_control(xref, x0, _, oa, od):
     MPC control with SGD.
     """
     if oa is None or od is None:
-        oa = [0.0 + 5] * T 
-        od = [0.0 + 1e-1] * T
+        oa = [0.0 + 8] * T 
+        od = [0.0] * T
 
     device = torch.device('cpu')
     xref_t = torch.tensor(xref, device=device, requires_grad=False, dtype=torch.float32)
