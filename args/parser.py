@@ -52,7 +52,7 @@ def parse_training_args():
     parser.add_argument('--rnn_net', choices=['gru', 'lstm'], default='lstm',  help='RNN network type')
     parser.add_argument('--enc_dec_net', choices=['fcn', 'cnn'], default='cnn', help='Network architecture for encoder/decoder representation') 
     parser.add_argument('--dyn_net', choices=['linearmix', 'linearrank1', 'nonlinear'], default='linearmix', help='Network architecture for dynamics')     
-    parser.add_argument('--non_linearity', choices=['relu', 'elu'], default='relu', help='Activation used for decoder neural network')
+    parser.add_argument('--non_linearity', choices=['relu', 'elu', 'softplus'], default='relu', help='Activation used for decoder neural network')
     parser.add_argument('--frame_stacks', type=int, default=1, help="Number of frames to stack")
     
     # Training Settings

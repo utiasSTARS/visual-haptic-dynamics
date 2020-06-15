@@ -5,21 +5,21 @@ storage_base_path="/home/olimoyo/latent-metric-control/saved_models/"
 # dataset="/Users/oliver/Datasets/pendulum-srl-sim/pendulum64_total_2048_traj_16_repeat_2_with_angle_train.pkl"
 # storage_base_path="/Users/oliver/latent-metric-control/saved_models"
 
-n_batches=(64)
+n_batches=(32)
 learning_rates=(3e-4)
 batch_norms=('True')
 bi_directionals=('False')
 weight_inits=('custom')
 Ks=(15)
 rnn_nets=('lstm')
-dyn_nets=('linearmix')
+dyn_nets=('nonlinear')
 n_epochs=(4096)
 opt=('adam')
 enc_dec_nets=('cnn')
-opt_vae_base_epochs=(1024)
+opt_vae_base_epochs=(0)
 debug=('False')
 nl=('relu')
-traj_len=(16)
+traj_len=(31)
 frame_stack=(1)
 val_split=(0)
 lam_rec=(1.00)
@@ -56,7 +56,7 @@ for n in {1..1}; do
                                                                     --lam_rec $lam_rec \
                                                                     --lam_kl $lam_kl \
                                                                     --storage_base_path $storage_base_path \
-                                                                    --fc_hidden_size 128 \
+                                                                    --fc_hidden_size 256 \
                                                                     --rnn_hidden_size 256 \
                                                                     --use_bidirectional $bi_directional \
                                                                     --use_batch_norm $batch_norm \

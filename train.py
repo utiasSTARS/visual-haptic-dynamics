@@ -56,6 +56,8 @@ def train(args):
         nl = nn.ReLU()
     elif args.non_linearity=="elu":
         nl = nn.ELU()
+    elif args.non_linearity=="softplus":
+        nl = nn.Softplus()
     else:
         raise NotImplementedError()
     output_nl = None if args.use_binary_ce else nn.Sigmoid()

@@ -2,7 +2,7 @@
 MPC based on stochastic gradient descent.
 """
 import torch
-from torch import nn, optim
+from torch import optim
 
 class GradMPC():
     """
