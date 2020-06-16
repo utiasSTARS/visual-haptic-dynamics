@@ -90,6 +90,8 @@ def load_models(path, args, mode='eval', device='cuda:0'):
         nl = nn.ReLU()
     elif args.non_linearity=="elu":
         nl = nn.ELU()
+    elif args.non_linearity=="softplus":
+        nl = nn.Softplus()
     else:
         raise NotImplementedError()
 
