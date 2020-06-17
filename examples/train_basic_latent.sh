@@ -1,5 +1,5 @@
 device="cuda:0"
-dataset="/media/m2-drive/datasets/pendulum-srl-sim/pendulum64_total_2048_traj_16_repeat_2_with_angle_train.pkl"
+dataset="/media/m2-drive/datasets/pendulum-srl-sim/pendulum16_total_2048_traj_16_repeat_2_with_angle_train.pkl"
 storage_base_path="/home/olimoyo/latent-metric-control/saved_models/"
 
 # dataset="/Users/oliver/Datasets/pendulum-srl-sim/pendulum64_total_2048_traj_16_repeat_2_with_angle_train.pkl"
@@ -12,19 +12,19 @@ bi_directionals=('False')
 weight_inits=('custom')
 Ks=(15)
 rnn_nets=('lstm')
-dyn_nets=('nonlinear')
+dyn_nets=('linearmix')
 n_epochs=(4096)
 opt=('adam')
-enc_dec_nets=('cnn')
-opt_vae_base_epochs=(0)
-debug=('False')
+enc_dec_nets=('fcn')
+opt_vae_base_epochs=(1024)
+debug=('True')
 nl=('relu')
 traj_len=(31)
 frame_stack=(1)
 val_split=(0)
 lam_rec=(1.00)
 lam_kl=(1.00)
-n_checkpoint_epoch=(1048)
+n_checkpoint_epoch=(1024)
 
 for n in {1..1}; do
     for dyn_net in ${dyn_nets[@]}; do
@@ -42,7 +42,7 @@ for n in {1..1}; do
                                                                     --K $K \
                                                                     --dim_u 1 \
                                                                     --dim_z 3 \
-                                                                    --dim_x "1,64,64" \
+                                                                    --dim_x "1,16,16" \
                                                                     --n_worker 8 \
                                                                     --use_binary_ce "False" \
                                                                     --n_epoch $n_epoch \
@@ -66,7 +66,7 @@ for n in {1..1}; do
                                                                     --opt $opt \
                                                                     --rnn_net $rnn_net \
                                                                     --dyn_net $dyn_net \
-                                                                    --task "pendulum64" \
+                                                                    --task "pendulum16" \
                                                                     --val_split $val_split \
                                                                     --non_linearity $nl \
                                                                     --traj_len $traj_len \

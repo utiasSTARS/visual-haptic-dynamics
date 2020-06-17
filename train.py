@@ -202,6 +202,13 @@ def train(args):
             tv.transforms.ToTensor(),
             Normalize(mean=0.27, var=1.0 - 0.27) # 64x64
         ])
+    elif args.task == "pendulum16":
+        transform = transforms.Compose([
+            transforms.ToPILImage(),
+            transforms.Grayscale(num_output_channels=1),
+            transforms.ToTensor(),
+            transforms.Lambda(lambda x: (x - 0.68)/ (1.0 - 0.68)) # 16x16
+            ])
     else:
         raise NotImplementedError()
 
