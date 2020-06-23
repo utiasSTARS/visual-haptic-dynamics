@@ -4,6 +4,11 @@ Test environment with simple inputs.
 import os, sys, time
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../env/')))
 
+currentdir = os.path.dirname(os.path.abspath(
+    inspect.getfile(inspect.currentframe())))
+parentdir = os.path.dirname(os.path.dirname(currentdir))
+os.sys.path.insert(0, parentdir + "/pixel-environments/gym_thing/gym_thing/")
+from pusher_env import ThingPusher
 from pendulum import VisualPendulum
 import numpy as np
 

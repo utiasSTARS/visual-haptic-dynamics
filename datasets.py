@@ -3,7 +3,7 @@ PyTorch wrappers for datasets.
 """
 import torch.utils.data as data
 import torch
-import _pickle as pkl
+import pickle as pkl
 
 def pkl_loader(path):
     """A data loader for pickle files."""
