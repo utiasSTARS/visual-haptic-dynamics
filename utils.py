@@ -6,13 +6,13 @@ import torch.nn as nn
 import torch.nn.init as init
 import numpy as np
 import random
-from models import (FullyConvEncoderVAE,
-                    FullyConvDecoderVAE,
-                    FCNEncoderVAE,
-                    FCNDecoderVAE,
-                    LinearMixSSM,
-                    LinearSSM,
-                    NonLinearSSM)
+from networks import (FullyConvEncoderVAE,
+                        FullyConvDecoderVAE,
+                        FCNEncoderVAE,
+                        FCNDecoderVAE,
+                        LinearMixSSM,
+                        LinearSSM,
+                        NonLinearSSM)
 
 class Normalize:
     def __init__(self, mean, var):

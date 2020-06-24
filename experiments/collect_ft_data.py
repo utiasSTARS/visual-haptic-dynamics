@@ -21,23 +21,24 @@ def write_file_pkl(data, name, location="."):
         pkl.dump(data, f)
 
 def magnitude_experiment():
-    env = ThingVisualPusher(render_w=64, render_h=64, goal_vis=False)
+    n_steps = 32
+    env = ThingVisualPusher(render_w=64, render_h=64, goal_vis=False, substeps=n_steps)
     
     s_list = [2.0, 1.9, 1.8, 1.7, 1.6, 1.5, 1.4, 1.3, 1.2, 1.1, 1.0]
     n = len(s_list)
-    ll = 40
+    ll = 30
       
     data = {
         "img": np.zeros((n, ll, 64, 64, 3), dtype=np.uint8), 
-        "ft": np.zeros((n, ll, 10, 6)), 
-        "arm": np.zeros((n, ll, 10, 6)),
+        "ft": np.zeros((n, ll, n_steps, 6)), 
+        "arm": np.zeros((n, ll, n_steps, 6)),
         "info": {"experiment": "magnitude", "scales": s_list, "episode_len": ll}
     }
     
     for ii, s in enumerate(s_list):
         env.reset()
         for jj in range(ll): 
-            obs, reward, done, info = env.step(action=np.array([0.10 * s, 0]))
+            obs, reward, done, info = env.step(action=np.array([0.50 * s, 0]))
             data["img"][ii, jj] = obs["img"]
             data["ft"][ii, jj] = obs["ft"]
             data["arm"][ii, jj] = obs["arm"]
@@ -71,16 +72,17 @@ def horizontal_position_experiment():
             data["arm"][ii, jj] = obs["arm"]
     return data
 
-def weight_experiment():    
-    env = ThingVisualPusher(render_w=64, render_h=64, goal_vis=False)
+def weight_experiment():   
+    n_steps = 32 
+    env = ThingVisualPusher(render_w=64, render_h=64, goal_vis=False, substeps=n_steps)
     s_list = [5, 6, 7, 8, 9, 10]   
     n = len(s_list)
     ll = 80
 
     data = {
         "img": np.zeros((n, ll, 64, 64, 3), dtype=np.uint8), 
-        "ft": np.zeros((n, ll, 10, 6)), 
-        "arm": np.zeros((n, ll, 10, 6)),
+        "ft": np.zeros((n, ll, n_steps, 6)), 
+        "arm": np.zeros((n, ll, n_steps, 6)),
         "info": {"experiment": "weight", "weights": s_list, "episode_len": ll}
     }
     
@@ -95,8 +97,8 @@ def weight_experiment():
     return data
 
 if __name__ == "__main__":
-    # data = magnitude_experiment()
-    data = horizontal_position_experiment()
+    data = magnitude_experiment()
+    # data = horizontal_position_experiment()
     # data = weight_experiment()
     
     # write_file_pkl(data=data, name="horizontal_fixed", location="./data/ft_sim/")

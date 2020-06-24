@@ -11,7 +11,6 @@ class Flatten(nn.Module):
     def forward(self, x):
         return x.view(x.size(0), -1)
 
-
 class FullyConvEncoderVAE(nn.Module):
     def __init__(self, input=1, latent_size=12, bn=True, 
                  drop=False, nl=nn.ReLU(), stochastic=True, img_dim="64"):

@@ -17,13 +17,13 @@ import torchvision as tv
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
 
-from models import (FullyConvEncoderVAE,
-                    FullyConvDecoderVAE,
-                    FCNEncoderVAE,
-                    FCNDecoderVAE,
-                    LinearMixSSM,
-                    LinearSSM,
-                    NonLinearSSM)
+from networks import (FullyConvEncoderVAE,
+                        FullyConvDecoderVAE,
+                        FCNEncoderVAE,
+                        FCNDecoderVAE,
+                        LinearMixSSM,
+                        LinearSSM,
+                        NonLinearSSM)
 from datasets import ImgCached
 from losses import kl
 

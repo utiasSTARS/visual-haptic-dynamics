@@ -67,3 +67,28 @@ def parse_training_args():
 
     args = parse_common_training_args(parser=parser)
     return args
+
+def parse_ppo_args():
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument('--action_std', type=float, default=0.5, help='Std of action distribution')
+    parser.add_argument('--eps_clip', type=float, default=0.2, help='PPO clip parameter')
+    parser.add_argument('--gamma', type=float, default=0.99, help='Discount factor')
+    parser.add_argument('--epochs', type=int, default=80, help='Amount of update policy epochs')
+    parser.add_argument('--logging_interval', type=int, default=20, help='Print avg reward every interval')
+    parser.add_argument('--update_timestep', type=int, default=4000, help='Update policy every timestep amount')
+    parser.add_argument('--max_timesteps', type=int, default=1500, help='Maximum timesteps per episode')
+    parser.add_argument('--max_episodes', type=int, default=10000, help='Maximum episodes for training')
+    parser.add_argument('--solved_reward', type=int, default=300, help='Reward threshold for solved environment')
+
+    parser.add_argument('--betas', type=str2inttuple, default=(0.9, 0.999), help='Adam optimizer betas')
+    parser.add_argument('--lr', type=float, default=0.0003, help='Weight of kl loss')
+    parser.add_argument('--device', type=str, default='cpu', help='Device to use for PyTorch')
+    parser.add_argument('--env_name', type=str, default='Hopper-v2', help='Name of environment from gym')
+    parser.add_argument('--render', type=str2bool, default=False, help='Render environment')
+    parser.add_argument('--random_seed', type=int, default=333, help='Random seed')
+    parser.add_argument('--dim_u', type=int, default=2, help='Action dimension')
+    parser.add_argument('--dim_x', type=str2inttuple, default=(1, 64, 64), help='3-tuple image dimension (C, H, W)')
+    args = parser.parse_args()
+
+    return args
