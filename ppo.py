@@ -5,26 +5,27 @@ from https://github.com/nikhilbarhate99/PPO-PyTorch/blob/master/PPO_continuous.p
 import torch
 import torch.nn as nn
 import numpy as np
+import copy
 
 class PPO:
-    def __init__(self, state_dim, action_dim, action_std, lr, betas, gamma, K_epochs, eps_clip, device, actor_critic):
+    def __init__(self, lr, betas, gamma, K_epochs, eps_clip, device, actor_critic):
         self.lr = lr
         self.betas = betas
         self.gamma = gamma
         self.eps_clip = eps_clip
         self.K_epochs = K_epochs
         
-        self.policy = actor_critic(state_dim, action_dim, action_std, device).to(device)
+        self.policy = actor_critic
         self.optimizer = torch.optim.Adam(self.policy.parameters(), lr=lr, betas=betas)
         
-        self.policy_old = actor_critic(state_dim, action_dim, action_std, device).to(device)
+        self.policy_old = copy.deepcopy(self.policy)
         self.policy_old.load_state_dict(self.policy.state_dict())
         
         self.MseLoss = nn.MSELoss()
         self.device = device
 
     def select_action(self, state, memory):
-        state = torch.FloatTensor(state[np.newaxis]).to(self.device)
+        state = torch.FloatTensor(state).to(self.device)
         return self.policy_old.act(state, memory).cpu().data.numpy().flatten()
     
     def update(self, memory):

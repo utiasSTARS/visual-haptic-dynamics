@@ -99,6 +99,9 @@ def weight_experiment():
 
     return data
 
+def acceleration_experiment():
+    pass
+
 if __name__ == "__main__":
     # data = magnitude_experiment()
     # data = horizontal_position_experiment()

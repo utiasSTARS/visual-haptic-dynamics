@@ -90,7 +90,8 @@ def parse_ppo_args():
     parser.add_argument('--is_render', type=str2bool, default=None, help='Rendering specific to pybullet environment')
     parser.add_argument('--random_seed', type=int, default=333, help='Random seed')
     parser.add_argument('--dim_u', type=int, default=2, help='Action dimension')
-    parser.add_argument('--dim_x', type=str2inttuple, default=(1, 64, 64), help='3-tuple image dimension (C, H, W)')
+    parser.add_argument('--frame_stack', type=int, default=1, help='Number of frames to stack')
+    parser.add_argument('--dim_x', type=str2inttuple, default=(64, 64, 1), help='3-tuple image dimension (H, W, C)')
     args = parser.parse_args()
 
     return args

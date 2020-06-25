@@ -4,12 +4,12 @@ from torch.distributions import MultivariateNormal
 from networks import FullyConvEncoderVAE
 
 class ActorCriticCNN(nn.Module):
-    def __init__(self, state_dim, action_dim, action_std, device, shared_hidden_dim=256, img_dim=(1,64,64)):
+    def __init__(self, state_dim, action_dim, action_std, shared_hidden_dim=256, img_dim=(64,64,1)):
         super(ActorCriticCNN, self).__init__()
 
         # shared network
         self.shared_net = FullyConvEncoderVAE(
-            input=img_dim[0], 
+            input=img_dim[2], 
             latent_size=shared_hidden_dim, 
             bn=False, 
             drop=False, 
@@ -33,8 +33,7 @@ class ActorCriticCNN(nn.Module):
             nn.Linear(256, 1)
         )
 
-        self.action_var = nn.Parameter(torch.full((action_dim,), action_std*action_std).to(device))
-        self.device = device
+        self.action_var = nn.Parameter(torch.full((action_dim,), action_std*action_std))
 
     def forward(self):
         raise NotImplementedError
@@ -42,7 +41,7 @@ class ActorCriticCNN(nn.Module):
     def act(self, state, memory):
         hidden = self.shared_net(state)
         action_mean = self.actor_head(hidden)
-        cov_mat = torch.diag(self.action_var).to(self.device)
+        cov_mat = torch.diag(self.action_var)
         
         dist = MultivariateNormal(action_mean, cov_mat)
         action = dist.sample()
@@ -58,7 +57,7 @@ class ActorCriticCNN(nn.Module):
         action_mean = self.actor_head(hidden)
 
         action_var = self.action_var.expand_as(action_mean)
-        cov_mat = torch.diag_embed(action_var).to(self.device)
+        cov_mat = torch.diag_embed(action_var)
         
         dist = MultivariateNormal(action_mean, cov_mat)
         
@@ -69,7 +68,7 @@ class ActorCriticCNN(nn.Module):
         return action_logprobs, torch.squeeze(state_value), dist_entropy
 
 class ActorCriticMLP(nn.Module):
-    def __init__(self, state_dim, action_dim, action_std, device):
+    def __init__(self, state_dim, action_dim, action_std):
         super(ActorCriticMLP, self).__init__()
         # action mean range -1 to 1
         self.actor =  nn.Sequential(
@@ -89,15 +88,14 @@ class ActorCriticMLP(nn.Module):
                 nn.Tanh(),
                 nn.Linear(32, 1)
                 )
-        self.action_var = nn.Parameter(torch.full((action_dim,), action_std*action_std).to(device))
-        self.device = device
+        self.action_var = nn.Parameter(torch.full((action_dim,), action_std*action_std))
 
     def forward(self):
         raise NotImplementedError
     
     def act(self, state, memory):
         action_mean = self.actor(state)
-        cov_mat = torch.diag(self.action_var).to(self.device)
+        cov_mat = torch.diag(self.action_var)
         
         dist = MultivariateNormal(action_mean, cov_mat)
         action = dist.sample()
@@ -113,7 +111,7 @@ class ActorCriticMLP(nn.Module):
         action_mean = self.actor(state)
 
         action_var = self.action_var.expand_as(action_mean)
-        cov_mat = torch.diag_embed(action_var).to(self.device)
+        cov_mat = torch.diag_embed(action_var)
         
         dist = MultivariateNormal(action_mean, cov_mat)
         
