@@ -4,7 +4,7 @@ from torch.distributions import MultivariateNormal
 from networks import FullyConvEncoderVAE
 
 class ActorCriticCNN(nn.Module):
-    def __init__(self, state_dim, action_dim, action_std, device, shared_hidden_dim=128, img_dim=(1,64,64)):
+    def __init__(self, state_dim, action_dim, action_std, device, shared_hidden_dim=256, img_dim=(1,64,64)):
         super(ActorCriticCNN, self).__init__()
 
         # shared network

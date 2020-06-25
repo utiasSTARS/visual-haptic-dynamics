@@ -1,4 +1,4 @@
-import os, sys, inspect
+import os, sys, inspect, time
 sys.path.append('..')
 currentdir = os.path.dirname(os.path.abspath(
     inspect.getfile(inspect.currentframe())))
@@ -68,10 +68,12 @@ def train(args):
     running_reward = 0
     avg_length = 0
     time_step = 0
-    
+    avg_time = 0
+
     # training loop
     for i_episode in range(1, args.max_episodes+1):
         state = env.reset()
+        tic = time.time()
         for t in range(args.max_timesteps):
             time_step +=1
 
@@ -89,6 +91,7 @@ def train(args):
 
             # update if its time
             if time_step % args.update_timestep == 0:
+                print("Updating policy")
                 ppo.update(memory)
                 memory.clear_memory()
                 time_step = 0
@@ -97,19 +100,26 @@ def train(args):
                 env.render()
             if done:
                 break
-        
+        episode_t = time.time() - tic
+
         avg_length += t
+        avg_time += episode_t
 
         if i_episode % args.logging_interval == 0:
             avg_length = int(avg_length/args.logging_interval)
             running_reward = int((running_reward/args.logging_interval))
+            avg_time = float(avg_time/args.logging_interval)
             
-            print('Episode {} \t Avg length: {} \t Avg reward: {}'.format(i_episode, avg_length, running_reward))
+            print('Episode {} \t Avg length: {} \t Avg reward: {} \t Avg runtime per episode: {}'\
+                    .format(i_episode, avg_length, running_reward, avg_time))
+
             if running_reward > args.solved_reward:
                 print("########## Solved! ##########")
                 break
+
             running_reward = 0
             avg_length = 0
+            avg_time = 0
 
 def main():
     args = parse_ppo_args()
