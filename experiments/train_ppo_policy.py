@@ -1,10 +1,16 @@
-from utils import (set_seed_torch)
+import os, sys, inspect
+sys.path.append('..')
+currentdir = os.path.dirname(os.path.abspath(
+    inspect.getfile(inspect.currentframe())))
+parentdir = os.path.dirname(os.path.dirname(currentdir))
+os.sys.path.insert(0, parentdir + "/pixel-environments/")
+from gym_thing.gym_thing import reacher_env, pusher_env, visual_pusher_env, visual_reacher_env
+from utils import set_seed_torch, rgb2gray
 from args.parser import parse_ppo_args
 import gym
 from ppo import PPO
+from models import ActorCriticMLP, ActorCriticCNN
 import torch 
-
-import myenv
 
 class Memory:
     def __init__(self):
@@ -24,7 +30,11 @@ class Memory:
 def train(args):
     
     # creating environment
-    env = gym.make(args.env_name)
+    if args.is_render is not None:
+        env = gym.make(args.env_name, is_render=args.is_render)
+    else:
+        env = gym.make(args.env_name)
+    
     state_dim = env.observation_space.shape[0] # 24
     action_dim = env.action_space.shape[0] # 4
     print("State dim: {}".format(env.observation_space.shape))
@@ -36,7 +46,23 @@ def train(args):
         set_seed_torch(args.random_seed)  
 
     memory = Memory()
-    ppo = PPO(state_dim, action_dim, args.action_std, args.lr, args.betas, args.gamma, args.epochs, args.eps_clip, args.device)
+
+    if args.architecture == "mlp":
+        actor_critic = ActorCriticMLP
+    elif args.architecture =="cnn":
+        actor_critic = ActorCriticCNN
+
+    ppo = PPO(
+        state_dim, 
+        action_dim, 
+        args.action_std, 
+        args.lr, 
+        args.betas, 
+        args.gamma, 
+        args.epochs, 
+        args.eps_clip, 
+        args.device,
+        actor_critic=actor_critic)
     
     # logging variables
     running_reward = 0
@@ -48,14 +74,19 @@ def train(args):
         state = env.reset()
         for t in range(args.max_timesteps):
             time_step +=1
-            # Running policy_old:
-            action = ppo.select_action(state, memory)
+
+            # Running policy_old:            
+            if args.architecture =="cnn":
+                action = ppo.select_action(rgb2gray(state), memory)
+            else:
+                action = ppo.select_action(state, memory)
+
             state, reward, done, _ = env.step(action)
             
             # Saving reward and is_terminals:
             memory.rewards.append(reward)
             memory.is_terminals.append(done)
-            
+
             # update if its time
             if time_step % args.update_timestep == 0:
                 ppo.update(memory)
@@ -68,23 +99,15 @@ def train(args):
                 break
         
         avg_length += t
-        
-        # stop training if avg_reward > solved_reward
-        if running_reward > (args.logging_interval*args.solved_reward):
-            print("########## Solved! ##########")
-            torch.save(ppo.policy.state_dict(), 'experiments/results/PPO/PPO_continuous_solved_{}.pth'.format(env_name))
-            break
-        
-        # save every 500 episodes
-        if i_episode % 500 == 0:
-            torch.save(ppo.policy.state_dict(), 'experiments/results/PPO/PPO_continuous_{}.pth'.format(env_name))
-            
-        # logging
+
         if i_episode % args.logging_interval == 0:
             avg_length = int(avg_length/args.logging_interval)
             running_reward = int((running_reward/args.logging_interval))
             
             print('Episode {} \t Avg length: {} \t Avg reward: {}'.format(i_episode, avg_length, running_reward))
+            if running_reward > args.solved_reward:
+                print("########## Solved! ##########")
+                break
             running_reward = 0
             avg_length = 0
 

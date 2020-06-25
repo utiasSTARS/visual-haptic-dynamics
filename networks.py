@@ -13,7 +13,7 @@ class Flatten(nn.Module):
 
 class FullyConvEncoderVAE(nn.Module):
     def __init__(self, input=1, latent_size=12, bn=True, 
-                 drop=False, nl=nn.ReLU(), stochastic=True, img_dim="64"):
+                 drop=False, nl=nn.ReLU(), stochastic=True, img_dim=64):
         super(FullyConvEncoderVAE, self).__init__()
         self.stochastic = stochastic
         self.layers = nn.ModuleList()
@@ -39,9 +39,9 @@ class FullyConvEncoderVAE(nn.Module):
         if drop: self.layers.append(nn.Dropout(p=0.5))
         self.layers.append(nl)
 
-        if img_dim == "64":
+        if img_dim == 64:
             n_size = 256 * 2 * 2
-        elif img_dim == "128":
+        elif img_dim == 128:
             n_size = 256 * 6 * 6
         else:
             raise NotImplementedError()
@@ -68,7 +68,7 @@ class FullyConvEncoderVAE(nn.Module):
 
             return z, mu, logvar
         else: 
-            return x
+            return self.fc(x)
 
 
 class FullyConvDecoderVAE(nn.Module):

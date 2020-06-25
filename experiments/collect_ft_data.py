@@ -77,7 +77,7 @@ def weight_experiment():
     env = ThingVisualPusher(render_w=64, render_h=64, goal_vis=False, substeps=n_steps)
     s_list = [5, 6, 7, 8, 9, 10]   
     n = len(s_list)
-    ll = 80
+    ll = 20
 
     data = {
         "img": np.zeros((n, ll, 64, 64, 3), dtype=np.uint8), 
@@ -88,8 +88,9 @@ def weight_experiment():
     
     for ii, s in enumerate(s_list):
         env.reset()
+        env._p.changeDynamics(env.scene.plateId, -1, mass=s)
         for jj in range(ll): 
-            obs, reward, done, info = env.step(action=np.array([0.10, 0]))
+            obs, reward, done, info = env.step(action=np.array([0.50, 0]))
             data["img"][ii, jj] = obs["img"]
             data["ft"][ii, jj] = obs["ft"]
             data["arm"][ii, jj] = obs["arm"]
@@ -97,8 +98,8 @@ def weight_experiment():
     return data
 
 if __name__ == "__main__":
-    data = magnitude_experiment()
+    # data = magnitude_experiment()
     # data = horizontal_position_experiment()
-    # data = weight_experiment()
+    data = weight_experiment()
     
     # write_file_pkl(data=data, name="horizontal_fixed", location="./data/ft_sim/")

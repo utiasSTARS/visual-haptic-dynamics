@@ -25,6 +25,10 @@ class Normalize:
     def __repr__(self):
         return self.__class__.__name__ + '(mean={self.mean}, var={self.var})'
 
+def rgb2gray(x):
+    """Convert pytorch tensor of RGB images (b, h, w, c) to grayscale (b, c, h, w)."""
+    return np.dot(x[...,:3], [0.2989, 0.5870, 0.1140])[np.newaxis]
+
 def frame_stack(x, frames=1):
     """
     Given a trajectory images with shape (n, l, c, h, w) convert to 

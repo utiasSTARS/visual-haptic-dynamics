@@ -1,14 +1,14 @@
 """
 Test environment with simple inputs.
 """
-import os, sys, time, inspect
+import os, sys, inspect
 currentdir = os.path.dirname(os.path.abspath(
     inspect.getfile(inspect.currentframe())))
 parentdir = os.path.dirname(os.path.dirname(currentdir))
 os.sys.path.insert(0, parentdir + "/pixel-environments/")
 
 from classic_control_pixel import VisualPendulum
-from gym_thing.gym_thing import reacher_env
+from gym_thing.gym_thing import reacher_env, pusher_env, visual_pusher_env, visual_reacher_env
 import gym
 import numpy as np
 
@@ -78,6 +78,6 @@ def test_gym_visual_pusher():
 if __name__=="__main__":
     # test_actions()
     # test_gym_reacher()
-    # test_gym_pusher()
+    test_gym_pusher()
     # test_gym_visual_reacher()
-    test_gym_visual_pusher()
+    # test_gym_visual_pusher()
