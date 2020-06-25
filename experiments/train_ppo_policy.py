@@ -87,12 +87,14 @@ def train(args):
         tic = time.time()
         for t in range(args.max_timesteps):
             time_step +=1
-        state = rgb2gray(state)
 
             # Running policy_old:            
             if args.architecture =="cnn":
                 if args.dim_x[-1] == 1:
                     state = rgb2gray(state)
+                    img_min, img_max = state.min(), state.max()
+                    state = (state - img_min) / (img_max - img_min)
+
                 state = state.transpose(0, 3, 1, 2)
                 state = state.reshape(-1, *state.shape[2:])[np.newaxis]
                 action = ppo.select_action(state, memory)

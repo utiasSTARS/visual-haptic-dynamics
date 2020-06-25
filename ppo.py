@@ -6,6 +6,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 import copy
+from utils import common_init_weights
 
 class PPO:
     def __init__(self, lr, betas, gamma, K_epochs, eps_clip, device, actor_critic):
@@ -16,6 +17,7 @@ class PPO:
         self.K_epochs = K_epochs
         
         self.policy = actor_critic
+        self.policy.apply(common_init_weights)
         self.optimizer = torch.optim.Adam(self.policy.parameters(), lr=lr, betas=betas)
         
         self.policy_old = copy.deepcopy(self.policy)
