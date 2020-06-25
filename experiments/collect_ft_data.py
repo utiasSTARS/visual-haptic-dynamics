@@ -17,6 +17,7 @@ import pybullet as p
 def write_file_pkl(data, name, location="."):
     tag = uuid.uuid4().hex[:].upper()
     filename = os.path.join(location, name + "_" + tag)
+    os.makedirs(location, exist_ok=True)
     with open(f'{filename}.pkl', 'wb') as f:
         pkl.dump(data, f)
 
@@ -75,7 +76,8 @@ def horizontal_position_experiment():
 def weight_experiment():   
     n_steps = 32 
     env = ThingVisualPusher(render_w=64, render_h=64, goal_vis=False, substeps=n_steps)
-    s_list = [5, 6, 7, 8, 9, 10]   
+    # s_list = [5, 6, 7, 8, 9, 10]   
+    s_list = [5]
     n = len(s_list)
     ll = 20
 
@@ -102,4 +104,4 @@ if __name__ == "__main__":
     # data = horizontal_position_experiment()
     data = weight_experiment()
     
-    # write_file_pkl(data=data, name="horizontal_fixed", location="./data/ft_sim/")
+    write_file_pkl(data=data, name="horizontal_fixed", location="./data2/ft_sim/")
