@@ -33,7 +33,6 @@ def magnitude_experiment():
         "img": np.zeros((n, ll, 64, 64, 3), dtype=np.uint8), 
         "ft": np.zeros((n, ll, n_steps, 6)), 
         "arm": np.zeros((n, ll, n_steps, 6)),
-        "info": {"experiment": "magnitude", "scales": s_list, "episode_len": ll}
     }
     
     for ii, s in enumerate(s_list):
@@ -58,7 +57,6 @@ def horizontal_position_experiment():
         "img": np.zeros((n, ll, 64, 64, 3), dtype=np.uint8), 
         "ft": np.zeros((n, ll, n_steps, 6)), 
         "arm": np.zeros((n, ll, n_steps, 6)),
-        "info": {"experiment": "horizontal_position", "positions": s_list, "episode_len": ll}
     }
     
     for ii, s in enumerate(s_list):
@@ -85,7 +83,6 @@ def weight_experiment():
         "img": np.zeros((n, ll, 64, 64, 3), dtype=np.uint8), 
         "ft": np.zeros((n, ll, n_steps, 6)), 
         "arm": np.zeros((n, ll, n_steps, 6)),
-        "info": {"experiment": "weight", "weights": s_list, "episode_len": ll}
     }
     
     for ii, s in enumerate(s_list):
@@ -99,12 +96,36 @@ def weight_experiment():
 
     return data
 
-def acceleration_experiment():
-    pass
+def acceleration_experiment(frame_skip):
+    n = 10
+    n_steps = 32
+    env = ThingVisualPusher(render_w=64, render_h=64, goal_vis=False, substeps=n_steps, frame_skip=frame_skip)
+    ll = 30
+    p = np.random.uniform(-1,1,2) 
+        
+    data = {
+        "img": np.zeros((n, ll, 64, 64, 3), dtype=np.uint8), 
+        "ft": np.zeros((n, ll, n_steps, 6)), 
+        "arm": np.zeros((n, ll, n_steps, 6)),
+    }
+    
+    for ii in range(n):
+        env.reset()
+        for _ in range(int(30 / frame_skip)):
+                obs, reward, done, info = env.step(action=np.array([0.40, 0]))
+        for jj in range(ll): 
+            p = np.random.uniform(-1,1,2)
+            obs, reward, done, info = env.step(action=np.array([p[0], p[1]]))
+            data["img"][ii, jj] = obs["img"]
+            data["ft"][ii, jj] = obs["ft"]
+            data["arm"][ii, jj] = obs["arm"]
+
+    return data
 
 if __name__ == "__main__":
     # data = magnitude_experiment()
     # data = horizontal_position_experiment()
-    data = weight_experiment()
-    
-    write_file_pkl(data=data, name="horizontal_fixed", location="./data2/ft_sim/")
+    # data = weight_experiment()
+    data = acceleration_experiment(frame_skip=2)
+
+    write_file_pkl(data=data, name="acceleration_experiment_2frameskip_32substeps", location="./data/ft_sim/")
