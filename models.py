@@ -1,7 +1,44 @@
 import torch
 import torch.nn as nn
 from torch.distributions import MultivariateNormal
-from networks import FullyConvEncoderVAE
+from networks import FullyConvEncoderVAE, FullyConvDecoderVAE
+
+class AuxActorCriticCNN(ActorCriticCNN):
+    def __init__(self, state_dim, action_dim, action_std, shared_hidden_dim=256, img_dim=(64,64,1)):
+        super(AuxActorCriticCNN, self).__init__(
+            state_dim, 
+            action_dim, 
+            action_std, 
+            shared_hidden_dim=shared_hidden_dim, 
+            img_dim=img_dim
+        )
+
+        self.decoder = FullyConvDecoderVAE(
+            input=img_dim[2],
+            latent_size=shared_hidden_dim,
+            bn=False,
+            drop=False,
+            nl=nn.Tanh(),
+            img_dim=img_dim[1],
+            output_nl=nn.Sigmoid()
+        )
+
+    def evaluate(self, state, action): 
+        hidden = self.shared_net(state)
+        action_mean = self.actor_head(hidden.detach())
+
+        state_hat = self.decoder(hidden)
+
+        action_var = self.action_var.expand_as(action_mean)
+        cov_mat = torch.diag_embed(action_var)
+        
+        dist = MultivariateNormal(action_mean, cov_mat)
+        
+        action_logprobs = dist.log_prob(action)
+        dist_entropy = dist.entropy()
+        state_value = self.critic_head(hidden)
+        
+        return action_logprobs, torch.squeeze(state_value), dist_entropy, state_hat
 
 class ActorCriticCNN(nn.Module):
     def __init__(self, state_dim, action_dim, action_std, shared_hidden_dim=256, img_dim=(64,64,1)):
@@ -54,7 +91,7 @@ class ActorCriticCNN(nn.Module):
     
     def evaluate(self, state, action): 
         hidden = self.shared_net(state)
-        action_mean = self.actor_head(hidden)
+        action_mean = self.actor_head(hidden.detach())
 
         action_var = self.action_var.expand_as(action_mean)
         cov_mat = torch.diag_embed(action_var)
@@ -89,7 +126,7 @@ class ActorCriticMLP(nn.Module):
                 nn.Linear(32, 1)
                 )
         self.action_var = nn.Parameter(torch.full((action_dim,), action_std*action_std))
-
+        
     def forward(self):
         raise NotImplementedError
     

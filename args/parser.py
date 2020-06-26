@@ -81,7 +81,6 @@ def parse_ppo_args():
     parser.add_argument('--max_episodes', type=int, default=10000, help='Maximum episodes for training')
     parser.add_argument('--solved_reward', type=int, default=300, help='Reward threshold for solved environment')
     parser.add_argument('--architecture', choices=['cnn', 'mlp'], default='mlp',  help='Network architecture used')
-    parser.add_argument('--betas', type=str2inttuple, default=(0.9, 0.999), help='Adam optimizer betas')
     parser.add_argument('--lr', type=float, default=0.0003, help='Weight of kl loss')
     parser.add_argument('--device', type=str, default='cpu', help='Device to use for PyTorch')
     parser.add_argument('--env_name', type=str, default='ThingReacher2D-v0', help='Name of environment from gym')

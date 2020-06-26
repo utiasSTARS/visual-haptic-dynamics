@@ -49,4 +49,4 @@ def visual_haptic_1D():
 if __name__ == "__main__":
     data = visual_haptic_1D()
 
-    write_file_pkl(data=data, name="visual_haptic_1d", location="./data/datasets/")
+    write_file_pkl(data=data, name="visual_haptic_1D", location="./data/datasets/")

@@ -66,7 +66,6 @@ def train(args):
 
     ppo = PPO(
         args.lr, 
-        args.betas, 
         args.gamma, 
         args.epochs, 
         args.eps_clip, 

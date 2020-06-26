@@ -73,15 +73,15 @@ class FullyConvEncoderVAE(nn.Module):
 
 class FullyConvDecoderVAE(nn.Module):
     def __init__(self, input=1, latent_size=12, output_nl=nn.Tanh(), bn=True, 
-                    drop=False, nl=nn.ReLU(), img_dim="64"):
+                    drop=False, nl=nn.ReLU(), img_dim=64):
         super(FullyConvDecoderVAE, self).__init__()
         self.bn = bn
         self.drop = drop
         self.layers = nn.ModuleList()
 
-        if img_dim == "64":
+        if img_dim == 64:
             n_size = 256 * 2 * 2
-        elif img_dim == "128":
+        elif img_dim == 128:
             n_size = 256 * 6 * 6
         else:
             raise NotImplementedError()
@@ -96,7 +96,7 @@ class FullyConvDecoderVAE(nn.Module):
         if drop: self.layers.append(nn.Dropout(p=0.5))
         self.layers.append(nl)
 
-        if img_dim == "64":
+        if img_dim == 64:
             self.layers.append(nn.ConvTranspose2d(64, 32, 6, stride=2, bias=False))
             if bn: self.layers.append(nn.BatchNorm2d(32, track_running_stats=True))
             if drop: self.layers.append(nn.Dropout(p=0.5))
@@ -105,7 +105,7 @@ class FullyConvDecoderVAE(nn.Module):
             self.layers.append(nn.ConvTranspose2d(32, input, 6, stride=2, bias=False))
             if bn: self.layers.append(nn.BatchNorm2d(input, track_running_stats=True))
             if drop: self.layers.append(nn.Dropout(p=0.5))
-        elif img_dim == "128":
+        elif img_dim == 128:
             self.layers.append(nn.ConvTranspose2d(64, 32, 5, stride=2, bias=False))
             if bn: self.layers.append(nn.BatchNorm2d(32, track_running_stats=True))
             if drop: self.layers.append(nn.Dropout(p=0.5))
