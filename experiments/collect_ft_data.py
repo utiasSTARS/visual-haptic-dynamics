@@ -10,7 +10,6 @@ currentdir = os.path.dirname(os.path.abspath(
     inspect.getfile(inspect.currentframe())))
 parentdir = os.path.dirname(os.path.dirname(currentdir))
 os.sys.path.insert(0, parentdir + "/pixel-environments/gym_thing/gym_thing/")
-from pusher_env import ThingPusher
 from visual_pusher_env import ThingVisualPusher
 import pybullet as p
 
@@ -23,7 +22,7 @@ def write_file_pkl(data, name, location="."):
 
 def magnitude_experiment():
     n_steps = 32
-    env = ThingVisualPusher(render_w=64, render_h=64, goal_vis=False, substeps=n_steps)
+    env = ThingVisualPusher(render_w=64, render_h=64, goal_vis=False, substeps=n_steps, frame_skip=2)
     
     s_list = [2.0, 1.9, 1.8, 1.7, 1.6, 1.5, 1.4, 1.3, 1.2, 1.1, 1.0]
     n = len(s_list)
@@ -38,7 +37,7 @@ def magnitude_experiment():
     for ii, s in enumerate(s_list):
         env.reset()
         for jj in range(ll): 
-            obs, reward, done, info = env.step(action=np.array([0.50 * s, 0]))
+            obs, reward, done, info = env.step(action=np.array([0.20 * s, 0]))
             data["img"][ii, jj] = obs["img"]
             data["ft"][ii, jj] = obs["ft"]
             data["arm"][ii, jj] = obs["arm"]
@@ -123,9 +122,9 @@ def acceleration_experiment(frame_skip):
     return data
 
 if __name__ == "__main__":
-    # data = magnitude_experiment()
+    data = magnitude_experiment()
     # data = horizontal_position_experiment()
     # data = weight_experiment()
-    data = acceleration_experiment(frame_skip=2)
+    # data = acceleration_experiment(frame_skip=3)
 
-    write_file_pkl(data=data, name="acceleration_experiment_2frameskip_32substeps", location="./data/ft_sim/")
+    # write_file_pkl(data=data, name="acceleration_experiment_3frameskip_32substeps", location="./data/ft_sim/")
