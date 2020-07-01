@@ -1,9 +1,13 @@
-device="cuda:0"
-dataset="/media/m2-drive/datasets/pendulum-srl-sim/pendulum16_total_2048_traj_16_repeat_2_with_angle_train.pkl"
-storage_base_path="/home/olimoyo/latent-metric-control/saved_models/"
+# device="cuda:0"
+device="cpu"
+# dataset="/media/m2-drive/datasets/pendulum-srl-sim/pendulum16_total_2048_traj_16_repeat_2_with_angle_train.pkl"
+# storage_base_path="/home/olimoyo/visual-haptic-dynamics/saved_models/"
 
 # dataset="/Users/oliver/Datasets/pendulum-srl-sim/pendulum64_total_2048_traj_16_repeat_2_with_angle_train.pkl"
-# storage_base_path="/Users/oliver/latent-metric-control/saved_models"
+# storage_base_path="/Users/oliver/visual-haptic-dynamics/saved_models"
+
+dataset="/Users/oliver/visual-haptic-dynamics/experiments/data/datasets/visual_haptic_1D_B20B033AC27B4EC6AA690C653AC0AE70.pkl"
+storage_base_path="/Users/oliver/visual-haptic-dynamics/saved_models"
 
 n_batches=(32)
 learning_rates=(3e-4)
@@ -15,16 +19,17 @@ rnn_nets=('lstm')
 dyn_nets=('linearmix')
 n_epochs=(4096)
 opt=('adam')
-enc_dec_nets=('fcn')
+enc_dec_nets=('cnn')
 opt_vae_base_epochs=(1024)
 debug=('True')
 nl=('relu')
-traj_len=(31)
+traj_len=(29)
 frame_stack=(1)
 val_split=(0)
 lam_rec=(0.95)
 lam_kl=(0.80)
 n_checkpoint_epoch=(1024)
+task="push64"
 
 for n in {1..1}; do
     for dyn_net in ${dyn_nets[@]}; do
@@ -40,15 +45,15 @@ for n in {1..1}; do
                                             for n_epoch in ${n_epochs[@]}; do
                                                 python ../train.py \
                                                                     --K $K \
-                                                                    --dim_u 1 \
-                                                                    --dim_z 3 \
-                                                                    --dim_x "1,16,16" \
+                                                                    --dim_u 2 \
+                                                                    --dim_z 12 \
+                                                                    --dim_x "1,64,64" \
                                                                     --n_worker 8 \
                                                                     --use_binary_ce "False" \
                                                                     --n_epoch $n_epoch \
                                                                     --n_batch $n_batch \
                                                                     --debug $debug \
-                                                                    --comment "encdecnet-${enc_dec_net}_lr-${lr}_n_batch-${n_batch}_weightinit-${weight_init}_traj-${traj_len}_bn-${batch_norm}_dyntype-${dyn_net}_dynnet-${rnn_net}_framestacks-${frame_stack}_optvaebaseepochs-${opt_vae_base_epoch}_lamrec-${lam_rec}_lamkl-${lam_kl}" \
+                                                                    --comment "${task}_encdecnet-${enc_dec_net}_lr-${lr}_n_batch-${n_batch}_weightinit-${weight_init}_traj-${traj_len}_bn-${batch_norm}_dyntype-${dyn_net}_dynnet-${rnn_net}_framestacks-${frame_stack}_optvaebaseepochs-${opt_vae_base_epoch}_lamrec-${lam_rec}_lamkl-${lam_kl}" \
                                                                     --device $device \
                                                                     --lr $lr \
                                                                     --weight_init $weight_init \
@@ -66,7 +71,7 @@ for n in {1..1}; do
                                                                     --opt $opt \
                                                                     --rnn_net $rnn_net \
                                                                     --dyn_net $dyn_net \
-                                                                    --task "pendulum16" \
+                                                                    --task $task \
                                                                     --val_split $val_split \
                                                                     --non_linearity $nl \
                                                                     --traj_len $traj_len \

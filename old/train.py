@@ -24,7 +24,7 @@ from networks import (FullyConvEncoderVAE,
                         LinearMixSSM,
                         LinearSSM,
                         NonLinearSSM)
-from datasets import VisualHaptic
+from datasets import ImgCached
 from losses import kl
 
 set_seed_torch(3)
@@ -94,7 +94,7 @@ def train(args):
             bn=args.use_batch_norm,
             drop=args.use_dropout,
             nl=nl,
-            img_dim=args.dim_x[1],
+            img_dim=str(args.dim_x[1]),
             stochastic=True
         ).to(device=device)
         dec = FullyConvDecoderVAE(
@@ -103,7 +103,7 @@ def train(args):
             bn=args.use_batch_norm,
             drop=args.use_dropout,
             nl=nl,
-            img_dim=args.dim_x[1],
+            img_dim=str(args.dim_x[1]),
             output_nl=output_nl
         ).to(device=device)
 
@@ -195,12 +195,29 @@ def train(args):
     else:
         loss_REC = nn.MSELoss(reduction='none').to(device=device)
 
+    if args.task == "pendulum64":
+        transform = tv.transforms.Compose([
+            tv.transforms.ToPILImage(),
+            tv.transforms.Grayscale(num_output_channels=1),
+            tv.transforms.ToTensor(),
+            Normalize(mean=0.27, var=1.0 - 0.27) # 64x64
+        ])
+    elif args.task == "pendulum16":
+        transform = transforms.Compose([
+            transforms.ToPILImage(),
+            transforms.Grayscale(num_output_channels=1),
+            transforms.ToTensor(),
+            transforms.Lambda(lambda x: (x - 0.68)/ (1.0 - 0.68)) # 16x16
+            ])
+    else:
+        transform = None
+
     # Dataset
-    dataset = VisualHaptic(
+    dataset = ImgCached(
             args.dataset,
+            transform=transform,
             img_shape=args.dim_x
         )
-
     ds_size = len(dataset)
     idx = list(range(ds_size))
     split = int(np.floor(args.val_split * ds_size))
@@ -259,14 +276,14 @@ def train(args):
             
             # Load and shape trajectory data
             # XXX: all trajectories have same length
-            x_full = data['img'].float().to(device=device) # (n, l, 1, h, w)
+            x_full = data['images'].float().to(device=device) # (n, l, 1, h, w)
             x_full = frame_stack(x_full, frames=args.frame_stacks) # (n, l - frames, 1 + frames, h, w)
             start_idx = np.random.randint(x_full.shape[1] - args.traj_len + 1) # sample random range of traj_len
             end_idx = start_idx + args.traj_len
             x = x_full[:, start_idx:end_idx]
             n, l = x.shape[0], x.shape[1]
             x = x.reshape(-1, *x.shape[2:]) # reshape to (-1, 1, height, width)
-            u = data['action'][:, (start_idx + args.frame_stacks):(end_idx + args.frame_stacks)].float().to(device=device)
+            u = data['actions'][:, (start_idx + args.frame_stacks):(end_idx + args.frame_stacks)].float().to(device=device)
 
             # Encode & Decode all samples
             z, mu_z, logvar_z = enc(x)

@@ -25,7 +25,7 @@ def visual_haptic_1D():
     env = ThingVisualPusher(render_w=64, render_h=64, goal_vis=False, substeps=n_steps, frame_skip=2)
     config = env.get_config()
 
-    s_list = list(np.arange(1.0, 2.0, 0.01))  
+    s_list = list(np.arange(1.0, 1.96, 0.01))  
     n = len(s_list)
     ll = 30
       
