@@ -103,8 +103,8 @@ class ImgCached(data.Dataset):
         img = self.cached_data[idx] # (T, 1, res, res) 
         a = self.cached_data_actions[idx] # (T, 1)
 
-        sample = {'images':img, # (T, 1, res, res) 
-                  'actions': a}
+        sample = {'img':img, # (T, 1, res, res) 
+                  'action': a}
 
         return sample
 

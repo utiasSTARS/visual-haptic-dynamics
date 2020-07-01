@@ -66,7 +66,7 @@ def train(args):
     # Encoder and decoder
     if args.enc_dec_net == 'fcn':
         true_dim_x = (
-            args.dim_x[0] + args.frame_stacks, 
+            args.dim_x[0] * (args.frame_stacks + 1), 
             args.dim_x[1], 
             args.dim_x[2]
         )
@@ -90,7 +90,7 @@ def train(args):
         ).to(device=device)
     elif args.enc_dec_net == 'cnn':
         enc = FullyConvEncoderVAE(
-            input=args.dim_x[0] * args.frame_stacks,
+            input=args.dim_x[0] * (args.frame_stacks + 1),
             latent_size=args.dim_z,
             bn=args.use_batch_norm,
             drop=args.use_dropout,
@@ -99,7 +99,7 @@ def train(args):
             stochastic=True
         ).to(device=device)
         dec = FullyConvDecoderVAE(
-            input=args.dim_x[0] * args.frame_stacks,
+            input=args.dim_x[0] * (args.frame_stacks + 1),
             latent_size=args.dim_z,
             bn=args.use_batch_norm,
             drop=args.use_dropout,
