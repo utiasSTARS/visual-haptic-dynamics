@@ -1,13 +1,7 @@
-# device="cuda:0"
-device="cpu"
-# dataset="/media/m2-drive/datasets/pendulum-srl-sim/pendulum16_total_2048_traj_16_repeat_2_with_angle_train.pkl"
-# storage_base_path="/home/olimoyo/visual-haptic-dynamics/saved_models/"
+device="cuda:1"
 
-# dataset="/Users/oliver/Datasets/pendulum-srl-sim/pendulum64_total_2048_traj_16_repeat_2_with_angle_train.pkl"
-# storage_base_path="/Users/oliver/visual-haptic-dynamics/saved_models"
-
-dataset="/Users/oliver/visual-haptic-dynamics/experiments/data/datasets/visual_haptic_1D_B20B033AC27B4EC6AA690C653AC0AE70.pkl"
-storage_base_path="/Users/oliver/visual-haptic-dynamics/saved_models"
+dataset="/home/olimoyo/visual-haptic-dynamics/experiments/data/datasets/visual_haptic_1D_B1F515581A0A478A92AF1C58D4345408.pkl"
+storage_base_path="/home/olimoyo/visual-haptic-dynamics/saved_models/"
 
 n_batches=(32)
 learning_rates=(3e-4)

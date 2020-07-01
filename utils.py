@@ -152,7 +152,7 @@ def load_models(path, args, mode='eval', device='cuda:0'):
                                     latent_size=args.dim_z,
                                     bn=args.use_batch_norm,
                                     drop=args.use_dropout,
-                                    img_dim=str(args.dim_x[1]),
+                                    img_dim=args.dim_x[1],
                                     nl=nl,
                                     stochastic=True).to(device=device)
     else:
@@ -184,7 +184,7 @@ def load_models(path, args, mode='eval', device='cuda:0'):
                                   latent_size=args.dim_z,
                                   bn=args.use_batch_norm,
                                   drop=args.use_dropout,
-                                  img_dim=str(args.dim_x[1]),
+                                  img_dim=args.dim_x[1],
                                   nl=nl,
                                   output_nl=output_nl).to(device=device)
     else:

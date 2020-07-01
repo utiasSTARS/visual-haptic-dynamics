@@ -11,4 +11,5 @@ python ../experiments/train_ppo_policy.py \
 --solved_reward -5 \
 --update_timestep 3900 \
 --architecture cnn \
---device cuda:0
+--device cuda:0 \
+--max_episodes 1000000

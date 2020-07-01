@@ -24,7 +24,7 @@ from networks import (FullyConvEncoderVAE,
                         LinearMixSSM,
                         LinearSSM,
                         NonLinearSSM)
-from datasets import VisualHaptic
+from datasets import VisualHaptic, ImgCached
 from losses import kl
 
 set_seed_torch(3)
@@ -32,6 +32,7 @@ def _init_fn(worker_id):
     np.random.seed(int(3))
 
 def train(args):
+    print(args)
     assert 0 <= args.opt_vae_epochs <= args.opt_vae_base_epochs <= args.n_epoch
     device = torch.device(args.device)
     torch.backends.cudnn.deterministic = args.cudnn_deterministic
@@ -89,7 +90,7 @@ def train(args):
         ).to(device=device)
     elif args.enc_dec_net == 'cnn':
         enc = FullyConvEncoderVAE(
-            input=args.dim_x[0] + args.frame_stacks,
+            input=args.dim_x[0] * args.frame_stacks,
             latent_size=args.dim_z,
             bn=args.use_batch_norm,
             drop=args.use_dropout,
@@ -98,7 +99,7 @@ def train(args):
             stochastic=True
         ).to(device=device)
         dec = FullyConvDecoderVAE(
-            input=args.dim_x[0] + args.frame_stacks,
+            input=args.dim_x[0] * args.frame_stacks,
             latent_size=args.dim_z,
             bn=args.use_batch_norm,
             drop=args.use_dropout,
@@ -196,10 +197,25 @@ def train(args):
         loss_REC = nn.MSELoss(reduction='none').to(device=device)
 
     # Dataset
-    dataset = VisualHaptic(
-            args.dataset,
-            img_shape=args.dim_x
-        )
+    if args.task == "pendulum64":
+        transform = tv.transforms.Compose([
+            tv.transforms.ToPILImage(),
+            tv.transforms.Grayscale(num_output_channels=1),
+            tv.transforms.ToTensor(),
+            Normalize(mean=0.27, var=1.0 - 0.27) # 64x64
+        ])
+        dataset = ImgCached(
+                    args.dataset,
+                    transform=transform,
+                    img_shape=args.dim_x
+                    )
+    elif args.task == "push64":
+        transform = None
+        dataset = VisualHaptic(
+                    args.dataset,
+                    img_shape=args.dim_x
+                    )
+
 
     ds_size = len(dataset)
     idx = list(range(ds_size))
