@@ -57,9 +57,16 @@ class Normalize:
     def __repr__(self):
         return self.__class__.__name__ + '(mean={self.mean}, var={self.var})'
 
+    
 def rgb2gray(x):
-    """Convert pytorch tensor of RGB images (b, h, w, c) to grayscale (b, h, w, c)."""
-    return np.dot(x[...,:3], [0.2989, 0.5870, 0.1140])[..., np.newaxis]
+    """
+    Convert pytorch tensor of RGB images (b, h, w, c) to 
+    grayscale (b, h, w, c) renormalized between 0 to 1.
+    """
+    x = np.dot(x[...,:3], [0.2989, 0.5870, 0.1140])[..., np.newaxis]
+    x_min, x_max = x.min(), x.max()
+    x = (x - x_min) / (x_max - x_min)
+    return x
 
 def frame_stack(x, frames=1):
     """

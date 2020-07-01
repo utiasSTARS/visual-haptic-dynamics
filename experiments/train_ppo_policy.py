@@ -37,7 +37,9 @@ def train(args):
 
     if args.architecture =="cnn":
         env = FrameStack(env, k=args.frame_stack)
-
+        img_transform = tv.transforms.Compose([
+            
+        ])
     state_dim = env.observation_space.shape[0] # 24
     action_dim = env.action_space.shape[0] # 4
     print("State dim: {}".format(env.observation_space.shape))
@@ -91,8 +93,6 @@ def train(args):
             if args.architecture =="cnn":
                 if args.dim_x[-1] == 1:
                     state = rgb2gray(state)
-                    img_min, img_max = state.min(), state.max()
-                    state = (state - img_min) / (img_max - img_min)
 
                 state = state.transpose(0, 3, 1, 2)
                 state = state.reshape(-1, *state.shape[2:])[np.newaxis]

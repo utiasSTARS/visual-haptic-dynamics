@@ -210,7 +210,7 @@ def train(args):
             transforms.Lambda(lambda x: (x - 0.68)/ (1.0 - 0.68)) # 16x16
             ])
     else:
-        raise NotImplementedError()
+        transform = None
 
     # Dataset
     dataset = ImgCached(

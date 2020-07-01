@@ -33,16 +33,19 @@ def visual_haptic_1D():
         "img": np.zeros((n, ll, 64, 64, 3), dtype=np.uint8), 
         "ft": np.zeros((n, ll, n_steps, 6)), 
         "arm": np.zeros((n, ll, n_steps, 6)),
+        "action": np.zeros((n, ll, 2)), 
         "config": config
     }
 
     for ii, s in enumerate(s_list):
         env.reset()
         for jj in range(ll): 
-            obs, reward, done, info = env.step(action=np.array([0.20 * s, 0]))
+            u = np.array([0.20 * s, 0])
+            obs, reward, done, info = env.step(action=u)
             data["img"][ii, jj] = obs["img"]
             data["ft"][ii, jj] = obs["ft"]
             data["arm"][ii, jj] = obs["arm"]
+            data["action"][ii, jj] = u
 
     return data
 
