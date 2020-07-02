@@ -70,8 +70,8 @@ def rgb2gray(x):
 
 def frame_stack(x, frames=1):
     """
-    Given a trajectory images with shape (n, l, c, h, w) convert to 
-    (n, l - frames, (frames + 1) * c, h, w), where the channel dimension 
+    Given a trajectory of images with shape (n, l, c, ...) convert to 
+    (n, l - frames, (frames + 1) * c, ...), where the channel dimension 
     contains the extra frames added.
     
     e.g. visualization of frames=2:
@@ -80,12 +80,12 @@ def frame_stack(x, frames=1):
 
     NOTE: "Index 0" is the current frame, and index 1+ is the history
     """
-    n, l, c, h, w = x.shape
-    x_stacked = torch.zeros((n, l, (frames + 1) * c, h, w), 
+    n, l, c = x.shape[:3]
+    x_stacked = torch.zeros((n, l, (frames + 1) * c, *x.shape[3:]), 
                                 dtype=x.dtype, device=x.device)
     x_stacked[:, :, :c] = x
     for ii in (_ + 1 for _ in range(frames)):
-        pad = torch.zeros((n, ii, c, h, w), 
+        pad = torch.zeros((n, ii, c, *x.shape[3:]), 
                             dtype=x.dtype, device=x.device)
         x_stacked[:, :, ((ii) * c):((ii+1) * c)] = \
             torch.cat((pad, x), dim=1)[:, :l]

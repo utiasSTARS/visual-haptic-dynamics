@@ -29,7 +29,10 @@ class VisualHaptic(data.Dataset):
         batch_size = self.data["img"].shape[0]
         traj_len = self.data["img"].shape[1]
 
-        self.data["img"] = np.expand_dims(rgb2gray(self.data["img"])[..., 0], axis=2)
+        if img_shape[0] == 1:
+            self.data["img"] = np.expand_dims(rgb2gray(self.data["img"])[..., 0], axis=2)
+        elif img_shape[0] == 3:
+            self.data["img"] = np.transpose(self.data["img"], (0, 1, 4, 2, 3))
 
     def __len__(self):
         return self.data["img"].shape[0]
