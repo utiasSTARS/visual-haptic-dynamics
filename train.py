@@ -287,7 +287,7 @@ def train(args):
             # Encode & Decode all samples
             z, mu_z, logvar_z = enc(x)
             x_hat = dec(z)
-            loss_rec = (args.lam_rec * torch.sum(loss_REC(x_hat, x))) / n
+            loss_rec = (torch.sum(loss_REC(x_hat, x))) / n
 
             # Dynamics constraint with KL
             z = z.reshape(n, l, *z.shape[1:])
@@ -307,15 +307,15 @@ def train(args):
             var_z_hat = torch.cat((var_z_i, var_z_t1_hat), 1)
 
             loss_kl = (
-                args.lam_kl * torch.sum(kl(mu0=mu_z.reshape(-1, *mu_z.shape[2:]), 
+                torch.sum(kl(mu0=mu_z.reshape(-1, *mu_z.shape[2:]), 
                 cov0=var_z.reshape(-1, *var_z.shape[2:]), 
                 mu1=mu_z_hat.reshape(-1, *mu_z_hat.shape[2:]), 
                 cov1=var_z_hat.reshape(-1, *var_z_hat.shape[2:])))
             ) / n
 
-            total_loss = loss_rec + loss_kl
+            total_loss = args.lam_rec * loss_rec + args.lam_kl * loss_kl
 
-            running_stats['total_l'].append(total_loss.item())
+            running_stats['total_l'].append(loss_rec.item() + loss_kl.item())
             running_stats['rec_l'].append(loss_rec.item())
             running_stats['kl_l'].append(loss_kl.item())
 
