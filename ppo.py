@@ -18,9 +18,6 @@ class PPO:
         self.policy = actor_critic
         self.policy.apply(common_init_weights)
         
-        self.policy_old = copy.deepcopy(self.policy)
-        self.policy_old.load_state_dict(self.policy.state_dict())
-        
         self.MseLoss = nn.MSELoss()
         self.device = device
 
@@ -49,7 +46,7 @@ class PPO:
 
     def select_action(self, state, memory):
         state = torch.FloatTensor(state).to(self.device)
-        return self.policy_old.act(state, memory).cpu().data.numpy().flatten()
+        return self.policy.act(state, memory).cpu().data.numpy().flatten()
     
     def update(self, memory):
         # Monte Carlo estimate of rewards:
@@ -74,9 +71,6 @@ class PPO:
         # Optimize policy for K epochs:
         for _ in range(self.K_epochs):
             self.opt_step(old_states, old_actions, old_logprobs, returns)
-
-        # Copy new weights into old policy:
-        self.policy_old.load_state_dict(self.policy.state_dict())
 
 class AuxPPO(PPO):
     def __init__(self, lr, gamma, K_epochs, eps_clip, device, actor_critic):
