@@ -9,10 +9,10 @@ import random
 from networks import (FullyConvEncoderVAE,
                         FullyConvDecoderVAE,
                         FCNEncoderVAE,
-                        FCNDecoderVAE,
-                        LinearMixSSM,
-                        LinearSSM,
-                        NonLinearSSM)
+                        FCNDecoderVAE)
+from models import (LinearMixSSM, 
+                    LinearSSM, 
+                    NonLinearSSM)
 import gym
 from collections import deque
 from gym import spaces

@@ -20,10 +20,10 @@ from torch.utils.data.sampler import SubsetRandomSampler
 from networks import (FullyConvEncoderVAE,
                         FullyConvDecoderVAE,
                         FCNEncoderVAE,
-                        FCNDecoderVAE,
-                        LinearMixSSM,
-                        LinearSSM,
-                        NonLinearSSM)
+                        FCNDecoderVAE)
+from models import (LinearMixSSM, 
+                    LinearSSM, 
+                    NonLinearSSM)
 from datasets import VisualHaptic, ImgCached
 from losses import kl
 

@@ -46,7 +46,7 @@ class PPO:
 
     def select_action(self, state, memory):
         state = torch.FloatTensor(state).to(self.device)
-        return self.policy.act(state, memory).cpu().data.numpy().flatten()
+        return self.policy.act(state, memory).cpu().numpy().flatten()
     
     def update(self, memory):
         # Monte Carlo estimate of rewards:
@@ -64,10 +64,10 @@ class PPO:
         returns = returns.float()
 
         # convert list to tensor
-        old_states = torch.squeeze(torch.stack(memory.states).to(self.device), 1).detach()
-        old_actions = torch.squeeze(torch.stack(memory.actions).to(self.device), 1).detach()
-        old_logprobs = torch.squeeze(torch.stack(memory.logprobs), 1).to(self.device).detach()
-        
+        old_states = torch.squeeze(torch.stack(memory.states), 1)
+        old_actions = torch.squeeze(torch.stack(memory.actions), 1)
+        old_logprobs = torch.squeeze(torch.stack(memory.logprobs), 1)
+
         # Optimize policy for K epochs:
         for _ in range(self.K_epochs):
             self.opt_step(old_states, old_actions, old_logprobs, returns)
@@ -89,9 +89,9 @@ class AuxPPO(PPO):
         # Finding Surrogate Loss:
         advantages = returns - state_values.detach()   
         surr1 = ratios * advantages
-        surr2 = torch.clamp(ratios, 1-self.eps_clip, 1+self.eps_clip) * advantages
+        surr2 = torch.clamp(ratios, 1 - self.eps_clip, 1 + self.eps_clip) * advantages
         rec = self.MseLoss(state_hat, old_states)
-        loss = -torch.min(surr1, surr2) + 0.5*self.MseLoss(state_values, returns) + rec - 0.01*dist_entropy
+        loss = -torch.min(surr1, surr2) + 0.5 * self.MseLoss(state_values, returns) + rec - 0.01 * dist_entropy
 
         # take gradient step
         self.optimizer.zero_grad()

@@ -27,6 +27,8 @@ class Memory:
         del self.logprobs[:]
         del self.rewards[:]
         del self.is_terminals[:]
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
 def train(args):
     # creating environment
@@ -37,9 +39,7 @@ def train(args):
 
     if args.architecture =="cnn":
         env = FrameStack(env, k=args.frame_stack)
-        img_transform = tv.transforms.Compose([
-            
-        ])
+
     state_dim = env.observation_space.shape[0] # 24
     action_dim = env.action_space.shape[0] # 4
     print("State dim: {}".format(env.observation_space.shape))
