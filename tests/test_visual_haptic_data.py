@@ -45,7 +45,6 @@ def test_vh():
         ft = frame_stack(ft)
         ft = ft.reshape(-1, *ft.shape[2:]) 
         out = net(ft)
-        print(out[:, -1, :].shape) # latest feature vector
         break
 
 if __name__=="__main__":
