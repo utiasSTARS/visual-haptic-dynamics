@@ -15,7 +15,7 @@ n_epochs=(8192)
 opt=('adam')
 enc_dec_nets=('cnn')
 opt_vae_base_epochs=(1024)
-debug=('False')
+debug=('True')
 nl=('relu')
 traj_len=(29)
 frame_stack=(1)
@@ -37,7 +37,7 @@ for n in {1..1}; do
                                     for lr in ${learning_rates[@]}; do
                                         for bi_directional in ${bi_directionals[@]}; do
                                             for n_epoch in ${n_epochs[@]}; do
-                                                python ../train.py \
+                                                python ../train_img.py \
                                                                     --K $K \
                                                                     --dim_u 2 \
                                                                     --dim_z 12 \

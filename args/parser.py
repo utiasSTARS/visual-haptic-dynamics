@@ -38,7 +38,7 @@ def parse_common_training_args(parser=None):
     args = parser.parse_args()
     return args
 
-def parse_training_args():
+def parse_img_training_args():
     parser = argparse.ArgumentParser()
 
     # Network args
@@ -51,6 +51,37 @@ def parse_training_args():
     parser.add_argument('--use_bidirectional', type=str2bool, default=False, help='Use bidirectional RNN')
     parser.add_argument('--rnn_net', choices=['gru', 'lstm'], default='lstm',  help='RNN network type')
     parser.add_argument('--enc_dec_net', choices=['fcn', 'cnn'], default='cnn', help='Network architecture for encoder/decoder representation') 
+    parser.add_argument('--dyn_net', choices=['linearmix', 'linearrank1', 'nonlinear'], default='linearmix', help='Network architecture for dynamics')     
+    parser.add_argument('--non_linearity', choices=['relu', 'elu', 'softplus'], default='relu', help='Activation used for decoder neural network')
+    parser.add_argument('--frame_stacks', type=int, default=1, help="Number of frames to stack")
+    
+    # Training Settings
+    parser.add_argument('--lr', type=float, default= 3e-4, help='Learning rate')
+    parser.add_argument('--opt_vae_epochs', type=int, default=0, help='Number of epochs to train VAE only')
+    parser.add_argument('--opt_vae_base_epochs', type=int, default=1024, help='Number of epochs to train VAE and base mixture matrices (must be >= opt_vae_epochs)')
+    parser.add_argument('--traj_len', type=int, default= 31, help='Size of trajectory to train on')
+    parser.add_argument('--lam_rec', type=float, default=0.95, help='Weight of reconstruction loss')
+    parser.add_argument('--lam_kl', type=float, default=0.80, help='Weight of kl loss')
+    parser.add_argument('--use_binary_ce', type=str2bool, default=False, help='Use Binary Cross Entropy loss insted of default Mean Squared Error loss')
+
+    args = parse_common_training_args(parser=parser)
+    return args
+
+def parse_vh_training_args():
+    parser = argparse.ArgumentParser()
+
+    # Network args
+    parser.add_argument('--dim_u', type=int, default=1, help='Action dimension')
+    parser.add_argument('--dim_z', type=int, default=16, help='Final latent state dimension')
+    parser.add_argument('--dim_z_img', type=int, default=16, help='Latent state dimension of images')
+    parser.add_argument('--dim_z_haptic', type=int, default=8, help='Latent state dimension of haptic')
+    parser.add_argument('--dim_z_arm', type=int, default=8, help='Latent state dimension of arm')
+    parser.add_argument('--dim_x', type=str2inttuple, default=(1, 64, 64), help='3-tuple image dimension (C, H, W)')
+    parser.add_argument('--K', type=int, default=15, help='Number of mixture component for dynamic models')
+    parser.add_argument('--fc_hidden_size', type=int, default=256, help='The number of hidden units for each linear layer')
+    parser.add_argument('--rnn_hidden_size', type=int, default=256, help='The number of hidden units for each GRU or LSTM layer')
+    parser.add_argument('--use_bidirectional', type=str2bool, default=False, help='Use bidirectional RNN')
+    parser.add_argument('--rnn_net', choices=['gru', 'lstm'], default='lstm',  help='RNN network type')
     parser.add_argument('--dyn_net', choices=['linearmix', 'linearrank1', 'nonlinear'], default='linearmix', help='Network architecture for dynamics')     
     parser.add_argument('--non_linearity', choices=['relu', 'elu', 'softplus'], default='relu', help='Activation used for decoder neural network')
     parser.add_argument('--frame_stacks', type=int, default=1, help="Number of frames to stack")

@@ -4,7 +4,7 @@ from utils import (set_seed_torch,
                     frame_stack)
 import numpy as np
 import random
-from args.parser import parse_training_args
+from args.parser import parse_vh_training_args
 from collections import OrderedDict
 from datetime import datetime
 from tensorboardX import SummaryWriter
@@ -23,8 +23,9 @@ from networks import (FullyConvEncoderVAE,
                         FCNDecoderVAE)
 from models import (LinearMixSSM, 
                     LinearSSM, 
-                    NonLinearSSM)
-from datasets import VisualHaptic, ImgCached
+                    NonLinearSSM,
+                    TCN)
+from datasets import VisualHaptic
 from losses import kl
 
 set_seed_torch(3)
@@ -63,50 +64,46 @@ def train(args):
         raise NotImplementedError()
     output_nl = None if args.use_binary_ce else nn.Sigmoid()
 
-    # Encoder and decoder
-    if args.enc_dec_net == 'fcn':
-        true_dim_x = (
-            args.dim_x[0] * (args.frame_stacks + 1), 
-            args.dim_x[1], 
-            args.dim_x[2]
-        )
-        enc = FCNEncoderVAE(
-            dim_in=int(np.product(true_dim_x)),
-            dim_out=args.dim_z,
-            bn=args.use_batch_norm,
-            drop=args.use_dropout,
-            nl=nl,
-            hidden_size=args.fc_hidden_size,
-            stochastic=True
-        ).to(device=device)
-        dec = FCNDecoderVAE(
-            dim_in=args.dim_z,
-            dim_out=true_dim_x,
-            bn=args.use_batch_norm,
-            drop=args.use_dropout,
-            nl=nl,
-            output_nl=output_nl,
-            hidden_size=args.fc_hidden_size
-        ).to(device=device)
-    elif args.enc_dec_net == 'cnn':
-        enc = FullyConvEncoderVAE(
-            input=args.dim_x[0] * (args.frame_stacks + 1),
-            latent_size=args.dim_z,
-            bn=args.use_batch_norm,
-            drop=args.use_dropout,
-            nl=nl,
-            img_dim=args.dim_x[1],
-            stochastic=True
-        ).to(device=device)
-        dec = FullyConvDecoderVAE(
-            input=args.dim_x[0] * (args.frame_stacks + 1),
-            latent_size=args.dim_z,
-            bn=args.use_batch_norm,
-            drop=args.use_dropout,
-            nl=nl,
-            img_dim=args.dim_x[1],
-            output_nl=output_nl
-        ).to(device=device)
+    # Networks
+    img_enc = FullyConvEncoderVAE(
+        input=args.dim_x[0] * (args.frame_stacks + 1),
+        latent_size=args.dim_z_img,
+        bn=args.use_batch_norm,
+        drop=args.use_dropout,
+        nl=nl,
+        img_dim=args.dim_x[1],
+        stochastic=False
+    ).to(device=device)
+
+    haptic_enc = TCN(
+        input_size=6,
+        num_channels=[256, 128, 64, 32, args.dim_z_haptic]
+    ).to(device=device)
+
+    arm_enc = TCN(
+        input_size=6,
+        num_channels=[256, 128, 64, 32, args.dim_z_arm]
+    ).to(device=device)
+
+    img_dec = FullyConvDecoderVAE(
+        input=args.dim_x[0] * (args.frame_stacks + 1),
+        latent_size=args.dim_z_img,
+        bn=args.use_batch_norm,
+        drop=args.use_dropout,
+        nl=nl,
+        img_dim=args.dim_x[1],
+        output_nl=output_nl
+    ).to(device=device)
+
+    mix = FCNEncoderVAE(
+        dim_in=args.dim_z_img + args.dim_z_haptic + args.dim_z_arm,
+        dim_out=args.dim_z,
+        bn=args.use_batch_norm,
+        drop=args.use_dropout,
+        nl=nl,
+        hidden_size=args.fc_hidden_size,
+        stochastic=True
+    ).to(device=device)
 
     # Dynamics network
     if args.dyn_net == "linearmix":
@@ -142,41 +139,59 @@ def train(args):
 
     if args.opt == "adam":
         opt_vae = torch.optim.Adam(
-            list(enc.parameters()) + 
-            list(dec.parameters()), 
+            list(img_enc.parameters()) + 
+            list(haptic_enc.parameters()) +
+            list(arm_enc.parameters()) +
+            list(mix.parameters()) +
+            list(img_dec.parameters()), 
             lr=args.lr
         )
         opt_vae_base = torch.optim.Adam(
-            list(enc.parameters()) + 
-            list(dec.parameters()) + 
+            list(img_enc.parameters()) + 
+            list(haptic_enc.parameters()) +
+            list(arm_enc.parameters()) +
+            list(mix.parameters()) +
+            list(img_dec.parameters()) + 
             base_params, 
             lr=args.lr
         )
         opt_all = torch.optim.Adam(
-            list(enc.parameters()) + 
-            list(dec.parameters()) +
+            list(img_enc.parameters()) + 
+            list(haptic_enc.parameters()) +
+            list(arm_enc.parameters()) +
+            list(mix.parameters()) +
+            list(img_dec.parameters()) +
             list(dyn.parameters()), 
             lr=args.lr
         )
     elif args.opt == "sgd":
         opt_vae = torch.optim.SGD(
-            list(enc.parameters()) + 
-            list(dec.parameters()), 
+            list(img_enc.parameters()) + 
+            list(haptic_enc.parameters()) +
+            list(arm_enc.parameters()) +
+            list(mix.parameters()) +
+            list(img_dec.parameters()), 
             lr=args.lr, 
             momentum=0.9, 
             nesterov=True
         )
         opt_vae_base = torch.optim.SGD(
-            list(enc.parameters()) + 
-            list(dec.parameters()) + 
+            list(img_enc.parameters()) + 
+            list(haptic_enc.parameters()) +
+            list(arm_enc.parameters()) +
+            list(mix.parameters()) +
+            list(img_dec.parameters()) + 
             base_params,
             lr=args.lr, 
             momentum=0.9, 
             nesterov=True
         )
         opt_all = torch.optim.SGD(
-            list(enc.parameters()) + 
-            list(dec.parameters()) +
+            list(img_enc.parameters()) + 
+            list(haptic_enc.parameters()) +
+            list(arm_enc.parameters()) +
+            list(mix.parameters()) +
+            list(img_dec.parameters()) +
             list(dyn.parameters()), 
             lr=args.lr, 
             momentum=0.9, 
@@ -186,8 +201,11 @@ def train(args):
         raise NotImplementedError()
 
     if args.weight_init == 'custom':
-        enc.apply(common_init_weights)
-        dec.apply(common_init_weights)
+        img_enc.apply(common_init_weights)
+        haptic_enc.apply(common_init_weights)
+        arm_enc.apply(common_init_weights)
+        mix.apply(common_init_weights)
+        img_dec.apply(common_init_weights)
         dyn.apply(common_init_weights)
     
     # Loss functions
@@ -197,25 +215,10 @@ def train(args):
         loss_REC = nn.MSELoss(reduction='none').to(device=device)
 
     # Dataset
-    if args.task == "pendulum64":
-        transform = tv.transforms.Compose([
-            tv.transforms.ToPILImage(),
-            tv.transforms.Grayscale(num_output_channels=1),
-            tv.transforms.ToTensor(),
-            Normalize(mean=0.27, var=1.0 - 0.27) # 64x64
-        ])
-        dataset = ImgCached(
-                    args.dataset,
-                    transform=transform,
-                    img_shape=args.dim_x
-                    )
-    elif args.task == "push64":
-        transform = None
-        dataset = VisualHaptic(
-                    args.dataset,
-                    img_shape=args.dim_x
-                    )
-
+    dataset = VisualHaptic(
+                args.dataset,
+                img_shape=args.dim_x
+                )
 
     ds_size = len(dataset)
     idx = list(range(ds_size))
@@ -243,8 +246,11 @@ def train(args):
     if os.path.exists(checkpoint_dir + "checkpoint.pth"):
         checkpoint = torch.load(checkpoint_dir + "checkpoint.pth")
         dyn.load_state_dict(checkpoint['dyn'])
-        enc.load_state_dict(checkpoint['enc'])
-        dec.load_state_dict(checkpoint['dec'])
+        img_enc.load_state_dict(checkpoint['img_enc'])
+        haptic_enc.load_state_dict(checkpoint['haptic_enc'])
+        arm_enc.load_state_dict(checkpoint['arm_enc'])
+        mix.load_state_dict(checkpoint['mix'])
+        img_dec.load_state_dict(checkpoint['img_dec'])
         opt_all.load_state_dict(checkpoint['opt_all'])
         opt_vae.load_state_dict(checkpoint['opt_vae'])
         opt_vae_base.load_state_dict(checkpoint['opt_vae_base'])
@@ -257,17 +263,24 @@ def train(args):
     def opt_iter(epoch, opt=None):
         """Single training epoch."""
         if opt:
-            enc.train()
-            dec.train()
+            img_enc.train()
+            haptic_enc.train()
+            arm_enc.train()
+            mix.train()
+            img_dec.train()
             dyn.train()
             loader = train_loader
         else:
-            enc.eval()
-            dec.eval()
+            img_enc.eval()
+            haptic_enc.eval()
+            arm_enc.eval()
+            mix.eval()
+            img_dec.eval()
             dyn.eval()
             loader = val_loader
         
         running_stats = {"total_l": [], "kl_l": [], "rec_l": []}
+        x = {}
 
         for idx, data in enumerate(loader):
             if idx == args.n_example:
@@ -275,19 +288,37 @@ def train(args):
             
             # Load and shape trajectory data
             # XXX: all trajectories have same length
-            x_full = data['img'].float().to(device=device) # (n, l, 1, h, w)
-            x_full = frame_stack(x_full, frames=args.frame_stacks) # (n, l - frames, 1 + frames, h, w)
-            start_idx = np.random.randint(x_full.shape[1] - args.traj_len + 1) # sample random range of traj_len
+            x['img'] = data['img'].float().to(device=device) # (n, l, c, h, w)
+            x['ft'] = data['ft'].float().to(device=device) # (n, l, f, 6)
+            x['arm'] = data['arm'].float().to(device=device) # (n, l, f, 6)
+
+            n = x['img'].shape[0]
+
+            for key in x:
+                x[key] = frame_stack(x[key], frames=args.frame_stacks)
+
+            start_idx = np.random.randint(x['img'].shape[1] - args.traj_len + 1) # sample random range of traj_len
             end_idx = start_idx + args.traj_len
-            x = x_full[:, start_idx:end_idx]
-            n, l = x.shape[0], x.shape[1]
-            x = x.reshape(-1, *x.shape[2:]) # reshape to (-1, 1, height, width)
+            l = x['img'].shape[1]
+
+            for key in x:
+                x[key] = x[key][:, start_idx:end_idx]
+                x[key] = x[key].reshape(-1, *x[key].shape[2:])
+            
             u = data['action'][:, (start_idx + args.frame_stacks):(end_idx + args.frame_stacks)].float().to(device=device)
 
-            # Encode & Decode all samples
-            z, mu_z, logvar_z = enc(x)
-            x_hat = dec(z)
-            loss_rec = (torch.sum(loss_REC(x_hat, x))) / n
+            # Encode
+            z_img = img_enc(x['img'])
+            z_haptic = haptic_enc(x['ft'])[:, -1]
+            z_arm = arm_enc(x['arm'])[:, -1]
+        
+            # Concatenate modalities
+            z_cat = torch.cat((z_img, z_haptic, z_arm), dim=1)
+            z, mu_z, logvar_z = mix(z_cat)
+            
+            # Decode
+            x_hat = img_dec(z)
+            loss_rec = (torch.sum(loss_REC(x_hat, x['img']))) / n
 
             # Dynamics constraint with KL
             z = z.reshape(n, l, *z.shape[1:])
@@ -325,16 +356,19 @@ def train(args):
                 total_loss.backward()
                 # clip for stable RNN training
                 torch.nn.utils.clip_grad_norm_(dyn.parameters(), 0.5)
-                torch.nn.utils.clip_grad_norm_(enc.parameters(), 0.5)
-                torch.nn.utils.clip_grad_norm_(dec.parameters(), 0.5)
+                torch.nn.utils.clip_grad_norm_(img_enc.parameters(), 0.5)
+                torch.nn.utils.clip_grad_norm_(haptic_enc.parameters(), 0.5)
+                torch.nn.utils.clip_grad_norm_(arm_enc.parameters(), 0.5)
+                torch.nn.utils.clip_grad_norm_(mix.parameters(), 0.5)
+                torch.nn.utils.clip_grad_norm_(img_dec.parameters(), 0.5)
                 opt.step()
 
         # Summary stats from epoch
         summary_stats = {f'avg_{key}':sum(stats)/len(stats) 
             for (key, stats) in running_stats.items()}
         n_images = 16 # random sample of images to visualize reconstruction quality
-        rng = random.randint(0, x.shape[0] - n_images)
-        x_plt = x[rng:(rng + n_images), np.newaxis, -1].detach().cpu()
+        rng = random.randint(0, x["img"].shape[0] - n_images)
+        x_plt = x["img"][rng:(rng + n_images), np.newaxis, -1].detach().cpu()
         x_hat_plt = x_hat[rng:(rng + n_images), np.newaxis, -1].detach().cpu()
         summary_stats['og_imgs'] = x_plt
         summary_stats['rec_imgs'] = x_hat_plt
@@ -383,8 +417,11 @@ def train(args):
                     torch.save({
                         'epoch': epoch,
                         'dyn': dyn.state_dict(),
-                        'enc': enc.state_dict(),
-                        'dec': dec.state_dict(),
+                        'mix': mix.state_dict(),
+                        'haptic_enc': haptic_enc.state_dict(),
+                        'arm_enc': arm_enc_state_dict(),
+                        'img_enc': img_enc.state_dict(),
+                        'img_dec': img_dec.state_dict(),
                         'opt_all': opt_all.state_dict(),
                         'opt_vae': opt_vae.state_dict(),
                         'opt_vae_base': opt_vae_base.state_dict()}, 
@@ -396,12 +433,15 @@ def train(args):
             if not np.isnan(summary_train['avg_total_l']):
                 # Save models
                 torch.save(dyn.state_dict(), save_dir + '/dyn.pth')
-                torch.save(enc.state_dict(), save_dir + '/enc.pth')
-                torch.save(dec.state_dict(), save_dir + '/dec.pth')
+                torch.save(img_enc.state_dict(), save_dir + '/img_enc.pth')
+                torch.save(haptic_enc.state_dict(), save_dir + '/haptic_enc.pth')
+                torch.save(arm_enc.state_dict(), save_dir + '/arm_enc.pth')
+                torch.save(image_dec.state_dict(), save_dir + '/dec.pth')
+                torch.save(mix.state_dict(), save_dir + '/mix.pth')
             writer.close()
 
 def main():
-    args = parse_training_args()
+    args = parse_vh_training_args()
     train(args)
 
 if __name__ == "__main__":
