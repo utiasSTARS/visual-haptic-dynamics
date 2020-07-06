@@ -8,12 +8,12 @@ from torch.utils.data.sampler import SubsetRandomSampler
 import torch
 
 from datasets import VisualHaptic
-from models import HapticNet
+from models import TCN
 from utils import frame_stack
 
 def test_vh():
     dataset = VisualHaptic(
-            "/Users/oliver/visual-haptic-dynamics/experiments/data/datasets/visual_haptic_1D_B1F515581A0A478A92AF1C58D4345408.pkl",
+            "/home/olimoyo/visual-haptic-dynamics/experiments/data/datasets/visual_haptic_1D_B1F515581A0A478A92AF1C58D4345408.pkl",
             img_shape=(3,64,64)
         )
 
@@ -30,22 +30,22 @@ def test_vh():
         sampler=train_sampler
     )
 
-    net = HapticNet(input_size=6, num_channels=[450, 450, 8])
+    hapticnet = TCN(input_size=6, num_channels=[450, 450, 450, 450, 8])
 
     for idx, data in enumerate(train_loader):
         img = data["img"].float()
         ft = data["ft"].float()
         ee_pose = data["arm"].float()
         u = data["action"].float()
-        # print("img", img.shape)
-        # print("ft", ft.shape)
-        # print("arm", ee_pose.shape)
-        # print("action", u.shape)
+        print("img", img.shape)
+        print("ft", ft.shape)
+        print("arm", ee_pose.shape)
+        print("action", u.shape)
 
         ft = frame_stack(ft)
         ft = ft.reshape(-1, *ft.shape[2:]) 
         out = net(ft)
-        print(out[:, -1, :].shape) # latest feature vector
+        final_feature = out[..., -1, :]
         break
 
 if __name__=="__main__":

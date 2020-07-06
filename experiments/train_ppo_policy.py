@@ -110,6 +110,7 @@ def train(args):
             if time_step % args.update_timestep == 0:
                 print("Updating policy")
                 ppo.update(memory)
+                print("Policy updated!")
                 memory.clear_memory()
                 time_step = 0
             running_reward += reward

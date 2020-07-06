@@ -263,7 +263,7 @@ class TemporalConvNet(nn.Module):
             dilation_size = 2 ** i
             in_channels = num_inputs if i == 0 else num_channels[i-1]
             out_channels = num_channels[i]
-            print("Level {}, Dilation {}, in channels {}, out channels {}".format(i, dilation_size, in_channels, out_channels))
+            # print("Level {}, Dilation {}, in channels {}, out channels {}".format(i, dilation_size, in_channels, out_channels))
             layers += [TemporalBlock(in_channels, out_channels, kernel_size, stride=1, dilation=dilation_size,
                                      padding=(kernel_size-1) * dilation_size, dropout=dropout)]
 

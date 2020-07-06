@@ -482,9 +482,9 @@ class NonLinearSSM(nn.Module):
             return z_t1, mu_t1, var_t1, h
 
 
-class HapticNet(nn.Module):
+class TCN(nn.Module):
     def __init__(self, input_size, num_channels, kernel_size=3, dropout=0.2):
-        super(HapticNet, self).__init__()
+        super(TCN, self).__init__()
         self.tcn = TemporalConvNet(input_size, num_channels, kernel_size=kernel_size, dropout=dropout) # num_channels = [450, 450, 100]
 
     def forward(self, x):

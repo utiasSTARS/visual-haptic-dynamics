@@ -12,4 +12,5 @@ python ../experiments/train_ppo_policy.py \
 --update_timestep 3900 \
 --architecture cnn \
 --device cuda:0 \
---max_episodes 1000000
+--max_episodes 1000000 \
+--random_seed 333344444

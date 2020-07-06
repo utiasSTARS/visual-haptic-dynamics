@@ -55,29 +55,28 @@ def test_gym_pusher():
 
 def test_gym_visual_reacher():
     env = gym.make('ThingVisualReacher2D-v0')
-    for ii in range(1000):
-        print(ii)
-        obs, _, _, _ = env.step(np.array([0.1]))
-        if ii % 100 == 0:
+    for ii in range(10000000):
+        obs, _, _, _ = env.step(np.array([0.0]))
+        if (ii + 1) % 150 == 0:
             env.reset()
-            print("resetting")
-        print("Action dim: ", env.action_space)
-        print("Obs dim: ", env.observation_space)
+            print("Resetting with {} time steps".format(ii))
+        # print("Action dim: ", env.action_space)
+        # print("Obs dim: ", env.observation_space)
 
 def test_gym_visual_pusher():
-    env = gym.make('ThingVisualPusher-v0')
-    for ii in range(1000):
-        print(ii)
-        obs, _, _, _ = env.step(np.array([0.25, 0]))
-        if ii % 100 == 0:
+    env = gym.make('ThingVisualPusher-v0', is_render=False)
+    for ii in range(10000000):
+        p = np.random.uniform(-1,1,2)
+        obs, _, _, _ = env.step(np.array([p[0], p[1]]))
+        if (ii + 1) % 150 == 0:
             env.reset()
-            print("resetting")
-        print("Action dim: ", env.action_space)
-        print("Obs dim: ", env.observation_space)
+            print("Resetting with {} time steps".format(ii))
+        # print("Action dim: ", env.action_space)
+        # print("Obs dim: ", env.observation_space)
 
 if __name__=="__main__":
     # test_actions()
     # test_gym_reacher()
-    test_gym_pusher()
+    # test_gym_pusher()
     # test_gym_visual_reacher()
-    # test_gym_visual_pusher()
+    test_gym_visual_pusher()
