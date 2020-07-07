@@ -37,10 +37,10 @@ class ActorCriticMLP(nn.Module):
         action = dist.sample()
         action_logprob = dist.log_prob(action)
 
-        memory.states.append(state.detach())
-        memory.actions.append(action.detach())
-        memory.logprobs.append(action_logprob.detach())
-        return action.detach()
+        memory.states.append(state.detach().clone())
+        memory.actions.append(action.detach().clone())
+        memory.logprobs.append(action_logprob.detach().clone())
+        return action.detach().clone()
     
     def evaluate(self, state, action):  
         action_mean = self.actor(state)

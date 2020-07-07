@@ -280,13 +280,13 @@ def train(args):
             end_idx = start_idx + args.traj_len
             x = x_full[:, start_idx:end_idx]
             n, l = x.shape[0], x.shape[1]
-            x = x.reshape(-1, *x.shape[2:]) # reshape to (-1, 1, height, width)
+            x = x.reshape(-1, *x.shape[2:]) # reshape to (-1, 1 * fs, height, width)
             u = data['action'][:, (start_idx + args.frame_stacks):(end_idx + args.frame_stacks)].float().to(device=device)
             # Encode & Decode all samples
             z, mu_z, logvar_z = enc(x)
             x_hat = dec(z)
             loss_rec = (torch.sum(loss_REC(x_hat, x))) / n
-
+    
             # Dynamics constraint with KL
             z = z.reshape(n, l, *z.shape[1:])
             mu_z = mu_z.reshape(n, l, *mu_z.shape[1:])

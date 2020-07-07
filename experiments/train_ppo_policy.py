@@ -22,11 +22,11 @@ class Memory:
         self.is_terminals = []
     
     def clear_memory(self):
-        del self.actions[:]
-        del self.states[:]
-        del self.logprobs[:]
-        del self.rewards[:]
-        del self.is_terminals[:]
+        self.actions.clear()
+        self.states.clear()
+        self.logprobs.clear()
+        self.rewards.clear()
+        self.is_terminals.clear()
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
@@ -112,6 +112,7 @@ def train(args):
                 ppo.update(memory)
                 print("Policy updated!")
                 memory.clear_memory()
+                print("Memory cleared")
                 time_step = 0
             running_reward += reward
             if args.render:

@@ -419,7 +419,7 @@ def train(args):
                         'dyn': dyn.state_dict(),
                         'mix': mix.state_dict(),
                         'haptic_enc': haptic_enc.state_dict(),
-                        'arm_enc': arm_enc_state_dict(),
+                        'arm_enc': arm_enc.state_dict(),
                         'img_enc': img_enc.state_dict(),
                         'img_dec': img_dec.state_dict(),
                         'opt_all': opt_all.state_dict(),
@@ -436,7 +436,7 @@ def train(args):
                 torch.save(img_enc.state_dict(), save_dir + '/img_enc.pth')
                 torch.save(haptic_enc.state_dict(), save_dir + '/haptic_enc.pth')
                 torch.save(arm_enc.state_dict(), save_dir + '/arm_enc.pth')
-                torch.save(image_dec.state_dict(), save_dir + '/dec.pth')
+                torch.save(img_dec.state_dict(), save_dir + '/img_dec.pth')
                 torch.save(mix.state_dict(), save_dir + '/mix.pth')
             writer.close()
 

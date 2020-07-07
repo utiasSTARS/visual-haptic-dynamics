@@ -1,4 +1,4 @@
-device="cuda:1"
+device="cuda:0"
 
 dataset="/home/olimoyo/visual-haptic-dynamics/experiments/data/datasets/visual_haptic_1D_B1F515581A0A478A92AF1C58D4345408.pkl"
 storage_base_path="/home/olimoyo/visual-haptic-dynamics/saved_models/"
@@ -14,15 +14,15 @@ dyn_nets=('linearmix')
 n_epochs=(8192)
 opt=('adam')
 opt_vae_base_epochs=(1024)
-debug=('True')
+debug=('False')
 nl=('relu')
 traj_len=(29)
 frame_stack=(1)
 val_split=(0)
 lam_rec=(0.95)
-lam_kl=(0.80)
+lam_kl=(1.00)
 n_checkpoint_epoch=(1024)
-task="push64"
+task="push64vh"
 
 for n in {1..1}; do
     for dyn_net in ${dyn_nets[@]}; do
@@ -45,7 +45,7 @@ for n in {1..1}; do
                                                                 --n_epoch $n_epoch \
                                                                 --n_batch $n_batch \
                                                                 --debug $debug \
-                                                                --comment "${task}_vh_encdecnet-${enc_dec_net}_lr-${lr}_n_batch-${n_batch}_weightinit-${weight_init}_traj-${traj_len}_bn-${batch_norm}_dyntype-${dyn_net}_dynnet-${rnn_net}_framestacks-${frame_stack}_optvaebaseepochs-${opt_vae_base_epoch}_lamrec-${lam_rec}_lamkl-${lam_kl}" \
+                                                                --comment "${task}vh_lr-${lr}_n_batch-${n_batch}_weightinit-${weight_init}_traj-${traj_len}_bn-${batch_norm}_dyntype-${dyn_net}_dynnet-${rnn_net}_framestacks-${frame_stack}_optvaebaseepochs-${opt_vae_base_epoch}_lamrec-${lam_rec}_lamkl-${lam_kl}" \
                                                                 --device $device \
                                                                 --lr $lr \
                                                                 --weight_init $weight_init \
