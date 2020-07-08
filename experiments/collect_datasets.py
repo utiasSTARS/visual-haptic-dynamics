@@ -27,7 +27,7 @@ def visual_haptic_1D():
 
     s_list = list(np.arange(1.0, 1.96, 0.01))  
     n = len(s_list)
-    ll = 30
+    ll = 10
       
     data = {
         "img": np.zeros((n, ll, 64, 64, 3), dtype=np.uint8), 
@@ -40,7 +40,7 @@ def visual_haptic_1D():
     for ii, s in enumerate(s_list):
         env.reset()
         for jj in range(ll): 
-            u = np.array([0.20 * s, 0])
+            u = np.array([0.50 * s, 0])
             obs, reward, done, info = env.step(action=u)
             data["img"][ii, jj] = obs["img"]
             data["ft"][ii, jj] = obs["ft"]
@@ -52,4 +52,4 @@ def visual_haptic_1D():
 if __name__ == "__main__":
     data = visual_haptic_1D()
 
-    write_file_pkl(data=data, name="visual_haptic_1D", location="./data/datasets/")
+    # write_file_pkl(data=data, name="visual_haptic_1D", location="./data/datasets/")

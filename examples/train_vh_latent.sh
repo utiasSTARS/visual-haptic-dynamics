@@ -1,6 +1,8 @@
-device="cuda:0"
+device="cuda:1"
 
-dataset="/home/olimoyo/visual-haptic-dynamics/experiments/data/datasets/visual_haptic_1D_B1F515581A0A478A92AF1C58D4345408.pkl"
+# dataset="/home/olimoyo/visual-haptic-dynamics/experiments/data/datasets/visual_haptic_1D_B1F515581A0A478A92AF1C58D4345408.pkl"
+dataset="/home/olimoyo/visual-haptic-dynamics/experiments/data/datasets/visual_haptic_1D_bigger_action_magnitudes_DA3D5A6E36D54F52AC1496D1B46CF555.pkl"
+
 storage_base_path="/home/olimoyo/visual-haptic-dynamics/saved_models/"
 
 n_batches=(32)
@@ -14,13 +16,13 @@ dyn_nets=('linearmix')
 n_epochs=(8192)
 opt=('adam')
 opt_vae_base_epochs=(1024)
-debug=('False')
+debug=('True')
 nl=('relu')
-traj_len=(29)
+traj_len=(7)
 frame_stack=(1)
 val_split=(0)
 lam_rec=(0.95)
-lam_kl=(1.00)
+lam_kl=(0.80)
 n_checkpoint_epoch=(1024)
 task="push64vh"
 

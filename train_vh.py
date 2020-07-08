@@ -26,7 +26,6 @@ from models import (LinearMixSSM,
                     NonLinearSSM,
                     TCN)
 from datasets import VisualHaptic
-from losses import kl
 
 set_seed_torch(3)
 def _init_fn(worker_id):
@@ -299,10 +298,12 @@ def train(args):
 
             start_idx = np.random.randint(x['img'].shape[1] - args.traj_len + 1) # sample random range of traj_len
             end_idx = start_idx + args.traj_len
-            l = x['img'].shape[1]
 
             for key in x:
                 x[key] = x[key][:, start_idx:end_idx]
+            l = x['img'].shape[1]
+
+            for key in x:
                 x[key] = x[key].reshape(-1, *x[key].shape[2:])
             
             u = data['action'][:, (start_idx + args.frame_stacks):(end_idx + args.frame_stacks)].float().to(device=device)
@@ -311,11 +312,12 @@ def train(args):
             z_img = img_enc(x['img'])
             z_haptic = haptic_enc(x['ft'])[:, -1]
             z_arm = arm_enc(x['arm'])[:, -1]
-        
+
             # Concatenate modalities
             z_cat = torch.cat((z_img, z_haptic, z_arm), dim=1)
+
             z, mu_z, logvar_z = mix(z_cat)
-            
+
             # Decode
             x_hat = img_dec(z)
             loss_rec = (torch.sum(loss_REC(x_hat, x['img']))) / n
@@ -325,6 +327,7 @@ def train(args):
             mu_z = mu_z.reshape(n, l, *mu_z.shape[1:])
             logvar_z = logvar_z.reshape(n, l, *logvar_z.shape[1:])
             var_z = torch.diag_embed(torch.exp(logvar_z))
+
             _, mu_z_t1_hat, var_z_t1_hat, _ = \
                 dyn(z_t=z[:, :-1], mu_t=mu_z[:, :-1], var_t=var_z[:, :-1], u=u[:, 1:])
 
@@ -337,12 +340,15 @@ def train(args):
             mu_z_hat = torch.cat((mu_z_i, mu_z_t1_hat), 1)
             var_z_hat = torch.cat((var_z_i, var_z_t1_hat), 1)
 
-            loss_kl = (
-                torch.sum(kl(mu0=mu_z.reshape(-1, *mu_z.shape[2:]), 
-                cov0=var_z.reshape(-1, *var_z.shape[2:]), 
-                mu1=mu_z_hat.reshape(-1, *mu_z_hat.shape[2:]), 
-                cov1=var_z_hat.reshape(-1, *var_z_hat.shape[2:])))
-            ) / n
+            p = torch.distributions.MultivariateNormal(
+                mu_z.reshape(-1, *mu_z.shape[2:]), 
+                var_z.reshape(-1, *var_z.shape[2:])
+            )
+            q = torch.distributions.MultivariateNormal(
+                mu_z_hat.reshape(-1, *mu_z_hat.shape[2:]), 
+                var_z_hat.reshape(-1, *var_z_hat.shape[2:])
+            )
+            loss_kl = torch.sum(torch.distributions.kl_divergence(p, q)) / n
 
             total_loss = args.lam_rec * loss_rec + args.lam_kl * loss_kl
 

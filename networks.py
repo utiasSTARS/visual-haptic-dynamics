@@ -59,11 +59,14 @@ class FullyConvEncoderVAE(nn.Module):
         for i in range(len(self.layers)):
             x = self.layers[i](x)
         x = self.flatten(x)
+
         if self.stochastic:
             mu = self.fc_mu(x)
             logvar = self.fc_logvar(x)
+
             # Reparameterize
             std = torch.exp(logvar / 2.0)
+
             eps = torch.randn_like(std)
             z = mu + eps * std
 

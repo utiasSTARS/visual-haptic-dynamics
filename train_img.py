@@ -25,7 +25,6 @@ from models import (LinearMixSSM,
                     LinearSSM, 
                     NonLinearSSM)
 from datasets import VisualHaptic, ImgCached
-from losses import kl
 
 set_seed_torch(3)
 def _init_fn(worker_id):
@@ -282,8 +281,10 @@ def train(args):
             n, l = x.shape[0], x.shape[1]
             x = x.reshape(-1, *x.shape[2:]) # reshape to (-1, 1 * fs, height, width)
             u = data['action'][:, (start_idx + args.frame_stacks):(end_idx + args.frame_stacks)].float().to(device=device)
+            
             # Encode & Decode all samples
             z, mu_z, logvar_z = enc(x)
+
             x_hat = dec(z)
             loss_rec = (torch.sum(loss_REC(x_hat, x))) / n
     
@@ -292,6 +293,7 @@ def train(args):
             mu_z = mu_z.reshape(n, l, *mu_z.shape[1:])
             logvar_z = logvar_z.reshape(n, l, *logvar_z.shape[1:])
             var_z = torch.diag_embed(torch.exp(logvar_z))
+
             _, mu_z_t1_hat, var_z_t1_hat, _ = \
                 dyn(z_t=z[:, :-1], mu_t=mu_z[:, :-1], var_t=var_z[:, :-1], u=u[:, 1:])
 
@@ -303,16 +305,18 @@ def train(args):
 
             mu_z_hat = torch.cat((mu_z_i, mu_z_t1_hat), 1)
             var_z_hat = torch.cat((var_z_i, var_z_t1_hat), 1)
-
-            loss_kl = (
-                torch.sum(kl(mu0=mu_z.reshape(-1, *mu_z.shape[2:]), 
-                cov0=var_z.reshape(-1, *var_z.shape[2:]), 
-                mu1=mu_z_hat.reshape(-1, *mu_z_hat.shape[2:]), 
-                cov1=var_z_hat.reshape(-1, *var_z_hat.shape[2:])))
-            ) / n
+  
+            p = torch.distributions.MultivariateNormal(
+                mu_z.reshape(-1, *mu_z.shape[2:]), 
+                var_z.reshape(-1, *var_z.shape[2:])
+            )
+            q = torch.distributions.MultivariateNormal(
+                mu_z_hat.reshape(-1, *mu_z_hat.shape[2:]), 
+                var_z_hat.reshape(-1, *var_z_hat.shape[2:])
+            )
+            loss_kl = torch.sum(torch.distributions.kl_divergence(p, q)) / n
 
             total_loss = args.lam_rec * loss_rec + args.lam_kl * loss_kl
-
             running_stats['total_l'].append(loss_rec.item() + loss_kl.item())
             running_stats['rec_l'].append(loss_rec.item())
             running_stats['kl_l'].append(loss_kl.item())
