@@ -12,15 +12,16 @@ from ppo import PPO
 from models import ActorCriticMLP, ActorCriticCNN
 import torch 
 import numpy as np
+import collections 
 
 class Memory:
-    def __init__(self):
-        self.actions = []
-        self.states = []
-        self.logprobs = []
-        self.rewards = []
-        self.is_terminals = []
-    
+    def __init__(self, maxsize):
+        self.actions = collections.deque([], maxlen=maxsize) 
+        self.states = collections.deque([], maxlen=maxsize) 
+        self.logprobs = collections.deque([], maxlen=maxsize) 
+        self.rewards = collections.deque([], maxlen=maxsize) 
+        self.is_terminals = collections.deque([], maxlen=maxsize) 
+
     def clear_memory(self):
         self.actions.clear()
         self.states.clear()
@@ -29,7 +30,7 @@ class Memory:
         self.is_terminals.clear()
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
-
+            
 def train(args):
     # creating environment
     if args.is_render is not None:
@@ -50,7 +51,7 @@ def train(args):
         env.seed(args.random_seed)
         set_seed_torch(args.random_seed)  
 
-    memory = Memory()
+    memory = Memory(maxsize=args.update_timestep)
 
     if args.architecture == "mlp":
         actor_critic = ActorCriticMLP(
