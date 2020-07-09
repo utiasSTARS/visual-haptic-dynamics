@@ -54,7 +54,7 @@ def test_gym_pusher():
         print("Obs dim: ", env.observation_space)
 
 def test_gym_visual_reacher():
-    env = gym.make('ThingVisualReacher2D-v0')
+    env = gym.make('ThingVisualReacher2D-v0', is_render=False)
     for ii in range(10000000):
         p = np.random.uniform(-1,1,2)
         obs, _, _, _ = env.step(np.array([p[0], p[1]]))
