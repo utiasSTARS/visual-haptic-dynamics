@@ -30,11 +30,16 @@ class Memory:
         self.is_terminals.clear()
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
-            
+
 def train(args):
     # creating environment
     if args.is_render is not None:
-        env = gym.make(args.env_name, is_render=args.is_render, render_h=args.dim_x[0], render_w=args.dim_x[1])
+        env = gym.make(
+            args.env_name, 
+            is_render=args.is_render, 
+            render_h=args.dim_x[0], 
+            render_w=args.dim_x[1]
+        )
     else:
         env = gym.make(args.env_name)
 
@@ -51,21 +56,21 @@ def train(args):
         env.seed(args.random_seed)
         set_seed_torch(args.random_seed)  
 
-    memory = Memory(maxsize=args.update_timestep)
+    memory = Memory(maxsize=args.update_timesteps)
 
     if args.architecture == "mlp":
         actor_critic = ActorCriticMLP(
             state_dim, 
             action_dim, 
             args.action_std
-            ).to(args.device)
+        ).to(args.device)
     elif args.architecture =="cnn":
         actor_critic = ActorCriticCNN(
             state_dim, 
             action_dim, 
             args.action_std, 
             img_dim=(args.dim_x[0], args.dim_x[1], args.frame_stack * args.dim_x[2])
-            ).to(args.device)
+        ).to(args.device)
 
     ppo = PPO(
         args.lr, 
@@ -73,14 +78,17 @@ def train(args):
         args.epochs, 
         args.eps_clip, 
         args.device,
-        actor_critic=actor_critic
+        actor_critic=actor_critic,
+        batch_size=args.opt_timesteps
     )
     
     # logging variables
-    running_reward = 0
-    avg_length = 0
+    logging = {
+        "running_reward": 0,
+        "avg_len": 0,
+        "avg_time": 0
+    }
     time_step = 0
-    avg_time = 0
 
     # training loop
     for i_episode in range(1, args.max_episodes+1):
@@ -108,38 +116,39 @@ def train(args):
             memory.is_terminals.append(done)
 
             # update if its time
-            if time_step % args.update_timestep == 0:
+            if time_step % args.update_timesteps == 0:
                 print("Updating policy")
                 ppo.update(memory)
                 print("Policy updated!")
                 memory.clear_memory()
                 print("Memory cleared")
                 time_step = 0
-            running_reward += reward
+            logging["running_reward"] += reward
             if args.render:
                 env.render()
             if done:
                 break
         episode_t = time.time() - tic
 
-        avg_length += t
-        avg_time += episode_t
+        logging["avg_len"] += t
+        logging["avg_time"] += episode_t
 
         if i_episode % args.logging_interval == 0:
-            avg_length = int(avg_length/args.logging_interval)
-            running_reward = int((running_reward/args.logging_interval))
-            avg_time = float(avg_time/args.logging_interval)
-            
-            print('Episode {} \t Avg length: {} \t Avg reward: {} \t Avg runtime per episode: {}'\
-                    .format(i_episode, avg_length, running_reward, avg_time))
+            logging = {k:float(v / args.logging_interval) for k,v in logging.items()}
 
-            if running_reward > args.solved_reward:
+            print('Episode {} \t Avg length: {} \t Avg reward: {}'
+                    '\t Avg runtime per episode: {}'.format(
+                        i_episode, 
+                        int(logging["avg_len"]), 
+                        int(logging["running_reward"]), 
+                        logging["avg_time"]
+                    ))
+
+            if logging["running_reward"] > args.solved_reward:
                 print("########## Solved! ##########")
                 break
 
-            running_reward = 0
-            avg_length = 0
-            avg_time = 0
+            logging = dict.fromkeys(logging, 0)
 
 def main():
     args = parse_ppo_args()

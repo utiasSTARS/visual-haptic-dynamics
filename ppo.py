@@ -13,7 +13,7 @@ class SAC:
         pass
         
 class PPO:
-    def __init__(self, lr, gamma, K_epochs, eps_clip, device, actor_critic):
+    def __init__(self, lr, gamma, K_epochs, eps_clip, device, actor_critic, batch_size):
         self.lr = lr
         self.gamma = gamma
         self.eps_clip = eps_clip
@@ -24,6 +24,7 @@ class PPO:
         
         self.MseLoss = nn.MSELoss()
         self.device = device
+        self.batch_size = batch_size
 
         self.setup_opt(lr)
 
@@ -50,53 +51,35 @@ class PPO:
         returns = returns.float()
 
         # convert list to tensor
-        old_states = torch.squeeze(torch.stack(list(memory.states)), 1)
-        old_actions = torch.squeeze(torch.stack(list(memory.actions)), 1)
-        old_logprobs = torch.squeeze(torch.stack(list(memory.logprobs)), 1)
+        states = torch.squeeze(torch.stack(list(memory.states)), 1)
+        actions = torch.squeeze(torch.stack(list(memory.actions)), 1)
+        logprobs = torch.squeeze(torch.stack(list(memory.logprobs)), 1)
 
         # Optimize policy for K epochs:
         for _ in range(self.K_epochs):
-            #TODO: Break correlation here
-            self.opt_step(old_states, old_actions, old_logprobs, returns)
+            idx = np.arange(returns.shape[0])
+            np.random.shuffle(idx)
+            for ii in range(idx.shape[0] // self.batch_size):
+                opt_idx = idx[ii * self.batch_size:(ii + 1) * self.batch_size]
+                self.opt_step(
+                    states[opt_idx], 
+                    actions[opt_idx], 
+                    logprobs[opt_idx], 
+                    returns[opt_idx]
+                )
 
-    def opt_step(self, old_states, old_actions, old_logprobs, returns):
+    def opt_step(self, states, actions, initial_logprobs, returns):
         # Evaluating old actions and values :
-        logprobs, state_values, dist_entropy = self.policy.evaluate(old_states, old_actions)
+        logprobs, state_values, dist_entropy = self.policy.evaluate(states, actions)
         
         # Finding the ratio (pi_theta / pi_theta__old):
-        ratios = torch.exp(logprobs - old_logprobs)
+        ratios = torch.exp(logprobs - initial_logprobs)
 
         # Finding Surrogate Loss:
         advantages = returns - state_values.detach() # A = Q - V
         surr1 = ratios * advantages
         surr2 = torch.clamp(ratios, 1 - self.eps_clip, 1 + self.eps_clip) * advantages
-        loss = -torch.min(surr1, surr2) + 0.5 * self.MseLoss(state_values, returns) - 0.01*dist_entropy
-
-        # take gradient step
-        self.optimizer.zero_grad()
-        loss.mean().backward()
-        self.optimizer.step()
-
-class AuxPPO(PPO):
-    def __init__(self, lr, gamma, K_epochs, eps_clip, device, actor_critic):
-        super(AuxPPO, self).__init__(lr, gamma, K_epochs, eps_clip, device, actor_critic)
-
-    def setup_opt(self, lr):
-        self.optimizer = torch.optim.Adam(self.policy.parameters(), lr=lr)
-
-    def opt_step(self, old_states, old_actions, old_logprobs, returns):
-        # Evaluating old actions and values :
-        logprobs, state_values, dist_entropy, state_hat = self.policy.evaluate(old_states, old_actions)
-        
-        # Finding the ratio (pi_theta / pi_theta__old):
-        ratios = torch.exp(logprobs - old_logprobs)
-
-        # Finding Surrogate Loss:
-        advantages = returns - state_values.detach()   
-        surr1 = ratios * advantages
-        surr2 = torch.clamp(ratios, 1 - self.eps_clip, 1 + self.eps_clip) * advantages
-        rec = self.MseLoss(state_hat, old_states)
-        loss = -torch.min(surr1, surr2) + 0.5 * self.MseLoss(state_values, returns) + rec - 0.01 * dist_entropy
+        loss = -torch.min(surr1, surr2) + 0.5 * self.MseLoss(state_values, returns) - 0.01 * dist_entropy
 
         # take gradient step
         self.optimizer.zero_grad()
