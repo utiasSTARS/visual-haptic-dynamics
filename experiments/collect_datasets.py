@@ -20,9 +20,61 @@ def write_file_pkl(data, name, location="."):
     with open(f'{filename}.pkl', 'wb') as f:
         pkl.dump(data, f)
 
+def visual_haptic_2D():
+    n_steps = 32
+    env = ThingVisualPusher(
+        is_render=False,
+        render_w=64, 
+        render_h=64, 
+        goal_vis=False, 
+        substeps=n_steps, 
+        frame_skip=2
+    )
+    config = env.get_config()
+
+    mag_list = list(np.arange(1.0, 1.96, 0.03))  
+    n_mag = len(mag_list)
+
+    init_pos_list = list(3 * np.arange(-0.050, 0.060, 0.005))
+    n_init = len(init_pos_list)
+    
+    n = n_init * n_mag
+    ll = 10
+    ii = 0
+
+    data = {
+        "img": np.zeros((n, ll, 64, 64, 3), dtype=np.uint8), 
+        "ft": np.zeros((n, ll, n_steps, 6)), 
+        "arm": np.zeros((n, ll, n_steps, 6)),
+        "action": np.zeros((n, ll, 2)), 
+        "config": config
+    }
+    
+    for _, h in enumerate(init_pos_list):
+        for _, m in enumerate(mag_list):
+            env.reset()
+            for _ in range(5):
+                env.step(action=np.array([0, h]))
+            for jj in range(ll): 
+                u = np.array([0.50 * m, 0])
+                obs, reward, done, info = env.step(action=u)
+                data["img"][ii, jj] = obs["img"]
+                data["ft"][ii, jj] = obs["ft"]
+                data["arm"][ii, jj] = obs["arm"]
+                data["action"][ii, jj] = u
+            ii += 1
+
+    return data
+
 def visual_haptic_1D():
     n_steps = 32
-    env = ThingVisualPusher(render_w=64, render_h=64, goal_vis=False, substeps=n_steps, frame_skip=2)
+    env = ThingVisualPusher(
+        render_w=64, 
+        render_h=64, 
+        goal_vis=False, 
+        substeps=n_steps, 
+        frame_skip=2
+    )
     config = env.get_config()
 
     s_list = list(np.arange(1.0, 1.96, 0.01))  
@@ -50,6 +102,7 @@ def visual_haptic_1D():
     return data
 
 if __name__ == "__main__":
-    data = visual_haptic_1D()
+    # data = visual_haptic_1D()
+    data = visual_haptic_2D()
 
-    # write_file_pkl(data=data, name="visual_haptic_1D", location="./data/datasets/")
+    write_file_pkl(data=data, name="visual_haptic_2D", location="./data/datasets/")

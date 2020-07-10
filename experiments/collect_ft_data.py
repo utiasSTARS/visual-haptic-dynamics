@@ -46,11 +46,11 @@ def magnitude_experiment():
 
 def horizontal_position_experiment():
     n_steps = 32
-    env = ThingVisualPusher(render_w=64, render_h=64, goal_vis=False, substeps=n_steps)
+    env = ThingVisualPusher(is_render=True, render_w=64, render_h=64, goal_vis=False, substeps=n_steps, frame_skip=2)
     
-    s_list = list(3 * np.arange(-0.050, 0.060, 0.01))
+    s_list = list(3 * np.arange(-0.050, 0.060, 0.005))
     n = len(s_list)
-    ll = 30
+    ll = 10
 
     data = {
         "img": np.zeros((n, ll, 64, 64, 3), dtype=np.uint8), 
@@ -98,7 +98,7 @@ def weight_experiment():
 def acceleration_experiment(frame_skip):
     n = 10
     n_steps = 32
-    env = ThingVisualPusher(render_w=64, render_h=64, goal_vis=False, substeps=n_steps, frame_skip=frame_skip)
+    env = ThingVisualPusher(is_render=True, render_w=64, render_h=64, goal_vis=False, substeps=n_steps, frame_skip=frame_skip)
     ll = 30
     p = np.random.uniform(-1,1,2) 
         
@@ -122,8 +122,8 @@ def acceleration_experiment(frame_skip):
     return data
 
 if __name__ == "__main__":
-    data = magnitude_experiment()
-    # data = horizontal_position_experiment()
+    # data = magnitude_experiment()
+    data = horizontal_position_experiment()
     # data = weight_experiment()
     # data = acceleration_experiment(frame_skip=3)
 
