@@ -266,15 +266,6 @@ class LinearMixSSM(nn.Module):
         Q = torch.eye(self.dim_z, requires_grad=False, device=z_t.device) 
         var_t1 = 0.01 * Q.repeat(n, l, 1, 1)
 
-        # # Transition mean
-        # mu_t1 = torch.bmm(A_t, mu_t.unsqueeze(-1)) + torch.bmm(B_t, u.unsqueeze(-1))
-        # mu_t1 = mu_t1.reshape(n, l, *mu_t1.shape[1:]).squeeze(-1)
-        
-        # # Transition covariance
-        # I = torch.eye(self.dim_z, requires_grad=False, device=z_t.device) 
-        # var_t1 = torch.bmm(torch.bmm(A_t, var_t), A_t.transpose(1, 2)) + 0.01 * I
-        # var_t1 = var_t1.reshape(n, l, *var_t1.shape[1:])
-
         return z_t1, mu_t1, var_t1, h
 
 
