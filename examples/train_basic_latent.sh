@@ -1,7 +1,8 @@
 device="cuda:0"
 
 # dataset="/home/olimoyo/visual-haptic-dynamics/experiments/data/datasets/visual_haptic_1D_B1F515581A0A478A92AF1C58D4345408.pkl"
-dataset="/media/m2-drive/datasets/pendulum-srl-sim/pendulum64_total_2048_traj_16_repeat_2_with_angle_train.pkl "
+dataset="/home/olimoyo/visual-haptic-dynamics/experiments/data/datasets/visual_haptic_1D_bigger_action_magnitudes_DA3D5A6E36D54F52AC1496D1B46CF555.pkl"
+
 storage_base_path="/home/olimoyo/visual-haptic-dynamics/saved_models/"
 
 n_batches=(32)
@@ -12,20 +13,19 @@ weight_inits=('custom')
 Ks=(15)
 rnn_nets=('lstm')
 dyn_nets=('linearmix')
-n_epochs=(8192)
+n_epochs=(4096)
 opt=('adam')
 enc_dec_nets=('cnn')
 opt_vae_base_epochs=(1024)
 debug=('False')
 nl=('relu')
-traj_len=(29)
+traj_len=(7)
 frame_stack=(1)
 val_split=(0)
 lam_rec=(0.95)
 lam_kl=(0.80)
 n_checkpoint_epoch=(1024)
-# task="push64"
-task="pendulum64"
+task="push64"
 
 for n in {1..1}; do
     for dyn_net in ${dyn_nets[@]}; do
@@ -41,15 +41,15 @@ for n in {1..1}; do
                                             for n_epoch in ${n_epochs[@]}; do
                                                 python ../train_img.py \
                                                                     --K $K \
-                                                                    --dim_u 1 \
-                                                                    --dim_z 3 \
+                                                                    --dim_u 2 \
+                                                                    --dim_z 16 \
                                                                     --dim_x "1,64,64" \
                                                                     --n_worker 8 \
                                                                     --use_binary_ce "False" \
                                                                     --n_epoch $n_epoch \
                                                                     --n_batch $n_batch \
                                                                     --debug $debug \
-                                                                    --comment "generativeKL_${task}_encdecnet-${enc_dec_net}_lr-${lr}_n_batch-${n_batch}_weightinit-${weight_init}_traj-${traj_len}_bn-${batch_norm}_dyntype-${dyn_net}_dynnet-${rnn_net}_framestacks-${frame_stack}_optvaebaseepochs-${opt_vae_base_epoch}_lamrec-${lam_rec}_lamkl-${lam_kl}" \
+                                                                    --comment "${task}_encdecnet-${enc_dec_net}_lr-${lr}_n_batch-${n_batch}_weightinit-${weight_init}_traj-${traj_len}_bn-${batch_norm}_dyntype-${dyn_net}_dynnet-${rnn_net}_framestacks-${frame_stack}_optvaebaseepochs-${opt_vae_base_epoch}_lamrec-${lam_rec}_lamkl-${lam_kl}" \
                                                                     --device $device \
                                                                     --lr $lr \
                                                                     --weight_init $weight_init \

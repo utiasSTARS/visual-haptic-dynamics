@@ -16,7 +16,7 @@ def test_actions_pendulum():
     env = VisualPendulum(frame_stack=0)
     env.reset(np.array([np.pi,0]))
 
-    for ii in range(1000):
+    for ii in range(10000000):
         obs, _, _, _ = env.step(np.array([1.0]))
         if ii % 100 == 0:
             env.reset()
@@ -30,16 +30,15 @@ def test_actions_pendulum():
 
 def test_gym_reacher():
     env = gym.make('ThingReacher2D-v0')
-    for ii in range(1000):
+    for ii in range(10000000):
         print(ii)
         obs, _, _, _ = env.step(np.array([1.0]))
-        if ii % 100 == 0:
+        if ii % 1000 == 0:
             env.reset()
             print("resetting")
-        print("Obs received: ", obs.shape)
-        print("Action dim: ", env.action_space)
-        print("Obs dim: ", env.observation_space)
-
+        # print("Obs received: ", obs.shape)
+        # print("Action dim: ", env.action_space)
+        # print("Obs dim: ", env.observation_space)
 
 def test_gym_pusher():
     env = gym.make('ThingPusher-v0')
@@ -49,9 +48,9 @@ def test_gym_pusher():
         if ii % 100 == 0:
             env.reset()
             print("resetting")
-        print("Obs received: ", obs.shape)
-        print("Action dim: ", env.action_space)
-        print("Obs dim: ", env.observation_space)
+        # print("Obs received: ", obs.shape)
+        # print("Action dim: ", env.action_space)
+        # print("Obs dim: ", env.observation_space)
 
 def test_gym_visual_reacher():
     env = gym.make('ThingVisualReacher2D-v0', is_render=False)
@@ -76,8 +75,7 @@ def test_gym_visual_pusher():
         # print("Obs dim: ", env.observation_space)
 
 if __name__=="__main__":
-    # test_actions()
-    # test_gym_reacher()
+    test_gym_reacher()
     # test_gym_pusher()
-    test_gym_visual_reacher()
+    # test_gym_visual_reacher()
     # test_gym_visual_pusher()
