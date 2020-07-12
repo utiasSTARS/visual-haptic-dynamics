@@ -29,7 +29,7 @@ def test_actions_pendulum():
     env.close()
 
 def test_gym_reacher():
-    env = gym.make('ThingReacher2D-v0')
+    env = gym.make('ThingReacher2D-v0', is_render=False)
     for ii in range(10000000):
         print(ii)
         obs, _, _, _ = env.step(np.array([1.0]))
