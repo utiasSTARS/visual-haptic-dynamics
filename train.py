@@ -386,10 +386,11 @@ def train(args):
                 # Save model at intermittent checkpoints 
                 if epoch % args.n_checkpoint_epoch == 0:
                     torch.save(
-                        {**{v.state_dict() for k, v in nets.items()},
+                        {**{k: v.state_dict() for k, v in nets.items()},
                         'opt_all': opt_all.state_dict(),
                         'opt_vae': opt_vae.state_dict(),
-                        'opt_vae_base': opt_vae_base.state_dict()}, 
+                        'opt_vae_base': opt_vae_base.state_dict(),
+                        'epoch': epoch}, 
                         checkpoint_dir + "checkpoint.pth"
                     )
     finally:
