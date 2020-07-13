@@ -2,7 +2,6 @@ device="cpu"
 
 # dataset="/home/olimoyo/visual-haptic-dynamics/experiments/data/datasets/visual_haptic_1D_B1F515581A0A478A92AF1C58D4345408.pkl"
 dataset="/home/olimoyo/visual-haptic-dynamics/experiments/data/datasets/visual_haptic_1D_bigger_action_magnitudes_DA3D5A6E36D54F52AC1496D1B46CF555.pkl"
-
 storage_base_path="/home/olimoyo/visual-haptic-dynamics/saved_models/"
 
 n_batches=(32)
