@@ -1,4 +1,4 @@
-device="cuda:1"
+device="cpu"
 
 # dataset="/home/olimoyo/visual-haptic-dynamics/experiments/data/datasets/visual_haptic_1D_B1F515581A0A478A92AF1C58D4345408.pkl"
 dataset="/home/olimoyo/visual-haptic-dynamics/experiments/data/datasets/visual_haptic_1D_bigger_action_magnitudes_DA3D5A6E36D54F52AC1496D1B46CF555.pkl"
@@ -25,6 +25,9 @@ lam_rec=(0.95)
 lam_kl=(0.80)
 n_checkpoint_epoch=(1024)
 task="push64vh"
+use_img="True"
+use_haptic="True"
+use_arm="True"
 
 for n in {1..1}; do
     for dyn_net in ${dyn_nets[@]}; do
@@ -37,7 +40,10 @@ for n in {1..1}; do
                                 for lr in ${learning_rates[@]}; do
                                     for bi_directional in ${bi_directionals[@]}; do
                                         for n_epoch in ${n_epochs[@]}; do
-                                            python ../train_vh.py \
+                                            python ../train.py \
+                                                                --use_img $use_img \
+                                                                --use_haptic $use_haptic \
+                                                                --use_arm $use_arm \
                                                                 --K $K \
                                                                 --dim_u 2 \
                                                                 --dim_z 16 \

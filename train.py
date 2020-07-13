@@ -63,39 +63,54 @@ def train(args):
         raise NotImplementedError()
     output_nl = None if args.use_binary_ce else nn.Sigmoid()
 
+    nets = {}
+    z_dim_in = 0
+
     # Networks
-    img_enc = FullyConvEncoderVAE(
-        input=args.dim_x[0] * (args.frame_stacks + 1),
-        latent_size=args.dim_z_img,
-        bn=args.use_batch_norm,
-        drop=args.use_dropout,
-        nl=nl,
-        img_dim=args.dim_x[1],
-        stochastic=False
-    ).to(device=device)
+    if args.use_img:
+        img_enc = FullyConvEncoderVAE(
+            input=args.dim_x[0] * (args.frame_stacks + 1),
+            latent_size=args.dim_z_img,
+            bn=args.use_batch_norm,
+            drop=args.use_dropout,
+            nl=nl,
+            img_dim=args.dim_x[1],
+            stochastic=False
+        ).to(device=device)
+        nets["img_enc"] = img_enc
+        z_dim_in += args.dim_z_img
 
-    haptic_enc = TCN(
-        input_size=6,
-        num_channels=[256, 128, 64, 32, args.dim_z_haptic]
-    ).to(device=device)
+    if args.use_haptic:
+        haptic_enc = TCN(
+            input_size=6,
+            num_channels=[256, 128, 64, 32, args.dim_z_haptic]
+        ).to(device=device)
+        nets["haptic_enc"] = haptic_enc
+        z_dim_in += args.dim_z_haptic
 
-    arm_enc = TCN(
-        input_size=6,
-        num_channels=[256, 128, 64, 32, args.dim_z_arm]
-    ).to(device=device)
+    if args.use_arm:
+        arm_enc = TCN(
+            input_size=6,
+            num_channels=[256, 128, 64, 32, args.dim_z_arm]
+        ).to(device=device)
+        nets["arm_enc"] = arm_enc
+        z_dim_in += args.dim_z_arm
 
     img_dec = FullyConvDecoderVAE(
         input=args.dim_x[0] * (args.frame_stacks + 1),
-        latent_size=args.dim_z_img,
+        latent_size=z_dim_in,
         bn=args.use_batch_norm,
         drop=args.use_dropout,
         nl=nl,
         img_dim=args.dim_x[1],
         output_nl=output_nl
     ).to(device=device)
+    nets["img_dec"] = img_dec
+
+    #TODO: Decoder for arm and haptic data
 
     mix = FCNEncoderVAE(
-        dim_in=args.dim_z_img + args.dim_z_haptic + args.dim_z_arm,
+        dim_in=z_dim_in,
         dim_out=args.dim_z,
         bn=args.use_batch_norm,
         drop=args.use_dropout,
@@ -103,6 +118,7 @@ def train(args):
         hidden_size=args.fc_hidden_size,
         stochastic=True
     ).to(device=device)
+    nets["mix"] = mix
 
     # Dynamics network
     if args.dyn_net == "linearmix":
@@ -135,77 +151,42 @@ def train(args):
         base_params = []
     else:
         raise NotImplementedError()
+    nets["dyn"] = dyn
+
+    enc_params = [list(v.parameters()) for k, v in nets.items() if "enc" in k]
+    enc_params = [v for sl in enc_params for v in sl] # remove nested list
 
     if args.opt == "adam":
-        opt_vae = torch.optim.Adam(
-            list(img_enc.parameters()) + 
-            list(haptic_enc.parameters()) +
-            list(arm_enc.parameters()) +
-            list(mix.parameters()) +
-            list(img_dec.parameters()), 
-            lr=args.lr
-        )
-        opt_vae_base = torch.optim.Adam(
-            list(img_enc.parameters()) + 
-            list(haptic_enc.parameters()) +
-            list(arm_enc.parameters()) +
-            list(mix.parameters()) +
-            list(img_dec.parameters()) + 
-            base_params, 
-            lr=args.lr
-        )
-        opt_all = torch.optim.Adam(
-            list(img_enc.parameters()) + 
-            list(haptic_enc.parameters()) +
-            list(arm_enc.parameters()) +
-            list(mix.parameters()) +
-            list(img_dec.parameters()) +
-            list(dyn.parameters()), 
-            lr=args.lr
-        )
+        opt_type = torch.optim.Adam
     elif args.opt == "sgd":
-        opt_vae = torch.optim.SGD(
-            list(img_enc.parameters()) + 
-            list(haptic_enc.parameters()) +
-            list(arm_enc.parameters()) +
-            list(mix.parameters()) +
-            list(img_dec.parameters()), 
-            lr=args.lr, 
-            momentum=0.9, 
-            nesterov=True
-        )
-        opt_vae_base = torch.optim.SGD(
-            list(img_enc.parameters()) + 
-            list(haptic_enc.parameters()) +
-            list(arm_enc.parameters()) +
-            list(mix.parameters()) +
-            list(img_dec.parameters()) + 
-            base_params,
-            lr=args.lr, 
-            momentum=0.9, 
-            nesterov=True
-        )
-        opt_all = torch.optim.SGD(
-            list(img_enc.parameters()) + 
-            list(haptic_enc.parameters()) +
-            list(arm_enc.parameters()) +
-            list(mix.parameters()) +
-            list(img_dec.parameters()) +
-            list(dyn.parameters()), 
-            lr=args.lr, 
-            momentum=0.9, 
-            nesterov=True
-        )
+        opt_type = torch.optim.SGD
     else:
         raise NotImplementedError()
 
+    opt_vae = opt_type(
+        enc_params + 
+        list(nets["mix"].parameters()) +
+        list(nets["img_dec"].parameters()), 
+        lr=args.lr
+    )
+    opt_vae_base = opt_type(
+        enc_params +
+        list(nets["mix"].parameters()) +
+        list(nets["img_dec"].parameters()) + 
+        base_params, 
+        lr=args.lr
+    )
+    opt_all = opt_type(
+        enc_params +
+        list(nets["mix"].parameters()) +
+        list(nets["img_dec"].parameters()) +
+        list(nets["dyn"].parameters()), 
+        lr=args.lr
+    )
+     
     if args.weight_init == 'custom':
-        img_enc.apply(common_init_weights)
-        haptic_enc.apply(common_init_weights)
-        arm_enc.apply(common_init_weights)
-        mix.apply(common_init_weights)
-        img_dec.apply(common_init_weights)
-        dyn.apply(common_init_weights)
+        for k, v in nets.items():
+            v.apply(common_init_weights)
     
     # Loss functions
     if args.use_binary_ce:
@@ -217,14 +198,13 @@ def train(args):
     dataset = VisualHaptic(
                 args.dataset,
                 img_shape=args.dim_x
-                )
+              )
 
-    ds_size = len(dataset)
-    idx = list(range(ds_size))
-    split = int(np.floor(args.val_split * ds_size))
-    train_idx, val_idx = idx[split:], idx[:split]
-    train_sampler = SubsetRandomSampler(train_idx)
-    valid_sampler = SubsetRandomSampler(val_idx)
+    idx = list(range(len(dataset)))
+    split = int(np.floor(args.val_split * len(dataset)))
+    train_sampler = SubsetRandomSampler(idx[split:])
+    valid_sampler = SubsetRandomSampler(idx[:split])
+
     train_loader = DataLoader(
         dataset,
         batch_size=args.n_batch,
@@ -244,15 +224,11 @@ def train(args):
     checkpoint_epochs = 0
     if os.path.exists(checkpoint_dir + "checkpoint.pth"):
         checkpoint = torch.load(checkpoint_dir + "checkpoint.pth")
-        dyn.load_state_dict(checkpoint['dyn'])
-        img_enc.load_state_dict(checkpoint['img_enc'])
-        haptic_enc.load_state_dict(checkpoint['haptic_enc'])
-        arm_enc.load_state_dict(checkpoint['arm_enc'])
-        mix.load_state_dict(checkpoint['mix'])
-        img_dec.load_state_dict(checkpoint['img_dec'])
-        opt_all.load_state_dict(checkpoint['opt_all'])
+        for k, v in nets.items():
+            v.load_state_dict(checkpoint[k])
         opt_vae.load_state_dict(checkpoint['opt_vae'])
         opt_vae_base.load_state_dict(checkpoint['opt_vae_base'])
+        opt_all.load_state_dict(checkpoint['opt_all'])
         checkpoint_epochs = checkpoint['epoch']
         print(f"Resuming training from checkpoint at epoch {checkpoint_epochs}")
         assert (checkpoint_epochs < args.n_epoch), \
@@ -262,24 +238,15 @@ def train(args):
     def opt_iter(epoch, opt=None):
         """Single training epoch."""
         if opt:
-            img_enc.train()
-            haptic_enc.train()
-            arm_enc.train()
-            mix.train()
-            img_dec.train()
-            dyn.train()
+            for k, v in nets.items():
+                v.train()
             loader = train_loader
         else:
-            img_enc.eval()
-            haptic_enc.eval()
-            arm_enc.eval()
-            mix.eval()
-            img_dec.eval()
-            dyn.eval()
+            for k, v in nets.items():
+                v.eval()
             loader = val_loader
         
         running_stats = {"total_l": [], "kl_l": [], "rec_l": []}
-        x = {}
 
         for idx, data in enumerate(loader):
             if idx == args.n_example:
@@ -287,39 +254,44 @@ def train(args):
             
             # Load and shape trajectory data
             # XXX: all trajectories have same length
+            x = {}
             x['img'] = data['img'].float().to(device=device) # (n, l, c, h, w)
             x['ft'] = data['ft'].float().to(device=device) # (n, l, f, 6)
             x['arm'] = data['arm'].float().to(device=device) # (n, l, f, 6)
 
             n = x['img'].shape[0]
 
-            for key in x:
-                x[key] = frame_stack(x[key], frames=args.frame_stacks)
+            for k in x:
+                x[k] = frame_stack(x[k], frames=args.frame_stacks)
 
             start_idx = np.random.randint(x['img'].shape[1] - args.traj_len + 1) # sample random range of traj_len
             end_idx = start_idx + args.traj_len
+            for k in x:
+                x[k] = x[k][:, start_idx:end_idx]
 
-            for key in x:
-                x[key] = x[key][:, start_idx:end_idx]
             l = x['img'].shape[1]
 
-            for key in x:
-                x[key] = x[key].reshape(-1, *x[key].shape[2:])
+            for k in x:
+                x[k] = x[k].reshape(-1, *x[k].shape[2:])
             
             u = data['action'][:, (start_idx + args.frame_stacks):(end_idx + args.frame_stacks)].float().to(device=device)
 
             # Encode
-            z_img = img_enc(x['img'])
-            z_haptic = haptic_enc(x['ft'])[:, -1]
-            z_arm = arm_enc(x['arm'])[:, -1]
+            z_all = []
+            if args.use_img:
+                z_all.append(nets["img_enc"](x['img']))
+            if args.use_haptic:
+                z_all.append(nets["haptic_enc"](x['ft'])[:, -1])
+            if args.use_arm:
+                z_all.append(nets["arm_enc"](x['arm'])[:, -1])
 
             # Concatenate modalities
-            z_cat = torch.cat((z_img, z_haptic, z_arm), dim=1)
+            z_cat = torch.cat(z_all, dim=1)
 
-            z, mu_z, logvar_z = mix(z_cat)
+            z, mu_z, logvar_z = nets["mix"](z_cat)
 
             # Decode
-            x_hat = img_dec(z)
+            x_hat = nets["img_dec"](z)
             loss_rec = (torch.sum(loss_REC(x_hat, x['img']))) / n
 
             # Dynamics constraint with KL
@@ -329,7 +301,7 @@ def train(args):
             var_z = torch.diag_embed(torch.exp(logvar_z))
 
             _, mu_z_t1_hat, var_z_t1_hat, _ = \
-                dyn(z_t=z[:, :-1], mu_t=mu_z[:, :-1], var_t=var_z[:, :-1], u=u[:, 1:])
+                nets["dyn"](z_t=z[:, :-1], mu_t=mu_z[:, :-1], var_t=var_z[:, :-1], u=u[:, 1:])
 
             # Initial distribution 
             mu_z_i = torch.zeros(args.dim_z, requires_grad=False, device=device)
@@ -361,23 +333,16 @@ def train(args):
                 opt.zero_grad()
                 total_loss.backward()
                 # clip for stable RNN training
-                torch.nn.utils.clip_grad_norm_(dyn.parameters(), 0.5)
-                torch.nn.utils.clip_grad_norm_(img_enc.parameters(), 0.5)
-                torch.nn.utils.clip_grad_norm_(haptic_enc.parameters(), 0.5)
-                torch.nn.utils.clip_grad_norm_(arm_enc.parameters(), 0.5)
-                torch.nn.utils.clip_grad_norm_(mix.parameters(), 0.5)
-                torch.nn.utils.clip_grad_norm_(img_dec.parameters(), 0.5)
+                for k, v in nets.items():
+                    torch.nn.utils.clip_grad_norm_(v.parameters(), 0.5)
                 opt.step()
 
         # Summary stats from epoch
-        summary_stats = {f'avg_{key}':sum(stats)/len(stats) 
-            for (key, stats) in running_stats.items()}
+        summary_stats = {f'avg_{k}':sum(v)/len(v) for k, v in running_stats.items()}
         n_images = 16 # random sample of images to visualize reconstruction quality
         rng = random.randint(0, x["img"].shape[0] - n_images)
-        x_plt = x["img"][rng:(rng + n_images), np.newaxis, -1].detach().cpu()
-        x_hat_plt = x_hat[rng:(rng + n_images), np.newaxis, -1].detach().cpu()
-        summary_stats['og_imgs'] = x_plt
-        summary_stats['rec_imgs'] = x_hat_plt
+        summary_stats['og_imgs'] = x["img"][rng:(rng + n_images), np.newaxis, -1].detach().cpu()
+        summary_stats['rec_imgs'] = x_hat[rng:(rng + n_images), np.newaxis, -1].detach().cpu()
 
         return summary_stats
 
@@ -405,8 +370,8 @@ def train(args):
                 f"Avg val loss: {summary_val['avg_total_l'] if args.val_split > 0 else 'N/A'}, "
                 f"Time per epoch: {epoch_time}"))
             
-            # Tensorboard
             if not args.debug:
+                # Tensorboard
                 for loss in ['total', 'kl', 'rec']:
                     writer.add_scalar(f"loss/{loss}/train", summary_train[f'avg_{loss}_l'], epoch)
                 writer.add_images(f'reconstructed_images/{args.comment}/train/original', summary_train['og_imgs'])
@@ -420,30 +385,19 @@ def train(args):
 
                 # Save model at intermittent checkpoints 
                 if epoch % args.n_checkpoint_epoch == 0:
-                    torch.save({
-                        'epoch': epoch,
-                        'dyn': dyn.state_dict(),
-                        'mix': mix.state_dict(),
-                        'haptic_enc': haptic_enc.state_dict(),
-                        'arm_enc': arm_enc.state_dict(),
-                        'img_enc': img_enc.state_dict(),
-                        'img_dec': img_dec.state_dict(),
+                    torch.save(
+                        {**{v.state_dict() for k, v in nets.items()},
                         'opt_all': opt_all.state_dict(),
                         'opt_vae': opt_vae.state_dict(),
                         'opt_vae_base': opt_vae_base.state_dict()}, 
                         checkpoint_dir + "checkpoint.pth"
                     )
-
     finally:
         if not args.debug:
             if not np.isnan(summary_train['avg_total_l']):
                 # Save models
-                torch.save(dyn.state_dict(), save_dir + '/dyn.pth')
-                torch.save(img_enc.state_dict(), save_dir + '/img_enc.pth')
-                torch.save(haptic_enc.state_dict(), save_dir + '/haptic_enc.pth')
-                torch.save(arm_enc.state_dict(), save_dir + '/arm_enc.pth')
-                torch.save(img_dec.state_dict(), save_dir + '/img_dec.pth')
-                torch.save(mix.state_dict(), save_dir + '/mix.pth')
+                for k, v in nets.items():
+                    torch.save(v.state_dict(), save_dir + f"/{k}.pth")
             writer.close()
 
 def main():

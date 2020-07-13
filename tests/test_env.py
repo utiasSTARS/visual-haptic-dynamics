@@ -31,11 +31,10 @@ def test_actions_pendulum():
 def test_gym_reacher():
     env = gym.make('ThingReacher2D-v0', is_render=False)
     for ii in range(10000000):
-        print(ii)
         obs, _, _, _ = env.step(np.array([1.0]))
         if ii % 1000 == 0:
             env.reset()
-            print("resetting")
+            print(f"resetting {ii}")
         # print("Obs received: ", obs.shape)
         # print("Action dim: ", env.action_space)
         # print("Obs dim: ", env.observation_space)
