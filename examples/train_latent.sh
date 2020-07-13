@@ -23,11 +23,11 @@ frame_stack=(1)
 val_split=(0)
 lam_rec=(0.95)
 lam_kl=(0.80)
-n_checkpoint_epoch=(1024)
+n_checkpoint_epoch=(128)
 task="push64vh"
 use_img="True"
-use_haptic="True"
-use_arm="True"
+use_haptic="False"
+use_arm="False"
 
 for n in {1..1}; do
     for dyn_net in ${dyn_nets[@]}; do

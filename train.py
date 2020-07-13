@@ -27,12 +27,12 @@ from models import (LinearMixSSM,
                     TCN)
 from datasets import VisualHaptic
 
-set_seed_torch(3)
-def _init_fn(worker_id):
-    np.random.seed(int(3))
-
 def train(args):
     print(args)
+    set_seed_torch(args.random_seed)
+    def _init_fn(worker_id):
+        np.random.seed(int(args.random_seed))
+
     assert 0 <= args.opt_vae_epochs <= args.opt_vae_base_epochs <= args.n_epoch
     device = torch.device(args.device)
     torch.backends.cudnn.deterministic = args.cudnn_deterministic
@@ -98,7 +98,7 @@ def train(args):
 
     img_dec = FullyConvDecoderVAE(
         input=args.dim_x[0] * (args.frame_stacks + 1),
-        latent_size=z_dim_in,
+        latent_size=args.dim_z,
         bn=args.use_batch_norm,
         drop=args.use_dropout,
         nl=nl,
