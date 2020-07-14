@@ -266,32 +266,39 @@ def load_vh_models(path, args, mode='eval', device='cuda:0'):
         raise NotImplementedError()
     
     models = {}
-    
-    img_enc = FullyConvEncoderVAE(
-        input=args.dim_x[0] * (args.frame_stacks + 1),
-        latent_size=args.dim_z_img,
-        bn=args.use_batch_norm,
-        drop=args.use_dropout,
-        nl=nl,
-        img_dim=args.dim_x[1],
-        stochastic=False
-    ).to(device=device)
-    models["img_enc"] = img_enc
+    z_dim_in = 0
 
-    haptic_enc = TCN(
-        input_size=6,
-        num_channels=[256, 128, 64, 32, args.dim_z_haptic]
-    ).to(device=device)
-    models["haptic_enc"] = haptic_enc
+    if args.use_img_enc:
+        img_enc = FullyConvEncoderVAE(
+            input=args.dim_x[0] * (args.frame_stacks + 1),
+            latent_size=args.dim_z_img,
+            bn=args.use_batch_norm,
+            drop=args.use_dropout,
+            nl=nl,
+            img_dim=args.dim_x[1],
+            stochastic=False
+        ).to(device=device)
+        models["img_enc"] = img_enc
+        z_dim_in += args.dim_z_img
 
-    arm_enc = TCN(
-        input_size=6,
-        num_channels=[256, 128, 64, 32, args.dim_z_arm]
-    ).to(device=device)
-    models["arm_enc"] = arm_enc
+    if args.use_haptic_enc:
+        haptic_enc = TCN(
+            input_size=6,
+            num_channels=[256, 128, 64, 32, args.dim_z_haptic]
+        ).to(device=device)
+        models["haptic_enc"] = haptic_enc
+        z_dim_in += args.dim_z_haptic
+
+    if args.use_arm_enc:
+        arm_enc = TCN(
+            input_size=6,
+            num_channels=[256, 128, 64, 32, args.dim_z_arm]
+        ).to(device=device)
+        models["arm_enc"] = arm_enc
+        z_dim_in += args.dim_z_arm
 
     mix = FCNEncoderVAE(
-        dim_in=args.dim_z_img + args.dim_z_haptic + args.dim_z_arm,
+        dim_in=z_dim_in,
         dim_out=args.dim_z,
         bn=args.use_batch_norm,
         drop=args.use_dropout,
@@ -359,5 +366,4 @@ def load_vh_models(path, args, mode='eval', device='cuda:0'):
         except Exception as e: 
             print(e)             
     
-    return models["img_enc"], models["haptic_enc"], models["arm_enc"], \
-            models["img_dec"], models["mix"], models["dyn"]
+    return models

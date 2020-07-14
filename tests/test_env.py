@@ -31,10 +31,11 @@ def test_actions_pendulum():
 def test_gym_reacher():
     env = gym.make('ThingReacher2D-v0', is_render=False)
     for ii in range(10000000):
-        obs, _, _, _ = env.step(np.array([1.0]))
-        if ii % 1000 == 0:
+        p = np.random.uniform(-1,1,2)
+        obs, _, _, _ = env.step(np.array([p[0], p[1]]))
+        if ii % 150 == 0:
             env.reset()
-            print(f"resetting {ii}")
+            print(f"Resetting with {ii} time steps")
         # print("Obs received: ", obs.shape)
         # print("Action dim: ", env.action_space)
         # print("Obs dim: ", env.observation_space)
@@ -47,8 +48,8 @@ def test_gym_pusher():
         if ii % 100 == 0:
             env.reset()
             print("resetting")
-        # print("Obs received: ", obs.shape)
-        # print("Action dim: ", env.action_space)
+        # print("Action dim: ", env.acti
+        # print("Obs received: ", obs.shapon_space)
         # print("Obs dim: ", env.observation_space)
 
 def test_gym_visual_reacher():
@@ -56,7 +57,7 @@ def test_gym_visual_reacher():
     for ii in range(10000000):
         p = np.random.uniform(-1,1,2)
         obs, _, _, _ = env.step(np.array([p[0], p[1]]))
-        if (ii + 1) % 150 == 0:
+        if ii % 150 == 0:
             env.reset()
             print("Resetting with {} time steps".format(ii))
         # print("Action dim: ", env.action_space)
