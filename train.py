@@ -10,6 +10,7 @@ from datetime import datetime
 from tensorboardX import SummaryWriter
 import json
 import os, sys, time
+import re
 
 import torch
 import torch.nn as nn
@@ -65,9 +66,10 @@ def train(args):
 
     nets = {}
     z_dim_in = 0
+    rec_modalities = []
 
     # Networks
-    if args.use_img:
+    if args.use_img_enc:
         img_enc = FullyConvEncoderVAE(
             input=args.dim_x[0] * (args.frame_stacks + 1),
             latent_size=args.dim_z_img,
@@ -80,7 +82,7 @@ def train(args):
         nets["img_enc"] = img_enc
         z_dim_in += args.dim_z_img
 
-    if args.use_haptic:
+    if args.use_haptic_enc:
         haptic_enc = TCN(
             input_size=6,
             num_channels=[256, 128, 64, 32, args.dim_z_haptic]
@@ -88,7 +90,7 @@ def train(args):
         nets["haptic_enc"] = haptic_enc
         z_dim_in += args.dim_z_haptic
 
-    if args.use_arm:
+    if args.use_arm_enc:
         arm_enc = TCN(
             input_size=6,
             num_channels=[256, 128, 64, 32, args.dim_z_arm]
@@ -96,18 +98,44 @@ def train(args):
         nets["arm_enc"] = arm_enc
         z_dim_in += args.dim_z_arm
 
-    img_dec = FullyConvDecoderVAE(
-        input=args.dim_x[0] * (args.frame_stacks + 1),
-        latent_size=args.dim_z,
-        bn=args.use_batch_norm,
-        drop=args.use_dropout,
-        nl=nl,
-        img_dim=args.dim_x[1],
-        output_nl=output_nl
-    ).to(device=device)
-    nets["img_dec"] = img_dec
+    if args.use_img_dec:
+        img_dec = FullyConvDecoderVAE(
+            input=args.dim_x[0] * (args.frame_stacks + 1),
+            latent_size=args.dim_z,
+            bn=args.use_batch_norm,
+            drop=args.use_dropout,
+            nl=nl,
+            img_dim=args.dim_x[1],
+            output_nl=output_nl
+        ).to(device=device)
+        nets["img_dec"] = img_dec
+        rec_modalities.append("img")
 
-    #TODO: Decoder for arm and haptic data
+    if args.use_haptic_dec:
+        haptic_dec = FCNDecoderVAE(
+            dim_in=args.dim_z, 
+            dim_out=6, 
+            bn=args.use_batch_norm, 
+            drop=args.use_dropout, 
+            nl=nn.ReLU(), 
+            output_nl=None, 
+            hidden_size=args.fc_hidden_size
+        )
+        nets["haptic_dec"] = haptic_dec
+        rec_modalities.append("haptic")
+
+    if args.use_arm_dec:
+        arm_dec = FCNDecoderVAE(
+            dim_in=args.dim_z, 
+            dim_out=6, 
+            bn=args.use_batch_norm, 
+            drop=args.use_dropout, 
+            nl=nn.ReLU(), 
+            output_nl=None, 
+            hidden_size=args.fc_hidden_size
+        )
+        nets["arm_dec"] = arm_dec
+        rec_modalities.append("arm")
 
     mix = FCNEncoderVAE(
         dim_in=z_dim_in,
@@ -156,6 +184,9 @@ def train(args):
     enc_params = [list(v.parameters()) for k, v in nets.items() if "enc" in k]
     enc_params = [v for sl in enc_params for v in sl] # remove nested list
 
+    dec_params = [list(v.parameters()) for k, v in nets.items() if "dec" in k]
+    dec_params = [v for sl in dec_params for v in sl] # remove nested list
+
     if args.opt == "adam":
         opt_type = torch.optim.Adam
     elif args.opt == "sgd":
@@ -165,21 +196,21 @@ def train(args):
 
     opt_vae = opt_type(
         enc_params + 
-        list(nets["mix"].parameters()) +
-        list(nets["img_dec"].parameters()), 
+        dec_params +
+        list(nets["mix"].parameters()),
         lr=args.lr
     )
     opt_vae_base = opt_type(
         enc_params +
+        dec_params +
         list(nets["mix"].parameters()) +
-        list(nets["img_dec"].parameters()) + 
         base_params, 
         lr=args.lr
     )
     opt_all = opt_type(
         enc_params +
+        dec_params +
         list(nets["mix"].parameters()) +
-        list(nets["img_dec"].parameters()) +
         list(nets["dyn"].parameters()), 
         lr=args.lr
     )
@@ -196,8 +227,8 @@ def train(args):
 
     # Dataset
     dataset = VisualHaptic(
-                args.dataset,
-                img_shape=args.dim_x
+                  args.dataset,
+                  img_shape=args.dim_x
               )
 
     idx = list(range(len(dataset)))
@@ -246,7 +277,10 @@ def train(args):
                 v.eval()
             loader = val_loader
         
-        running_stats = {"total_l": [], "kl_l": [], "rec_l": []}
+        # Keep track of losses
+        running_stats = {"total_l": [], "kl_l": []}
+        for m in rec_modalities:
+            running_stats[f'rec_l_{m}'] = []
 
         for idx, data in enumerate(loader):
             if idx == args.n_example:
@@ -256,7 +290,7 @@ def train(args):
             # XXX: all trajectories have same length
             x = {}
             x['img'] = data['img'].float().to(device=device) # (n, l, c, h, w)
-            x['ft'] = data['ft'].float().to(device=device) # (n, l, f, 6)
+            x['haptic'] = data['ft'].float().to(device=device) # (n, l, f, 6)
             x['arm'] = data['arm'].float().to(device=device) # (n, l, f, 6)
 
             n = x['img'].shape[0]
@@ -278,11 +312,11 @@ def train(args):
 
             # Encode
             z_all = []
-            if args.use_img:
+            if args.use_img_enc:
                 z_all.append(nets["img_enc"](x['img']))
-            if args.use_haptic:
-                z_all.append(nets["haptic_enc"](x['ft'])[:, -1])
-            if args.use_arm:
+            if args.use_haptic_enc:
+                z_all.append(nets["haptic_enc"](x['haptic'])[:, -1])
+            if args.use_arm_enc:
                 z_all.append(nets["arm_enc"](x['arm'])[:, -1])
 
             # Concatenate modalities
@@ -291,8 +325,13 @@ def train(args):
             z, mu_z, logvar_z = nets["mix"](z_cat)
 
             # Decode
-            x_hat = nets["img_dec"](z)
-            loss_rec = (torch.sum(loss_REC(x_hat, x['img']))) / n
+            loss_rec = {}
+            for m in rec_modalities:
+                x_hat = nets[f"{m}_dec"](z)
+                if m in ["haptic", "arm"]:
+                    loss_rec[f"loss_rec_{m}"] = (torch.sum(loss_REC(x_hat, x[f'{m}'][:, -1]))) / n
+                else:
+                    loss_rec[f"loss_rec_{m}"] = (torch.sum(loss_REC(x_hat, x[f'{m}']))) / n
 
             # Dynamics constraint with KL
             z = z.reshape(n, l, *z.shape[1:])
@@ -321,12 +360,19 @@ def train(args):
                 var_z_hat.reshape(-1, *var_z_hat.shape[2:])
             )
             loss_kl = torch.sum(torch.distributions.kl_divergence(p, q)) / n
-
-            total_loss = args.lam_rec * loss_rec + args.lam_kl * loss_kl
-
-            running_stats['total_l'].append(loss_rec.item() + loss_kl.item())
-            running_stats['rec_l'].append(loss_rec.item())
             running_stats['kl_l'].append(loss_kl.item())
+
+            loss_rec_total = 0
+            for m in rec_modalities:
+                loss_rec_total += loss_rec[f"loss_rec_{m}"]
+                running_stats[f'rec_l_{m}'].append(loss_rec[f"loss_rec_{m}"].item())
+
+            total_loss = args.lam_rec * loss_rec_total + \
+                args.lam_kl * loss_kl
+            running_stats['total_l'].append(
+                loss_rec_total.item() +
+                loss_kl.item()
+            )
 
             # Jointly optimize everything
             if opt:
@@ -372,13 +418,17 @@ def train(args):
             
             if not args.debug:
                 # Tensorboard
-                for loss in ['total', 'kl', 'rec']:
+                for m in rec_modalities:
+                    writer.add_scalar(f"loss/{m}/train", summary_train[f'avg_rec_l_{m}'], epoch)
+                for loss in ['total', 'kl']:
                     writer.add_scalar(f"loss/{loss}/train", summary_train[f'avg_{loss}_l'], epoch)
                 writer.add_images(f'reconstructed_images/{args.comment}/train/original', summary_train['og_imgs'])
                 writer.add_images(f'reconstructed_images/{args.comment}/train/reconstructed', summary_train['rec_imgs'])
 
                 if args.val_split > 0:
-                    for loss in ['total', 'kl', 'rec']:
+                    for m in rec_modalities:
+                        writer.add_scalar(f"loss/{m}/val", summary_val[f'avg_rec_l_{m}'], epoch)
+                    for loss in ['total', 'kl']:
                         writer.add_scalar(f"loss/{loss}/val", summary_val[f'avg_{loss}_l'], epoch)
                     writer.add_images(f'reconstructed_images/{args.comment}/val/original', summary_val['og_imgs'])
                     writer.add_images(f'reconstructed_images/{args.comment}/val/reconstructed', summary_val['rec_imgs'])

@@ -12,10 +12,10 @@ weight_inits=('custom')
 Ks=(15)
 rnn_nets=('lstm')
 dyn_nets=('linearmix')
-n_epochs=(70)
+n_epochs=(4096)
 opt=('adam')
-opt_vae_base_epochs=(0)
-debug=('False')
+opt_vae_base_epochs=(1024)
+debug=('True')
 nl=('relu')
 traj_len=(7)
 frame_stack=(1)
@@ -24,9 +24,11 @@ lam_rec=(0.95)
 lam_kl=(0.80)
 n_checkpoint_epoch=(1)
 task="push64vh"
-use_img="True"
-use_haptic="False"
-use_arm="False"
+use_img_enc="True"
+use_haptic_enc="True"
+use_arm_enc="True"
+use_haptic_dec="True"
+use_arm_dec="True"
 
 for n in {1..1}; do
     for dyn_net in ${dyn_nets[@]}; do
@@ -40,9 +42,11 @@ for n in {1..1}; do
                                     for bi_directional in ${bi_directionals[@]}; do
                                         for n_epoch in ${n_epochs[@]}; do
                                             python ../train.py \
-                                                                --use_img $use_img \
-                                                                --use_haptic $use_haptic \
-                                                                --use_arm $use_arm \
+                                                                --use_arm_dec $use_arm_dec \
+                                                                --use_haptic_dec $use_haptic_dec \
+                                                                --use_img_enc $use_img_enc \
+                                                                --use_haptic_enc $use_haptic_enc \
+                                                                --use_arm_enc $use_arm_enc \
                                                                 --K $K \
                                                                 --dim_u 2 \
                                                                 --dim_z 16 \

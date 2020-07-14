@@ -211,7 +211,7 @@ class FCNDecoderVAE(nn.Module):
     def forward(self, z):
         for l in self.layers:
             z = l(z)
-        x = z.view(-1, *self.dim_out)
+        x = z.view(-1, self.dim_out)
         return x
 
 
