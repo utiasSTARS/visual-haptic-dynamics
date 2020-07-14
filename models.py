@@ -187,14 +187,14 @@ class LinearMixSSM(nn.Module):
         self.bidirectional = bidirectional
         if net_type == "gru":
             self.rnn = nn.GRU(
-                input_size=dim_z, 
+                input_size=dim_z + dim_u, 
                 hidden_size=hidden_size, 
                 num_layers=layers, 
                 bidirectional=bidirectional
             )
         elif net_type =="lstm":
             self.rnn = nn.LSTM(
-                input_size=dim_z, 
+                input_size=dim_z + dim_u, 
                 hidden_size=hidden_size, 
                 num_layers=layers, 
                 bidirectional=bidirectional
@@ -232,10 +232,11 @@ class LinearMixSSM(nn.Module):
 
         n, l, _ = z_t.shape
 
+        inp = torch.cat([z_t, u], dim=-1)
         if h is None:
-            x, h = self.rnn(z_t)
+            x, h = self.rnn(inp)
         else:
-            x, h = self.rnn(z_t, h)
+            x, h = self.rnn(inp, h)
         
         if self.bidirectional:
             x = x.reshape(-1, 2*self.hidden_size) # (seq_len * batch_size, 2 * hidden_size)
@@ -294,14 +295,14 @@ class LinearSSM(nn.Module):
 
         if net_type == "gru":
             self.rnn = nn.GRU(
-                input_size=dim_z, 
+                input_size=dim_z + dim_u, 
                 hidden_size=hidden_size, 
                 num_layers=layers, 
                 bidirectional=bidirectional
             )
         elif net_type =="lstm":
             self.rnn = nn.LSTM(
-                input_size=dim_z, 
+                input_size=dim_z + dim_u, 
                 hidden_size=hidden_size, 
                 num_layers=layers, 
                 bidirectional=bidirectional
@@ -339,10 +340,11 @@ class LinearSSM(nn.Module):
 
         l, n, _ = z_t.shape
 
+        inp = torch.cat([z_t, u], dim=-1)
         if h is None:
-            x, h = self.rnn(z_t)
+            x, h = self.rnn(inp)
         else:
-            x, h = self.rnn(z_t, h)
+            x, h = self.rnn(inp, h)
         
         if self.bidirectional:
             x = x.reshape(-1, 2*self.hidden_size) # (seq_len * batch_size, 2 * hidden_size)
@@ -407,14 +409,14 @@ class NonLinearSSM(nn.Module):
 
         if net_type == "gru":
             self.rnn = nn.GRU(
-                input_size=dim_z, 
+                input_size=dim_z + dim_u, 
                 hidden_size=hidden_size, 
                 num_layers=layers, 
                 bidirectional=bidirectional
             )
         elif net_type =="lstm":
             self.rnn = nn.LSTM(
-                input_size=dim_z, 
+                input_size=dim_z + dim_u, 
                 hidden_size=hidden_size, 
                 num_layers=layers, 
                 bidirectional=bidirectional
@@ -452,10 +454,11 @@ class NonLinearSSM(nn.Module):
 
             l, n, _ = z_t.shape
 
+            inp = torch.cat([z_t, u], dim=-1)
             if h is None:
-                x, h = self.rnn(z_t)
+                x, h = self.rnn(inp)
             else:
-                x, h = self.rnn(z_t, h)
+                x, h = self.rnn(inp, h)
             
             if self.bidirectional:
                 x = x.reshape(-1, 2*self.hidden_size) # (seq_len * batch_size, 2 * hidden_size)
