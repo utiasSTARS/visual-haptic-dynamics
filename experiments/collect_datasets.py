@@ -20,6 +20,49 @@ def write_file_pkl(data, name, location="."):
     with open(f'{filename}.pkl', 'wb') as f:
         pkl.dump(data, f)
 
+def visual_haptic_2D_osc():
+    n_steps = 32
+    env = ThingVisualPusher(
+        is_render=True,
+        render_w=64, 
+        render_h=64, 
+        goal_vis=False, 
+        substeps=n_steps, 
+        frame_skip=2
+    )
+    config = env.get_config()
+
+    repeat = 3
+
+    mag_list = list(np.arange(1.0, 1.96, 0.03)) * repeat
+    n_mag = len(mag_list)
+
+    n = n_mag
+    ll = 16
+    ii = 0
+
+    data = {
+        "img": np.zeros((n, ll, 64, 64, 3), dtype=np.uint8), 
+        "ft": np.zeros((n, ll, n_steps, 6)), 
+        "arm": np.zeros((n, ll, n_steps, 6)),
+        "action": np.zeros((n, ll, 2)), 
+        "config": config
+    }
+    
+    for _, m in enumerate(mag_list):
+        env.reset()
+        for jj in range(ll): 
+            u_x = 0.30 * m
+            u_y = np.clip(np.random.normal(0, 0.25), -0.30, 0.30) 
+            obs, reward, done, info = env.step(action=np.array([u_x, u_y]))
+            data["img"][ii, jj] = obs["img"]
+            data["ft"][ii, jj] = obs["ft"]
+            data["arm"][ii, jj] = obs["arm"]
+            data["action"][ii, jj] = np.array([u_x, u_y])
+        ii += 1
+
+    return data
+
 def visual_haptic_2D():
     n_steps = 32
     env = ThingVisualPusher(
@@ -103,6 +146,7 @@ def visual_haptic_1D():
 
 if __name__ == "__main__":
     # data = visual_haptic_1D()
-    data = visual_haptic_2D()
+    # data = visual_haptic_2D()
+    data = visual_haptic_2D_osc()
 
-    write_file_pkl(data=data, name="visual_haptic_2D", location="./data/datasets/")
+    write_file_pkl(data=data, name="visual_haptic_2D_osc", location="./data/datasets/")
