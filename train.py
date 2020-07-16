@@ -120,7 +120,7 @@ def train(args):
             nl=nn.ReLU(), 
             output_nl=None, 
             hidden_size=args.fc_hidden_size
-        )
+        ).to(device=device)
         nets["haptic_dec"] = haptic_dec
         rec_modalities.append("haptic")
 
@@ -133,7 +133,7 @@ def train(args):
             nl=nn.ReLU(), 
             output_nl=None, 
             hidden_size=args.fc_hidden_size
-        )
+        ).to(device=device)
         nets["arm_dec"] = arm_dec
         rec_modalities.append("arm")
 
