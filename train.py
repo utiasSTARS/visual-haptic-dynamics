@@ -114,7 +114,7 @@ def train(args):
     if args.use_haptic_dec:
         haptic_dec = FCNDecoderVAE(
             dim_in=args.dim_z, 
-            dim_out=6, 
+            dim_out=6 * 32 * (args.frame_stacks + 1), 
             bn=args.use_batch_norm, 
             drop=args.use_dropout, 
             nl=nn.ReLU(), 
@@ -127,7 +127,7 @@ def train(args):
     if args.use_arm_dec:
         arm_dec = FCNDecoderVAE(
             dim_in=args.dim_z, 
-            dim_out=6, 
+            dim_out=6 * 32 * (args.frame_stacks + 1), 
             bn=args.use_batch_norm, 
             drop=args.use_dropout, 
             nl=nn.ReLU(), 
@@ -330,7 +330,8 @@ def train(args):
             for m in rec_modalities:
                 x_hat[f"{m}"] = nets[f"{m}_dec"](z)
                 if m in ["haptic", "arm"]:
-                    loss_rec[f"loss_rec_{m}"] = (torch.sum(loss_REC(x_hat[f"{m}"], x[f'{m}'][:, -1]))) / n
+                    x_hat[f"{m}"] = x_hat[f"{m}"].reshape(*x[f'{m}'].shape)
+                    loss_rec[f"loss_rec_{m}"] = (torch.sum(loss_REC(x_hat[f"{m}"], x[f'{m}']))) / n
                 else:
                     loss_rec[f"loss_rec_{m}"] = (torch.sum(loss_REC(x_hat[f"{m}"], x[f'{m}']))) / n
 
