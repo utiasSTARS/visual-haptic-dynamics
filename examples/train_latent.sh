@@ -12,10 +12,10 @@ weight_inits=('custom')
 Ks=(15)
 rnn_nets=('lstm')
 dyn_nets=('linearmix')
-n_epochs=(4096)
+n_epochs=(20)
 opt=('adam')
-opt_vae_base_epochs=(1024)
-debug=('True')
+opt_vae_base_epochs=(0)
+debug=('False')
 nl=('relu')
 traj_len=(7)
 frame_stack=(1)
@@ -56,7 +56,7 @@ for n in {1..1}; do
                                                                 --n_epoch $n_epoch \
                                                                 --n_batch $n_batch \
                                                                 --debug $debug \
-                                                                --comment "${task}vh_lr-${lr}_n_batch-${n_batch}_weightinit-${weight_init}_traj-${traj_len}_bn-${batch_norm}_dyntype-${dyn_net}_dynnet-${rnn_net}_framestacks-${frame_stack}_optvaebaseepochs-${opt_vae_base_epoch}_lamrec-${lam_rec}_lamkl-${lam_kl}" \
+                                                                --comment "${task}_lr-${lr}_n_batch-${n_batch}_weightinit-${weight_init}_traj-${traj_len}_bn-${batch_norm}_dyntype-${dyn_net}_dynnet-${rnn_net}_framestacks-${frame_stack}_optvaebaseepochs-${opt_vae_base_epoch}_lamrec-${lam_rec}_lamkl-${lam_kl}" \
                                                                 --device $device \
                                                                 --lr $lr \
                                                                 --weight_init $weight_init \

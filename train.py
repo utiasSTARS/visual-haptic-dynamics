@@ -326,12 +326,13 @@ def train(args):
 
             # Decode
             loss_rec = {}
+            x_hat = {}
             for m in rec_modalities:
-                x_hat = nets[f"{m}_dec"](z)
+                x_hat[f"{m}"] = nets[f"{m}_dec"](z)
                 if m in ["haptic", "arm"]:
-                    loss_rec[f"loss_rec_{m}"] = (torch.sum(loss_REC(x_hat, x[f'{m}'][:, -1]))) / n
+                    loss_rec[f"loss_rec_{m}"] = (torch.sum(loss_REC(x_hat[f"{m}"], x[f'{m}'][:, -1]))) / n
                 else:
-                    loss_rec[f"loss_rec_{m}"] = (torch.sum(loss_REC(x_hat, x[f'{m}']))) / n
+                    loss_rec[f"loss_rec_{m}"] = (torch.sum(loss_REC(x_hat[f"{m}"], x[f'{m}']))) / n
 
             # Dynamics constraint with KL
             z = z.reshape(n, l, *z.shape[1:])
@@ -388,7 +389,7 @@ def train(args):
         n_images = 16 # random sample of images to visualize reconstruction quality
         rng = random.randint(0, x["img"].shape[0] - n_images)
         summary_stats['og_imgs'] = x["img"][rng:(rng + n_images), np.newaxis, -1].detach().cpu()
-        summary_stats['rec_imgs'] = x_hat[rng:(rng + n_images), np.newaxis, -1].detach().cpu()
+        summary_stats['rec_imgs'] = x_hat["img"][rng:(rng + n_images), np.newaxis, -1].detach().cpu()
 
         return summary_stats
 

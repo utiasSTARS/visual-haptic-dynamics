@@ -4,6 +4,10 @@ MPC based on stochastic gradient descent.
 import torch
 from torch import optim
 
+class CEMMPC():
+    
+class CvxOptMPC():
+
 class GradMPC():
     """
     This class solves the MPC problem based on SGD. Code inspired by: 
