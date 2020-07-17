@@ -1,4 +1,4 @@
-device="cpu"
+device="cuda:1"
 
 # dataset="/home/olimoyo/visual-haptic-dynamics/experiments/data/datasets/visual_haptic_1D_B1F515581A0A478A92AF1C58D4345408.pkl"
 dataset="/home/olimoyo/visual-haptic-dynamics/experiments/data/datasets/visual_haptic_1D_bigger_action_magnitudes_DA3D5A6E36D54F52AC1496D1B46CF555.pkl"
@@ -23,12 +23,12 @@ val_split=(0)
 lam_rec=(0.95)
 lam_kl=(0.80)
 n_checkpoint_epoch=(128)
-task="push64vh"
+task="push64_vha"
 use_img_enc="True"
 use_haptic_enc="True"
 use_arm_enc="True"
-use_haptic_dec="True"
-use_arm_dec="True"
+use_haptic_dec="False"
+use_arm_dec="False"
 
 for n in {1..1}; do
     for dyn_net in ${dyn_nets[@]}; do

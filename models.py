@@ -267,7 +267,17 @@ class LinearMixSSM(nn.Module):
         Q = torch.eye(self.dim_z, requires_grad=False, device=z_t.device) 
         var_t1 = 0.01 * Q.repeat(l, n, 1, 1)
 
-        return z_t1, mu_t1, var_t1, h
+        A_t = A_t.reshape(l, n, *A_t.shape[1:])
+        B_t = B_t.reshape(l, n, *B_t.shape[1:])
+
+        if single:
+            z_t1 = z_t1[0]
+            mu_t1 = mu_t1[0]
+            var_t1 = var_t1[0]
+            A_t = A_t[0]
+            B_t = B_t[0]
+
+        return z_t1, mu_t1, var_t1, h, A_t, B_t
 
 
 class LinearSSM(nn.Module):
@@ -382,6 +392,12 @@ class LinearSSM(nn.Module):
         # Transition covariance
         var_t1 = torch.bmm(torch.bmm(A_t, var_t), A_t.transpose(1, 2)) + I
         var_t1 = var_t1.reshape(l, n, *var_t1.shape[1:])
+
+        if single:
+            z_t1 = z_t1[0]
+            mu_t1 = mu_t1[0]
+            var_t1 = var_t1[0]
+
         return z_t1, mu_t1, var_t1, h
 
 
@@ -477,6 +493,11 @@ class NonLinearSSM(nn.Module):
             z_t1 = z_t1.reshape(l, n, *z_t1.shape[1:])
             mu_t1 = mu_t1.reshape(l, n, *mu_t1.shape[1:])
             var_t1 = var_t1.reshape(l, n, *var_t1.shape[1:])
+
+            if single:
+                z_t1 = z_t1[0]
+                mu_t1 = mu_t1[0]
+                var_t1 = var_t1[0]
 
             return z_t1, mu_t1, var_t1, h
 
