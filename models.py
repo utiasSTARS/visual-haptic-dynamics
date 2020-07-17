@@ -230,7 +230,7 @@ class LinearMixSSM(nn.Module):
             mu_t = mu_t.unsqueeze(0)
             var_t = var_t.unsqueeze(0)
 
-        n, l, _ = z_t.shape
+        l, n, _ = z_t.shape
 
         inp = torch.cat([z_t, u], dim=-1)
         if h is None:
@@ -260,12 +260,12 @@ class LinearMixSSM(nn.Module):
 
         # Transition sample
         z_t1 = torch.bmm(A_t, z_t.unsqueeze(-1)) + torch.bmm(B_t, u.unsqueeze(-1))
-        z_t1 = z_t1.reshape(n, l, *z_t1.shape[1:]).squeeze(-1)
+        z_t1 = z_t1.reshape(l, n, *z_t1.shape[1:]).squeeze(-1)
 
         # Transition distribution
         mu_t1 = z_t1
         Q = torch.eye(self.dim_z, requires_grad=False, device=z_t.device) 
-        var_t1 = 0.01 * Q.repeat(n, l, 1, 1)
+        var_t1 = 0.01 * Q.repeat(l, n, 1, 1)
 
         return z_t1, mu_t1, var_t1, h
 

@@ -341,13 +341,19 @@ def train(args):
             logvar_z = logvar_z.reshape(n, l, *logvar_z.shape[1:])
             var_z = torch.diag_embed(torch.exp(logvar_z))
 
-            _, mu_z_t1_hat, var_z_t1_hat, _ = \
-                nets["dyn"](z_t=z[:, :-1], mu_t=mu_z[:, :-1], var_t=var_z[:, :-1], u=u[:, 1:])
+            _, mu_z_t1_hat, var_z_t1_hat, _ = nets["dyn"](
+                z_t=z[:, :-1].transpose(1,0), 
+                mu_t=mu_z[:, :-1].transpose(1,0), 
+                var_t=var_z[:, :-1].transpose(1,0), 
+                u=u[:, 1:].transpose(1,0)
+            )
+            mu_z_t1_hat = mu_z_t1_hat.transpose(1,0)
+            var_z_t1_hat = var_z_t1_hat.transpose(1,0)
 
             # Initial distribution 
             mu_z_i = torch.zeros(args.dim_z, requires_grad=False, device=device)
-            var_z_i = 20.00 * torch.eye(args.dim_z, requires_grad=False, device=device)
             mu_z_i = mu_z_i.repeat(n, 1, 1) # (n, l, dim_z)
+            var_z_i = 20.00 * torch.eye(args.dim_z, requires_grad=False, device=device)
             var_z_i = var_z_i.repeat(n, 1, 1, 1) # (n, l, dim_z, dim_z)
 
             mu_z_hat = torch.cat((mu_z_i, mu_z_t1_hat), 1)
