@@ -39,7 +39,6 @@ def visual_haptic_2D_osc():
 
     n = n_mag
     ll = 16
-    ii = 0
 
     data = {
         "img": np.zeros((n, ll, 64, 64, 3), dtype=np.uint8), 
@@ -49,7 +48,7 @@ def visual_haptic_2D_osc():
         "config": config
     }
     
-    for _, m in enumerate(mag_list):
+    for ii, m in enumerate(mag_list):
         env.reset()
         for jj in range(ll): 
             u_x = 0.30 * m
@@ -59,7 +58,6 @@ def visual_haptic_2D_osc():
             data["ft"][ii, jj] = obs["ft"]
             data["arm"][ii, jj] = obs["arm"]
             data["action"][ii, jj] = np.array([u_x, u_y])
-        ii += 1
 
     return data
 
@@ -83,7 +81,6 @@ def visual_haptic_2D():
     
     n = n_init * n_mag
     ll = 10
-    ii = 0
 
     data = {
         "img": np.zeros((n, ll, 64, 64, 3), dtype=np.uint8), 
@@ -93,8 +90,8 @@ def visual_haptic_2D():
         "config": config
     }
     
-    for _, h in enumerate(init_pos_list):
-        for _, m in enumerate(mag_list):
+    for ii, h in enumerate(init_pos_list):
+        for m in mag_list:
             env.reset()
             for _ in range(5):
                 env.step(action=np.array([0, h]))
@@ -105,7 +102,6 @@ def visual_haptic_2D():
                 data["ft"][ii, jj] = obs["ft"]
                 data["arm"][ii, jj] = obs["arm"]
                 data["action"][ii, jj] = u
-            ii += 1
 
     return data
 

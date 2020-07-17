@@ -176,7 +176,8 @@ class LinearMixSSM(nn.Module):
         net_type: Use the LSTM or GRU variation
     """
     def __init__(self, dim_z, dim_u, hidden_size=128, 
-                 K=1, layers=1, bidirectional=False, net_type="lstm"):
+                 K=1, layers=1, bidirectional=False, 
+                 net_type="lstm"):
         super(LinearMixSSM, self).__init__()
         self.K = K
         self.dim_z = dim_z
@@ -185,6 +186,7 @@ class LinearMixSSM(nn.Module):
         self.B = nn.Parameter(torch.rand((K, dim_z, dim_u)))
         self.hidden_size = hidden_size
         self.bidirectional = bidirectional
+
         if net_type == "gru":
             self.rnn = nn.GRU(
                 input_size=dim_z + dim_u, 
@@ -206,7 +208,7 @@ class LinearMixSSM(nn.Module):
 
         self.softmax = nn.Softmax(dim=-1)
     
-    def forward(self, z_t, mu_t, var_t, u, h=None, single=False):
+    def forward(self, z_t, mu_t, var_t, u, h=None, single=False, return_matrices=False):
         """
         Forward call to produce the subsequent state.
 
@@ -218,6 +220,7 @@ class LinearMixSSM(nn.Module):
             h: hidden state of the LSTM (num_layers * num_directions, batch_size, hidden_size) or None. 
                If None, h is defaulted as 0-tensor
             single: If True then remove the need for a placeholder unsqueezed dimension for seq_len 
+            return_matrices: Return state space matrices
         Returns:
             z_t1: next sampled stats (seq_len, batch_size, dim_z)
             mu_t1: next state input mean (seq_len, batch_size, dim_z)
@@ -277,7 +280,11 @@ class LinearMixSSM(nn.Module):
             A_t = A_t[0]
             B_t = B_t[0]
 
-        return z_t1, mu_t1, var_t1, h, A_t, B_t
+        if return_matrices:
+            return z_t1, mu_t1, var_t1, h, A_t, B_t
+
+        return z_t1, mu_t1, var_t1, h
+
 
 
 class LinearSSM(nn.Module):

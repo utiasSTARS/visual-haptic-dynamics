@@ -341,7 +341,7 @@ def train(args):
             logvar_z = logvar_z.reshape(n, l, *logvar_z.shape[1:])
             var_z = torch.diag_embed(torch.exp(logvar_z))
 
-            _, mu_z_t1_hat, var_z_t1_hat, _, _, _ = nets["dyn"](
+            _, mu_z_t1_hat, var_z_t1_hat, _ = nets["dyn"](
                 z_t=z[:, :-1].transpose(1,0), 
                 mu_t=mu_z[:, :-1].transpose(1,0), 
                 var_t=var_z[:, :-1].transpose(1,0), 

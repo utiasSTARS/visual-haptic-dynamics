@@ -47,7 +47,8 @@ class LinearMix(ModelWrapperMPC):
                     var_t=var_0, 
                     u=u[ll],
                     h=h_0,
-                    single=True
+                    single=True,
+                    return_matrices=True
                 )
             
             z_hat[ll] = z_t1_hat
