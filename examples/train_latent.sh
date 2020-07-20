@@ -1,7 +1,8 @@
-device="cuda:1"
+device="cuda:0"
 
 # dataset="/home/olimoyo/visual-haptic-dynamics/experiments/data/datasets/visual_haptic_1D_B1F515581A0A478A92AF1C58D4345408.pkl"
-dataset="/home/olimoyo/visual-haptic-dynamics/experiments/data/datasets/visual_haptic_1D_bigger_action_magnitudes_DA3D5A6E36D54F52AC1496D1B46CF555.pkl"
+# dataset="/home/olimoyo/visual-haptic-dynamics/experiments/data/datasets/visual_haptic_1D_bigger_action_magnitudes_DA3D5A6E36D54F52AC1496D1B46CF555.pkl"
+dataset="/home/olimoyo/visual-haptic-dynamics/experiments/data/datasets/visual_haptic_2D_9985E1798153438E880A8AD60B9146FE.pkl"
 storage_base_path="/home/olimoyo/visual-haptic-dynamics/saved_models/"
 
 n_batches=(32)
@@ -15,7 +16,7 @@ dyn_nets=('linearmix')
 n_epochs=(4096)
 opt=('adam')
 opt_vae_base_epochs=(1024)
-debug=('False')
+debug=('True')
 nl=('relu')
 traj_len=(7)
 frame_stack=(1)
@@ -23,12 +24,13 @@ val_split=(0)
 lam_rec=(0.95)
 lam_kl=(0.80)
 n_checkpoint_epoch=(64)
-task="push64_test4"
+task="push64"
 use_img_enc="True"
-use_haptic_enc="False"
-use_arm_enc="False"
+use_haptic_enc="True"
+use_arm_enc="True"
 use_haptic_dec="False"
 use_arm_dec="False"
+tcn_channels="128,64,32,8"
 
 for n in {1..1}; do
     for dyn_net in ${dyn_nets[@]}; do
@@ -51,6 +53,7 @@ for n in {1..1}; do
                                                                 --dim_u 2 \
                                                                 --dim_z 16 \
                                                                 --dim_x "1,64,64" \
+                                                                --tcn_channels $tcn_channels \
                                                                 --n_worker 8 \
                                                                 --use_binary_ce "False" \
                                                                 --n_epoch $n_epoch \

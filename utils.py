@@ -284,7 +284,7 @@ def load_vh_models(path, args, mode='eval', device='cuda:0'):
     if args.use_haptic_enc:
         haptic_enc = TCN(
             input_size=6,
-            num_channels=[256, 128, 64, 32, args.dim_z_haptic]
+            num_channels=list(args.tcn_channels)
         ).to(device=device)
         models["haptic_enc"] = haptic_enc
         z_dim_in += args.dim_z_haptic
@@ -292,7 +292,7 @@ def load_vh_models(path, args, mode='eval', device='cuda:0'):
     if args.use_arm_enc:
         arm_enc = TCN(
             input_size=6,
-            num_channels=[256, 128, 64, 32, args.dim_z_arm]
+            num_channels=list(args.tcn_channels)
         ).to(device=device)
         models["arm_enc"] = arm_enc
         z_dim_in += args.dim_z_arm
