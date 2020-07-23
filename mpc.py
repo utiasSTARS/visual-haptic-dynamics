@@ -273,11 +273,12 @@ class CEM(MPC):
                     dim=1, 
                     largest=False
                 )
-                
+
                 # Update mean and std
                 for ii in range(self.H):
                     u_mu[ii] = u_mu[ii, top_k_idx[ii]].mean(dim=0)
-                    u_std[ii] = u_std[ii, top_k_idx[ii]].mean(dim=0)
+                    u_std[ii] = u_std[ii, top_k_idx[ii]].std(dim=0)
+                
         
             
 class Grad(MPC):
