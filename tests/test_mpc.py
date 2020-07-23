@@ -1,7 +1,7 @@
 import os, sys
 os.sys.path.insert(0, "..")
 
-from mpc import CVXLinear, LinearMixWrapper
+from mpc import CVXLinear, Grad, CEM, LinearMixWrapper
 from models import LinearMixSSM
 import numpy as np
 import torch
@@ -19,7 +19,7 @@ dyn_wrapped = LinearMixWrapper(
     dyn_model=dyn
 )
 
-mpc = CVXLinear(
+mpc = CEM(
     planning_horizon=12,
     opt_iters=10,
     model=dyn_wrapped,

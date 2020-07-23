@@ -286,7 +286,6 @@ class LinearMixSSM(nn.Module):
         return z_t1, mu_t1, var_t1, h
 
 
-
 class LinearSSM(nn.Module):
     """
     This class defines the GRU-based or LSTM-based rank-1 approximation 

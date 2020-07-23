@@ -22,22 +22,22 @@ class LinearMixWrapper():
             z_0: Initial state sample (batch_size, dim_z)
             mu_0: Initial state mean (batch_size, dim_z)
             var_0: Initial distribution variance (batch_size, dim_z, dim_z)
-            a: u_0 or controls (pred_len, batch_size, dim_a)
+            u: Controls (pred_len, batch_size, dim_u)
         Returns:
-            z_hat: Predicted future states (pred_len, batch_size, dim_z)
+            mu_hat: Predicted future states (pred_len, batch_size, dim_z)
             info: Any extra information needed {
                 A: Locally linear transition matrices (pred_len, batch_size, dim_z, dim_z)
-                B: Locally linear control matrices (pred_len, batch_size, dim_z, dim_a)
+                B: Locally linear control matrices (pred_len, batch_size, dim_z, dim_u)
             }
         """
         pred_len, batch_size = u.shape[0], u.shape[1]
-        dim_z, dim_a = z_0.shape[-1], u.shape[-1]
+        dim_z, dim_u = z_0.shape[-1], u.shape[-1]
 
         z_hat = torch.zeros((pred_len, batch_size, dim_z)).float().to(device=self.device)
         mu_hat = torch.zeros((pred_len, batch_size, dim_z)).float().to(device=self.device)
         var_hat = torch.zeros((pred_len, batch_size, dim_z, dim_z)).float().to(device=self.device)
         A = torch.zeros((pred_len, batch_size, dim_z, dim_z)).float().to(device=self.device)
-        B = torch.zeros((pred_len, batch_size, dim_z, dim_a)).float().to(device=self.device)
+        B = torch.zeros((pred_len, batch_size, dim_z, dim_u)).float().to(device=self.device)
 
         h_0 = None
         for ll in range(pred_len):
@@ -90,7 +90,7 @@ class MPC():
 class CVXLinear(MPC):
     """
     This class solves the locally linear MPC problem using off-the-shelf
-    CVXOPT optimizers.
+    cvxpy optimizers.
     """
     def __init__(
         self, 
@@ -154,6 +154,16 @@ class CVXLinear(MPC):
         self.prob = cp.Problem(cp.Minimize(cost), constraints)
 
     def solve(self, z_0, mu_0, var_0, z_g, u_0=None):
+        """
+        Args: 
+            z_0: the initial sampled state (torch.tensor)
+            mu_0: the initial mean of the state (torch.tensor)
+            var_0: the initial variance of the state (torch.tensor)
+            z_g: the goal state (torch.tensor)
+            u_0: the initial guess for the controls (torch.tensor)
+        Returns:
+            u_0: the final solution (torch.tensor)
+        """
         with torch.no_grad():
             if u_0 == None:
                 u_0 = torch.zeros(
@@ -162,10 +172,6 @@ class CVXLinear(MPC):
                 )
 
             for _ in range(self.opt_iters):
-                
-                if type(u_0) is np.ndarray:
-                    u_0 = torch.tensor(u_0)
-                u_0 = u_0.clone().float().to(device=self.device)
 
                 z_hat, info = self.model.rollout(
                     z_0=z_0, 
@@ -186,6 +192,9 @@ class CVXLinear(MPC):
                 # Update operational point u_0
                 u_0 = self.u.value
                 u_0 = np.expand_dims(u_0, axis=1)
+                u_0 = torch.tensor(u_0)
+
+            return u_0
 
 class CEM(MPC):
     """
@@ -198,8 +207,10 @@ class CEM(MPC):
         opt_iters, 
         model, 
         device="cpu", 
+        nu=2,
+        nz=16,
         samples=128, 
-        top_samples=16):
+        top_samples=32):
 
         super(CEM, self).__init__(
             planning_horizon=planning_horizon,
@@ -209,13 +220,66 @@ class CEM(MPC):
         )
         self.samples = samples
         self.top_samples = top_samples
+        self.nu = nu
+        self.nz = nz
 
-    def cost(self, s_hat, info):
-        pass
+    def solve(self, z_0, mu_0, var_0, z_g):
+        """
+        Args: 
+            z_0: the initial sampled state (torch.tensor)
+            mu_0: the initial mean of the state (torch.tensor)
+            var_0: the initial variance of the state (torch.tensor)
+            z_g: the goal state (torch.tensor)
+        Returns:
+            u_0: the final solution (torch.tensor)
+        """
+        with torch.no_grad():
+            if self.samples > 1:
+                z_0 = z_0.repeat(self.samples, 1)
+                mu_0 = mu_0.repeat(self.samples, 1)
+                var_0 = var_0.repeat(self.samples, 1, 1)
 
-    def solve(self, z_0, z_g, u_0=None):
-        pass
+            # Initialize factorized belief over action sequences q(u_t:t+H) ~ N(0, I)
+            u_mu = torch.zeros(
+                self.H, 
+                self.nu, 
+                device=self.device
+            )
+            u_mu = u_mu.unsqueeze(1).repeat(1, self.samples, 1)
 
+            u_std = torch.ones(
+                self.H, 
+                self.nu, 
+                device=self.device
+            )
+            u_std = u_std.unsqueeze(1).repeat(1, self.samples, 1)
+
+            for _ in range(self.opt_iters):
+                eps = torch.randn_like(u_std)
+                u = u_mu + eps * u_std
+
+                z_hat, info = self.model.rollout(
+                    z_0=z_0, 
+                    mu_0=mu_0, 
+                    var_0=var_0, 
+                    u=u
+                )          
+
+                cost = (z_g - z_hat).sum(-1)
+
+                # Find top k lowest costs
+                _, top_k_idx = cost.topk(
+                    self.top_samples, 
+                    dim=1, 
+                    largest=False
+                )
+                
+                # Update mean and std
+                for ii in range(self.H):
+                    u_mu[ii] = u_mu[ii, top_k_idx[ii]].mean(dim=0)
+                    u_std[ii] = u_std[ii, top_k_idx[ii]].mean(dim=0)
+        
+            
 class Grad(MPC):
     """
     This class solves the MPC problem based on SGD. Code inspired by: 
@@ -227,7 +291,9 @@ class Grad(MPC):
         opt_iters, 
         model, 
         device="cpu", 
-        grad_clip=True):
+        grad_clip=True,
+        nu=2,
+        nz=16):
 
         super(Grad, self).__init__(
             planning_horizon=planning_horizon,
@@ -236,38 +302,41 @@ class Grad(MPC):
             device=device
         )
         self.grad_clip = grad_clip
+        self.nu = nu
+        self.nz = nz
         
     def solve(self, z_0, mu_0, var_0, z_g, u_0=None):
         """
         Args: 
-            z_0: the initial state
-            u_0: the initial guess for the solver (np.array or torch.tensor)
-            z_g: the goal state
+            z_0: the initial sampled state (torch.tensor)
+            mu_0: the initial mean of the state (torch.tensor)
+            var_0: the initial variance of the state (torch.tensor)
+            z_g: the goal state (torch.tensor)
+            u_0: the initial guess for the controls (torch.tensor)
         Returns:
             u_0: the final solution (torch.tensor)
         """
         if u_0 == None:
-            u_0 = torch.zeros((self.H, 1, self.na))
-        else:
-            if type(u_0) is np.ndarray:
-                u_0 = torch.tensor(u_0)
-
-        u_0 = u_0.clone().detach().to(device=self.device)
+            u_0 = torch.zeros(
+                (self.H, 1, self.nu), 
+                device=self.device
+            )
+        u_0 = u_0.clone().detach()
         u_0.requires_grad = True
 
         #TODO: Perturb guess randomly or perturb and run multiple solves and take best result?
 
         opt = optim.SGD([u_0], lr=0.1, momentum=0)
 
-        #XXX: Every opt_iter is like an iteration of iterative MPC?
         for _ in range(self.opt_iters):
             z_hat, info = self.model.rollout(
                 z_0=z_0, 
                 mu_0=mu_0, 
                 var_0=var_0, 
-                a=u_0
+                u=u_0
             )            
-            cost = z_g - z_hat
+            cost = torch.sum(z_g - z_hat)
+
             #TODO: Grad clip?
             opt.zero_grad()
             (-cost).backward()
