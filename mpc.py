@@ -3,6 +3,9 @@ MPC based on stochastic gradient descent.
 """
 import torch
 from torch import optim
+import numpy as np
+import cvxpy as cp
+import scipy.sparse as sparse
 
 class LinearMixWrapper():
     def __init__(self, dyn_model, device="cpu"):
@@ -13,14 +16,13 @@ class LinearMixWrapper():
         self.device = device
         self.dyn_model.to(device=device)
 
-    def rollout(self, s_0, a):
+    def rollout(self, z_0, mu_0, var_0, u):
         """
         Args:
-            s_0: Initial state (z_0, mu_0, var_0)
-                z_0: Initial state sample (batch_size, dim_z)
-                mu_0: Initial state mean (batch_size, dim_z)
-                var_0: Initial distribution variance (batch_size, dim_z, dim_z)
-            a: actions or controls (pred_len, batch_size, dim_a)
+            z_0: Initial state sample (batch_size, dim_z)
+            mu_0: Initial state mean (batch_size, dim_z)
+            var_0: Initial distribution variance (batch_size, dim_z, dim_z)
+            a: u_0 or controls (pred_len, batch_size, dim_a)
         Returns:
             z_hat: Predicted future states (pred_len, batch_size, dim_z)
             info: Any extra information needed {
@@ -28,8 +30,8 @@ class LinearMixWrapper():
                 B: Locally linear control matrices (pred_len, batch_size, dim_z, dim_a)
             }
         """
-        pred_len, batch_size = a.shape[0], a.shape[1]
-        dim_z, dim_a = z0.shape[-1], a.shape[-1]
+        pred_len, batch_size = u.shape[0], u.shape[1]
+        dim_z, dim_a = z_0.shape[-1], u.shape[-1]
 
         z_hat = torch.zeros((pred_len, batch_size, dim_z)).float().to(device=self.device)
         mu_hat = torch.zeros((pred_len, batch_size, dim_z)).float().to(device=self.device)
@@ -38,7 +40,7 @@ class LinearMixWrapper():
         B = torch.zeros((pred_len, batch_size, dim_z, dim_a)).float().to(device=self.device)
 
         h_0 = None
-        for ll in pred_len:
+        for ll in range(pred_len):
             z_t1_hat, mu_z_t1_hat, var_z_t1_hat, h_t1, A_t1, B_t1 = \
                 self.dyn_model(
                     z_t=z_0, 
@@ -49,7 +51,7 @@ class LinearMixWrapper():
                     single=True,
                     return_matrices=True
                 )
-            
+
             z_hat[ll] = z_t1_hat
             mu_hat[ll] = mu_z_t1_hat
             var_hat[ll] = var_z_t1_hat
@@ -62,15 +64,16 @@ class LinearMixWrapper():
             "B": B
         }
 
-        return z_hat, info
+        #XXX: Track based on mean for now
+        return mu_hat, info
 
 class MPC():
     """
     Generic MPC solver based on PyTorch transition or dynamics.
     """
-    def __init__(self, planning_horizon, opt_iters, model, device):
+    def __init__(self, planning_horizon, opt_iters, model, device="cpu"):
         self.set_model(model)
-        self.device = device
+        self.to(device)
         self.H = planning_horizon
         self.opt_iters = opt_iters
 
@@ -81,7 +84,7 @@ class MPC():
     def set_model(self, model):
         self.model = model
 
-    def solve(self, initial_state, initial_guess=None):
+    def solve(self, z_0, mu_0, var_0, z_g, u_0=None):
         raise NotImplementedError()
 
 class CVXLinear(MPC):
@@ -94,8 +97,15 @@ class CVXLinear(MPC):
         planning_horizon, 
         opt_iters, 
         model, 
-        goal, 
-        device):
+        device="cpu",
+        nz=16,
+        zmin=-np.inf,
+        zmax=np.inf,
+        nu=2,
+        umin=-1.0,
+        umax=1.0,
+        Q=1.0,
+        R=1.0):
 
         super(CVXLinear, self).__init__(
             planning_horizon=planning_horizon,
@@ -103,16 +113,79 @@ class CVXLinear(MPC):
             model=model,
             device=device
         )
-        self.set_goal(goal)
 
-    def set_goal(self, goal):
-        self.goal = goal
+        self.Q = Q * sparse.eye(nz)
+        self.R = R * sparse.eye(nu)
+        self.nz = nz
+        self.zmin = zmin
+        self.zmax = zmax
+        self.nu = nu
+        self.umin = umin
+        self.umax = umax
+        self.setup_cvx_problem()
 
-    def cost(self, s_hat, info):
-        pass
+    def setup_cvx_problem(self):
+        # Define parameters
+        self.z_i = cp.Parameter(self.nz)
+        self.z_g = cp.Parameter(self.nz)
 
-    def solve(self, initial_state, initial_guess=None):
-        pass
+        self.A = [None] * self.H
+        self.B = [None] * self.H
+
+        for h in range(self.H):
+            self.A[h] = cp.Parameter((self.nz, self.nz))
+            self.B[h] = cp.Parameter((self.nz, self.nu))
+
+        # Define action and observation vectors (variables)
+        self.u = cp.Variable((self.H, self.nu))
+        self.z = cp.Variable((self.H + 1, self.nz))
+
+        cost = 0
+        constraints = [self.z[0] == self.z_i]
+
+        for k in range(self.H):
+            cost += \
+                cp.quad_form(self.z[k + 1] - self.z_g, self.Q) + \
+                cp.quad_form(self.u[k], self.R)
+            constraints += [self.z[k + 1] == self.A[k] @ self.z[k] + self.B[k] @ self.u[k]]
+            constraints += [self.zmin <= self.z[k], self.z[k] <= self.zmax]
+            constraints += [self.umin <= self.u[k], self.u[k] <= self.umax]
+
+        self.prob = cp.Problem(cp.Minimize(cost), constraints)
+
+    def solve(self, z_0, mu_0, var_0, z_g, u_0=None):
+        with torch.no_grad():
+            if u_0 == None:
+                u_0 = torch.zeros(
+                    (self.H, 1, self.nu), 
+                    device=self.device
+                )
+
+            for _ in range(self.opt_iters):
+                
+                if type(u_0) is np.ndarray:
+                    u_0 = torch.tensor(u_0)
+                u_0 = u_0.clone().float().to(device=self.device)
+
+                z_hat, info = self.model.rollout(
+                    z_0=z_0, 
+                    mu_0=mu_0, 
+                    var_0=var_0, 
+                    u=u_0
+                )
+
+                for h in range(self.H):
+                    self.A[h].value = info["A"][h, 0].cpu().numpy()
+                    self.B[h].value = info["B"][h, 0].cpu().numpy()
+         
+                self.z_i.value = z_0.squeeze(0).cpu().numpy()
+                self.z_g.value = z_g.cpu().numpy()
+ 
+                self.prob.solve(warm_start=True)
+
+                # Update operational point u_0
+                u_0 = self.u.value
+                u_0 = np.expand_dims(u_0, axis=1)
 
 class CEM(MPC):
     """
@@ -124,8 +197,7 @@ class CEM(MPC):
         planning_horizon, 
         opt_iters, 
         model, 
-        goal, 
-        device, 
+        device="cpu", 
         samples=128, 
         top_samples=16):
 
@@ -137,15 +209,11 @@ class CEM(MPC):
         )
         self.samples = samples
         self.top_samples = top_samples
-        self.set_goal(goal)
-
-    def set_goal(self, goal):
-        self.goal = goal
 
     def cost(self, s_hat, info):
         pass
 
-    def solve(self, initial_state, initial_guess=None):
+    def solve(self, z_0, z_g, u_0=None):
         pass
 
 class Grad(MPC):
@@ -158,8 +226,7 @@ class Grad(MPC):
         planning_horizon, 
         opt_iters, 
         model, 
-        goal, 
-        device, 
+        device="cpu", 
         grad_clip=True):
 
         super(Grad, self).__init__(
@@ -169,45 +236,41 @@ class Grad(MPC):
             device=device
         )
         self.grad_clip = grad_clip
-        self.set_goal(goal)
-
-    def set_goal(self, goal):
-        self.goal = goal
-
-    def cost(self, s_hat, info):
-        return self.goal - s_hat
         
-    def solve(self, initial_state, initial_guess=None):
+    def solve(self, z_0, mu_0, var_0, z_g, u_0=None):
         """
         Args: 
-            initial_guess: the initial guess for the solver (np.array or torch.tensor)
+            z_0: the initial state
+            u_0: the initial guess for the solver (np.array or torch.tensor)
+            z_g: the goal state
         Returns:
-            actions: the final solution (torch.tensor)
+            u_0: the final solution (torch.tensor)
         """
-        if initial_guess == None:
-            actions = torch.zeros(
-                (self.H, self.a_dim), 
-                device=self.device, 
-                requires_grad=True
-            )
+        if u_0 == None:
+            u_0 = torch.zeros((self.H, 1, self.na))
         else:
-            assert isinstance(initial_guess, (np.ndarray, torch.Tensor))
-            if type(initial_guess) is np.ndarray:
-                initial_guess = torch.tensor(initial_guess)
-            actions = initial_guess.clone().detach().to(device=self.device)
-            actions.requires_grad = True
+            if type(u_0) is np.ndarray:
+                u_0 = torch.tensor(u_0)
+
+        u_0 = u_0.clone().detach().to(device=self.device)
+        u_0.requires_grad = True
 
         #TODO: Perturb guess randomly or perturb and run multiple solves and take best result?
 
-        opt = optim.SGD([actions], lr=0.1, momentum=0)
+        opt = optim.SGD([u_0], lr=0.1, momentum=0)
 
         #XXX: Every opt_iter is like an iteration of iterative MPC?
         for _ in range(self.opt_iters):
-            s_hat, info = self.model.rollout(initial_state=initial_state, actions=actions)
-            cost = self.cost(s_hat, info)
+            z_hat, info = self.model.rollout(
+                z_0=z_0, 
+                mu_0=mu_0, 
+                var_0=var_0, 
+                a=u_0
+            )            
+            cost = z_g - z_hat
             #TODO: Grad clip?
             opt.zero_grad()
             (-cost).backward()
             opt.step()
 
-        return actions.detach()
+        return u_0.detach()

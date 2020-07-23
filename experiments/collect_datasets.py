@@ -45,6 +45,7 @@ def visual_haptic_2D_osc():
         "ft": np.zeros((n, ll, n_steps, 6)), 
         "arm": np.zeros((n, ll, n_steps, 6)),
         "action": np.zeros((n, ll, 2)), 
+        "gt_plate_pos": np.zeros((n, ll, 3))
         "config": config
     }
     
@@ -58,6 +59,7 @@ def visual_haptic_2D_osc():
             data["ft"][ii, jj] = obs["ft"]
             data["arm"][ii, jj] = obs["arm"]
             data["action"][ii, jj] = np.array([u_x, u_y])
+            data["gt_plate_pos"][ii, jj] = info["achieved_goal"] 
 
     return data
 
@@ -87,6 +89,7 @@ def visual_haptic_2D():
         "ft": np.zeros((n, ll, n_steps, 6)), 
         "arm": np.zeros((n, ll, n_steps, 6)),
         "action": np.zeros((n, ll, 2)), 
+        "gt_plate_pos": np.zeros((n, ll, 3))
         "config": config
     }
     
@@ -102,6 +105,7 @@ def visual_haptic_2D():
                 data["ft"][ii, jj] = obs["ft"]
                 data["arm"][ii, jj] = obs["arm"]
                 data["action"][ii, jj] = u
+                data["gt_plate_pos"][ii, jj] = info["achieved_goal"] 
 
     return data
 
@@ -125,6 +129,7 @@ def visual_haptic_1D():
         "ft": np.zeros((n, ll, n_steps, 6)), 
         "arm": np.zeros((n, ll, n_steps, 6)),
         "action": np.zeros((n, ll, 2)), 
+        "gt_plate_pos": np.zeros((n, ll, 3))
         "config": config
     }
 
@@ -137,6 +142,7 @@ def visual_haptic_1D():
             data["ft"][ii, jj] = obs["ft"]
             data["arm"][ii, jj] = obs["arm"]
             data["action"][ii, jj] = u
+            data["gt_plate_pos"][ii, jj] = info["achieved_goal"] 
 
     return data
 
