@@ -26,11 +26,12 @@ lam_kl=(0.80)
 n_checkpoint_epoch=(64)
 task="push64"
 use_img_enc="True"
-use_haptic_enc="True"
-use_arm_enc="True"
+use_haptic_enc="False"
+use_arm_enc="False"
+use_joint_enc="True"
 use_haptic_dec="False"
 use_arm_dec="False"
-tcn_channels="128,64,32,8"
+tcn_channels="128,64,32"
 
 for n in {1..1}; do
     for dyn_net in ${dyn_nets[@]}; do
@@ -49,6 +50,7 @@ for n in {1..1}; do
                                                                 --use_img_enc $use_img_enc \
                                                                 --use_haptic_enc $use_haptic_enc \
                                                                 --use_arm_enc $use_arm_enc \
+                                                                --use_joint_enc $use_joint_enc \
                                                                 --K $K \
                                                                 --dim_u 2 \
                                                                 --dim_z 16 \

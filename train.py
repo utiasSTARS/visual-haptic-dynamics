@@ -34,6 +34,8 @@ def train(args):
     def _init_fn(worker_id):
         np.random.seed(int(args.random_seed))
 
+    if args.use_arm_enc or args.use_haptic_enc or args.use_joint_enc:
+        assert (args.use_arm_enc or args.use_haptic_enc) != args.use_joint_enc
     assert 0 <= args.opt_vae_epochs <= args.opt_vae_base_epochs <= args.n_epoch
     device = torch.device(args.device)
     torch.backends.cudnn.deterministic = args.cudnn_deterministic
@@ -84,7 +86,8 @@ def train(args):
     if args.use_haptic_enc:
         haptic_enc = TCN(
             input_size=6,
-            num_channels=list(args.tcn_channels)
+            num_channels=list(args.tcn_channels) + 
+                [args.dim_z_haptic]
         ).to(device=device)
         nets["haptic_enc"] = haptic_enc
         z_dim_in += args.dim_z_haptic
@@ -92,10 +95,20 @@ def train(args):
     if args.use_arm_enc:
         arm_enc = TCN(
             input_size=6,
-            num_channels=list(args.tcn_channels)
+            num_channels=list(args.tcn_channels) + 
+                [args.dim_z_arm]
         ).to(device=device)
         nets["arm_enc"] = arm_enc
         z_dim_in += args.dim_z_arm
+    
+    if args.use_joint_enc:
+        joint_enc = TCN(
+            input_size=12,
+            num_channels=list(args.tcn_channels) + 
+                [args.dim_z_haptic + args.dim_z_arm] 
+        ).to(device=device)
+        nets["joint_enc"] = joint_enc
+        z_dim_in += args.dim_z_arm + args.dim_z_haptic
 
     if args.use_img_dec:
         img_dec = FullyConvDecoderVAE(
@@ -316,10 +329,12 @@ def train(args):
                 z_all.append(nets["haptic_enc"](x['haptic'])[:, -1])
             if args.use_arm_enc:
                 z_all.append(nets["arm_enc"](x['arm'])[:, -1])
+            if args.use_joint_enc:
+                joint_inp = torch.cat((x['haptic'], x['arm']), dim=-1)
+                z_all.append(nets["joint_enc"](joint_inp)[:, -1])
 
             # Concatenate modalities
             z_cat = torch.cat(z_all, dim=1)
-
             z, mu_z, logvar_z = nets["mix"](z_cat)
 
             # Decode
