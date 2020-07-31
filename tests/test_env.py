@@ -43,16 +43,28 @@ def test_gym_reacher():
         # print("Obs dim: ", env.observation_space)
 
 def test_gym_pusher():
-    env = gym.make('ThingPusher-v0', is_render=False)
+    env_1 = gym.make('ThingPusher-v0', is_render=False, frame_skip=2)
+    env_2 = gym.make('ThingPusher-v0', is_render=False, frame_skip=2)
+    obs_1 = env_1.reset()
+    obs_2 = env_2.reset()
+    
     for ii in range(10000000):
         p = np.random.uniform(-1,1,2)
-        obs, _, _, _ = env.step(np.array([p[0], p[1]]))
+        obs_1, _, _, _ = env_1.step(np.array([p[0], p[1]]))
+        obs_2, _, _, _ = env_2.step(np.array([p[0], p[1]]))
+
         if ii % 150 == 0:
             tic = time.time()
-            env.reset()
+            env_1.reset()
+            env_2.reset()
             reset_time = time.time() - tic
             print(f"Resetting with {ii} time steps, time {reset_time}")
-        print("Obs received: ", obs)
+        print("Obs received: ", 
+            np.min(obs_1["ft"].astype(np.float32)), 
+            np.max(obs_1["ft"].astype(np.float32)),
+            np.min(obs_2["ft"].astype(np.float32)), 
+            np.max(obs_2["ft"].astype(np.float32))
+        )
         # print("Action dim: ", env.action_space)
         # print("Obs dim: ", env.observation_space)
 
