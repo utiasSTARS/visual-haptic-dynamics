@@ -52,7 +52,7 @@ def test_gym_pusher():
             env.reset()
             reset_time = time.time() - tic
             print(f"Resetting with {ii} time steps, time {reset_time}")
-        # print("Obs received: ", obs.shape)
+        print("Obs received: ", obs)
         # print("Action dim: ", env.action_space)
         # print("Obs dim: ", env.observation_space)
 
@@ -84,6 +84,6 @@ def test_gym_visual_pusher():
 
 if __name__=="__main__":
     # test_gym_reacher()
-    # test_gym_pusher()
-    test_gym_visual_reacher()
+    test_gym_pusher()
+    # test_gym_visual_reacher()
     # test_gym_visual_pusher()

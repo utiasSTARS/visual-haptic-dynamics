@@ -304,13 +304,16 @@ def train(args):
             x['img'] = data['img'].float().to(device=device) # (n, l, c, h, w)
             x['haptic'] = data['ft'].float().to(device=device) # (n, l, f, 6)
             x['arm'] = data['arm'].float().to(device=device) # (n, l, f, 6)
-
+            
             n = x['img'].shape[0]
 
             x['img'] = frame_stack(x['img'], frames=args.frame_stacks)
+            x['haptic'] = x['haptic'][:, args.frame_stacks:]
+            x['arm'] = x['arm'][:, args.frame_stacks:]
 
-            start_idx = np.random.randint(x['img'].shape[1] - args.traj_len + 1) # sample random range of traj_len
+            start_idx = np.random.randint(x['img'].shape[1] + 1 - args.traj_len) # sample random range of traj_len
             end_idx = start_idx + args.traj_len
+
             for k in x:
                 x[k] = x[k][:, start_idx:end_idx]
 
