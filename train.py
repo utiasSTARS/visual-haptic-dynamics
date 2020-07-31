@@ -34,6 +34,8 @@ def train(args):
     def _init_fn(worker_id):
         np.random.seed(int(args.random_seed))
 
+    if args.use_arm_enc or args.use_haptic_enc or args.use_joint_enc:
+        assert (args.use_arm_enc or args.use_haptic_enc) != args.use_joint_enc
     assert 0 <= args.opt_vae_epochs <= args.opt_vae_base_epochs <= args.n_epoch
     device = torch.device(args.device)
     torch.backends.cudnn.deterministic = args.cudnn_deterministic
@@ -62,7 +64,6 @@ def train(args):
         nl = nn.Softplus()
     else:
         raise NotImplementedError()
-    output_nl = None if args.use_binary_ce else nn.Sigmoid()
 
     nets = {}
     z_dim_in = 0
@@ -85,7 +86,8 @@ def train(args):
     if args.use_haptic_enc:
         haptic_enc = TCN(
             input_size=6,
-            num_channels=[256, 128, 64, 32, args.dim_z_haptic]
+            num_channels=list(args.tcn_channels) + 
+                [args.dim_z_haptic]
         ).to(device=device)
         nets["haptic_enc"] = haptic_enc
         z_dim_in += args.dim_z_haptic
@@ -93,10 +95,20 @@ def train(args):
     if args.use_arm_enc:
         arm_enc = TCN(
             input_size=6,
-            num_channels=[256, 128, 64, 32, args.dim_z_arm]
+            num_channels=list(args.tcn_channels) + 
+                [args.dim_z_arm]
         ).to(device=device)
         nets["arm_enc"] = arm_enc
         z_dim_in += args.dim_z_arm
+    
+    if args.use_joint_enc:
+        joint_enc = TCN(
+            input_size=12,
+            num_channels=list(args.tcn_channels) + 
+                [args.dim_z_haptic + args.dim_z_arm] 
+        ).to(device=device)
+        nets["joint_enc"] = joint_enc
+        z_dim_in += args.dim_z_arm + args.dim_z_haptic
 
     if args.use_img_dec:
         img_dec = FullyConvDecoderVAE(
@@ -106,7 +118,7 @@ def train(args):
             drop=args.use_dropout,
             nl=nl,
             img_dim=args.dim_x[1],
-            output_nl=output_nl
+            output_nl=None if args.use_binary_ce else nn.Sigmoid()
         ).to(device=device)
         nets["img_dec"] = img_dec
         rec_modalities.append("img")
@@ -295,8 +307,7 @@ def train(args):
 
             n = x['img'].shape[0]
 
-            for k in x:
-                x[k] = frame_stack(x[k], frames=args.frame_stacks)
+            x['img'] = frame_stack(x['img'], frames=args.frame_stacks)
 
             start_idx = np.random.randint(x['img'].shape[1] - args.traj_len + 1) # sample random range of traj_len
             end_idx = start_idx + args.traj_len
@@ -318,10 +329,12 @@ def train(args):
                 z_all.append(nets["haptic_enc"](x['haptic'])[:, -1])
             if args.use_arm_enc:
                 z_all.append(nets["arm_enc"](x['arm'])[:, -1])
+            if args.use_joint_enc:
+                joint_inp = torch.cat((x['haptic'], x['arm']), dim=-1)
+                z_all.append(nets["joint_enc"](joint_inp)[:, -1])
 
             # Concatenate modalities
             z_cat = torch.cat(z_all, dim=1)
-
             z, mu_z, logvar_z = nets["mix"](z_cat)
 
             # Decode
@@ -341,14 +354,27 @@ def train(args):
             logvar_z = logvar_z.reshape(n, l, *logvar_z.shape[1:])
             var_z = torch.diag_embed(torch.exp(logvar_z))
 
-            _, mu_z_t1_hat, var_z_t1_hat, _ = \
-                nets["dyn"](z_t=z[:, :-1], mu_t=mu_z[:, :-1], var_t=var_z[:, :-1], u=u[:, 1:])
+            _, mu_z_t1_hat, var_z_t1_hat, _ = nets["dyn"](
+                z_t=z[:, :-1].transpose(1,0), 
+                mu_t=mu_z[:, :-1].transpose(1,0), 
+                var_t=var_z[:, :-1].transpose(1,0), 
+                u=u[:, 1:].transpose(1,0)
+            )
+            mu_z_t1_hat = mu_z_t1_hat.transpose(1,0)
+            var_z_t1_hat = var_z_t1_hat.transpose(1,0)
 
             # Initial distribution 
-            mu_z_i = torch.zeros(args.dim_z, requires_grad=False, device=device)
-            var_z_i = 20.00 * torch.eye(args.dim_z, requires_grad=False, device=device)
-            mu_z_i = mu_z_i.repeat(n, 1, 1) # (n, l, dim_z)
-            var_z_i = var_z_i.repeat(n, 1, 1, 1) # (n, l, dim_z, dim_z)
+            mu_z_i = torch.zeros(
+                args.dim_z, 
+                requires_grad=False, 
+                device=device
+            ).repeat(n, 1, 1)
+
+            var_z_i = 20.00 * torch.eye(
+                args.dim_z, 
+                requires_grad=False, 
+                device=device
+            ).repeat(n, 1, 1, 1) 
 
             mu_z_hat = torch.cat((mu_z_i, mu_z_t1_hat), 1)
             var_z_hat = torch.cat((var_z_i, var_z_t1_hat), 1)

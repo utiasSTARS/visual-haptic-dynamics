@@ -281,21 +281,33 @@ def load_vh_models(path, args, mode='eval', device='cuda:0'):
         models["img_enc"] = img_enc
         z_dim_in += args.dim_z_img
 
+
     if args.use_haptic_enc:
         haptic_enc = TCN(
             input_size=6,
-            num_channels=[256, 128, 64, 32, args.dim_z_haptic]
+            num_channels=list(args.tcn_channels) + 
+                [args.dim_z_haptic]
         ).to(device=device)
-        models["haptic_enc"] = haptic_enc
+        nets["haptic_enc"] = haptic_enc
         z_dim_in += args.dim_z_haptic
 
     if args.use_arm_enc:
         arm_enc = TCN(
             input_size=6,
-            num_channels=[256, 128, 64, 32, args.dim_z_arm]
+            num_channels=list(args.tcn_channels) + 
+                [args.dim_z_arm]
         ).to(device=device)
-        models["arm_enc"] = arm_enc
+        nets["arm_enc"] = arm_enc
         z_dim_in += args.dim_z_arm
+    
+    if args.use_joint_enc:
+        joint_enc = TCN(
+            input_size=12,
+            num_channels=list(args.tcn_channels) + 
+                [args.dim_z_haptic + args.dim_z_arm] 
+        ).to(device=device)
+        nets["joint_enc"] = joint_enc
+        z_dim_in += args.dim_z_arm + args.dim_z_haptic
 
     mix = FCNEncoderVAE(
         dim_in=z_dim_in,

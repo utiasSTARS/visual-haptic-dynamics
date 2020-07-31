@@ -1,1 +1,0 @@
-python -u /scratch/ssd001/home/limoyool/visual-haptic-dynamics/tests/test_env.py

@@ -3,7 +3,7 @@ Compare consistency and speed between manual
 implementation and Torch distribituion package KL divergence.
 """
 import os, sys, time
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
+os.sys.path.insert(0, "..")
 
 import torch
 from losses import kl

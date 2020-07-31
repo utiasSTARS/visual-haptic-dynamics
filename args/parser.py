@@ -53,6 +53,7 @@ def parse_vh_training_args():
     parser.add_argument('--dim_z_haptic', type=int, default=8, help='Latent state dimension of haptic')
     parser.add_argument('--use_arm_enc', type=str2bool, default=True, help='Encode arm data')
     parser.add_argument('--use_arm_dec', type=str2bool, default=False, help='Decode arm data')
+    parser.add_argument('--use_joint_enc', type=str2bool, default=False, help='Encode haptic and arm data jointly')
     parser.add_argument('--dim_z_arm', type=int, default=8, help='Latent state dimension of arm')
     parser.add_argument('--dim_x', type=str2inttuple, default=(1, 64, 64), help='3-tuple image dimension (C, H, W)')
     parser.add_argument('--K', type=int, default=15, help='Number of mixture component for dynamic models')
@@ -63,7 +64,8 @@ def parse_vh_training_args():
     parser.add_argument('--dyn_net', choices=['linearmix', 'linearrank1', 'nonlinear'], default='linearmix', help='Network architecture for dynamics')     
     parser.add_argument('--non_linearity', choices=['relu', 'elu', 'softplus'], default='relu', help='Activation used for decoder neural network')
     parser.add_argument('--frame_stacks', type=int, default=1, help="Number of frames to stack")
-    
+    parser.add_argument('--tcn_channels', type=str2inttuple, default=(128, 64, 32), help='3-tuple image dimension (C, H, W)')
+
     # Training Settings
     parser.add_argument('--lr', type=float, default= 3e-4, help='Learning rate')
     parser.add_argument('--opt_vae_epochs', type=int, default=0, help='Number of epochs to train VAE only')
