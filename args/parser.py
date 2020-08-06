@@ -65,7 +65,7 @@ def parse_vh_training_args():
     parser.add_argument('--non_linearity', choices=['relu', 'elu', 'softplus'], default='relu', help='Activation used for decoder neural network')
     parser.add_argument('--frame_stacks', type=int, default=1, help="Number of frames to stack")
     parser.add_argument('--tcn_channels', type=str2inttuple, default=(128, 64, 32), help='3-tuple image dimension (C, H, W)')
-
+    parser.add_argument('--n_step_pred', type=int, default=1, help="Number of steps to predict during training")
     # Training Settings
     parser.add_argument('--lr', type=float, default= 3e-4, help='Learning rate')
     parser.add_argument('--opt_vae_epochs', type=int, default=0, help='Number of epochs to train VAE only')
