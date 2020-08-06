@@ -35,7 +35,8 @@ def train(args):
     def _init_fn(worker_id):
         np.random.seed(int(args.random_seed))
 
-    assert (args.use_arm_enc or args.use_haptic_enc) != args.use_joint_enc
+    if (args.use_arm_enc or args.use_haptic_enc or args.use_joint_enc):
+        assert (args.use_arm_enc or args.use_haptic_enc) != args.use_joint_enc
     assert 0 <= args.opt_vae_epochs <= args.opt_vae_base_epochs <= args.n_epoch
     device = torch.device(args.device)
     torch.backends.cudnn.deterministic = args.cudnn_deterministic
