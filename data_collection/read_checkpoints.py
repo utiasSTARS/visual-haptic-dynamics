@@ -26,7 +26,7 @@ curr_episode_obss = []
 curr_episode_acts = []
 curr_episode_rews = []
 
-for checkpoint in os.listdir(args.checkpoint_path):
+for checkpoint in sorted(os.listdir(args.checkpoint_path)):
     with gzip.open(os.path.join(args.checkpoint_path, checkpoint), "rb") as chkpt_file:
         chkpt_data = pickle.load(chkpt_file)
 
@@ -38,7 +38,7 @@ for checkpoint in os.listdir(args.checkpoint_path):
         if args.visualize:
             cv2.namedWindow('ThingVisualPusher Images - Episode: {}'.format(num_episodes), cv2.WINDOW_NORMAL)
             images = []
-            time.sleep(0.05)
+            time.sleep(0.01)
             cv2.imshow('ThingVisualPusher Images - Episode: {}'.format(num_episodes), obs[:-12].reshape((84, 84)))
             cv2.waitKey(1)
 
