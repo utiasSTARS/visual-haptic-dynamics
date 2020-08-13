@@ -5,10 +5,12 @@ It replaces the trained Q-scheduler with the U-scheduler for exploration data.
 
 import _pickle as pickle
 import argparse
+import cv2
 import gym
 import math
 import numpy as np
 import os
+import time
 
 import rl_sandbox.constants as c
 
@@ -28,7 +30,7 @@ class UScheduler:
         return np.random.randint(self._num_tasks, size=(1,)), None, [np.nan], None, None, None, None
 
 
-def generate_trajectories(agent, env, preprocess, num_trajectories, trajectory_length, save_path, render_h, render_w, n_steps):
+def generate_trajectories(agent, env, preprocess, num_trajectories, trajectory_length, save_path, render_h, render_w, n_steps, visualize):
     data = {
         "img": np.zeros((num_trajectories, trajectory_length + 1, render_h, render_w, 3), dtype=np.uint8),
         "ft": np.zeros((num_trajectories, trajectory_length + 1, n_steps, 6)),
@@ -50,6 +52,13 @@ def generate_trajectories(agent, env, preprocess, num_trajectories, trajectory_l
 
         for obs_i in range(trajectory_length):
             obs = preprocess(obs)
+            if args.visualize:
+                cv2.namedWindow('ThingVisualPusher Images - Episode: {}'.format(traj_i), cv2.WINDOW_NORMAL)
+                images = []
+                time.sleep(0.01)
+                cv2.imshow('ThingVisualPusher Images - Episode: {}'.format(traj_i), obs[0, :-12].reshape((84, 84)))
+                cv2.waitKey(1)
+
             action, h_state, act_info = agent.compute_action(obs=obs,
                                                              hidden_state=h_state)
             action = np.clip(action, a_min=-1, a_max=1)
@@ -60,6 +69,7 @@ def generate_trajectories(agent, env, preprocess, num_trajectories, trajectory_l
             data["action"][traj_i, obs_i] = action
             data["reward"][traj_i, obs_i] = reward
             data["gt_plate_pos"][traj_i, obs_i] = info["infos"][-1]["achieved_goal"]
+        cv2.destroyAllWindows()
 
     with open(save_path, "wb") as f:
         pickle.dump(data, f)
@@ -96,7 +106,8 @@ def main(args):
                           args.save_path,
                           env_setting[c.ENV_BASE][c.RENDER_H],
                           env_setting[c.ENV_BASE][c.RENDER_W],
-                          args.n_steps)
+                          args.n_steps,
+                          args.visualize)
 
 
 if __name__ == "__main__":
@@ -110,6 +121,7 @@ if __name__ == "__main__":
 
     parser.add_argument("--trajectory_length", required=True, type=int, help="The trajectory length")
     parser.add_argument("--scheduler_period", required=True, type=int, help="The interval in which the next intention is chosen")
+    parser.add_argument("--visualize", action="store_true")
     args = parser.parse_args()
 
     main(args)
