@@ -29,7 +29,6 @@ class UScheduler:
 
     def compute_action(self, state, h):
         action = np.random.randint(0, self._num_tasks, size=(1,))
-        print(action)
         return action, None, [np.nan], None, None, None, None
 
 
@@ -48,7 +47,8 @@ def generate_trajectories(agent, env, preprocess, num_trajectories, trajectory_l
     for traj_i in range(num_trajectories):
         env.reset()
         h_state = agent.reset()
-        obs, reward, done, info = env.step(action=np.random.randn(2))
+        #obs, reward, done, info = env.step(action=np.random.randn(2))
+        obs, reward, done, info = env.step(action=np.zeros(2))
         data["img"][traj_i, 0] = info["infos"][-1]['original_obs']['img']
         data["ft"][traj_i, 0] = info["infos"][-1]['original_obs']['ft']
         data["arm"][traj_i, 0] = info["infos"][-1]['original_obs']['arm']
