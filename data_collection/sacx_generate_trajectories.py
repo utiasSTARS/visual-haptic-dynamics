@@ -11,6 +11,7 @@ import math
 import numpy as np
 import os
 import time
+import torch
 
 import rl_sandbox.constants as c
 
@@ -91,6 +92,7 @@ def main(args):
     env_setting[c.ENV_BASE]["substeps"] = args.n_steps
     env = make_env(env_setting, seed=args.seed)
     intentions = make_model(config[c.INTENTIONS_SETTING])
+    intentions.load_state_dict(torch.load(args.model_path)[c.INTENTIONS][c.STATE_DICT])
 
     scheduler = UScheduler(num_tasks=config[c.NUM_TASKS])
 
