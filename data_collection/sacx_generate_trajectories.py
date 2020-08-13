@@ -27,7 +27,9 @@ class UScheduler:
         self._num_tasks = num_tasks
 
     def compute_action(self, state, h):
-        return np.random.randint(self._num_tasks, size=(1,)), None, [np.nan], None, None, None, None
+        action = np.random.randint(0, self._num_tasks, size=(1,))
+        print(action)
+        return action, None, [np.nan], None, None, None, None
 
 
 def generate_trajectories(agent, env, preprocess, num_trajectories, trajectory_length, save_path, render_h, render_w, n_steps, visualize):
