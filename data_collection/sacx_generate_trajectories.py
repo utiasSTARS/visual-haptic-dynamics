@@ -35,7 +35,8 @@ def generate_trajectories(agent, env, preprocess, num_trajectories, trajectory_l
         "arm": np.zeros((num_trajectories, trajectory_length + 1, n_steps, 6)),
         "action": np.zeros((num_trajectories, trajectory_length, 2)),
         "reward": np.zeros((num_trajectories, trajectory_length)),
-        "gt_plate_pos": np.zeros((num_trajectories, trajectory_length, 3))
+        "gt_plate_pos": np.zeros((num_trajectories, trajectory_length, 3)),
+        "config": env.get_config(),
     }
 
     for traj_i in range(num_trajectories):
