@@ -19,6 +19,15 @@ from rl_sandbox.model_architectures.utils import make_model
 from rl_sandbox.utils import set_seed
 
 
+class UScheduler:
+    def __init__(self,
+                 num_tasks):
+        self._num_tasks = num_tasks
+
+    def compute_action(self, state, h):
+        return np.random.randint(self._num_tasks, size=(1,)), None, [np.nan], None, None, None, None
+
+
 def generate_trajectories(agent, env, preprocess, num_trajectories, trajectory_length, save_path, render_h, render_w, n_steps):
     data = {
         "img": np.zeros((num_trajectories, trajectory_length + 1, render_h, render_w, 3), dtype=np.uint8),
@@ -33,9 +42,9 @@ def generate_trajectories(agent, env, preprocess, num_trajectories, trajectory_l
         env.reset()
         h_state = agent.reset()
         obs, reward, done, info = env.step(action=np.random.randn(2))
-        data["img"][traj_i, 0] = info["infos"]['original_obs']['img']
-        data["ft"][traj_i, 0] = info["infos"]['original_obs']['ft']
-        data["arm"][traj_i, 0] = info["infos"]['original_obs']['arm']
+        data["img"][traj_i, 0] = info["infos"][-1]['original_obs']['img']
+        data["ft"][traj_i, 0] = info["infos"][-1]['original_obs']['ft']
+        data["arm"][traj_i, 0] = info["infos"][-1]['original_obs']['arm']
 
         for obs_i in range(trajectory_length):
             obs = preprocess(obs)
@@ -43,44 +52,38 @@ def generate_trajectories(agent, env, preprocess, num_trajectories, trajectory_l
                                                              hidden_state=h_state)
             action = np.clip(action, a_min=-1, a_max=1)
             obs, reward, done, info = env.step(action)
-            data["img"][traj_i, obs_i + 1] = info["infos"]['original_obs']['img']
-            data["ft"][traj_i, obs_i + 1] = info["infos"]['original_obs']['ft']
-            data["arm"][traj_i, obs_i + 1] = info["infos"]['original_obs']['arm']
+            data["img"][traj_i, obs_i + 1] = info["infos"][-1]['original_obs']['img']
+            data["ft"][traj_i, obs_i + 1] = info["infos"][-1]['original_obs']['ft']
+            data["arm"][traj_i, obs_i + 1] = info["infos"][-1]['original_obs']['arm']
             data["action"][traj_i, obs_i] = action
             data["reward"][traj_i, obs_i] = reward
-            data["gt_plate_pos"][traj_i, obs_i] = info["infos"]["achieved_goal"]
+            data["gt_plate_pos"][traj_i, obs_i] = info["infos"][-1]["achieved_goal"]
 
     with open(save_path, "wb") as f:
-        pickle.dump(data, save_path)
+        pickle.dump(data, f)
 
 
 def main(args):
     assert args.num_trajectories > 0
     assert os.path.isfile(args.model_path)
     assert os.path.isfile(args.config_path)
-    os.makedirs(args.save_path, exist_ok=True)
+    os.makedirs(os.path.dirname(args.save_path), exist_ok=True)
 
     set_seed(args.seed)
     with open(args.config_path, "rb") as f:
         config = pickle.load(f)
 
     env_setting = config[c.ENV_SETTING]
-    env_setting[c.ENV_BASE]["n_steps"] = args.n_steps
+    env_setting[c.ENV_BASE]["substeps"] = args.n_steps
     env = make_env(env_setting, seed=args.seed)
     intentions = make_model(config[c.INTENTIONS_SETTING])
 
-    # Create Uniform scheduler
-    scheduler_setting = config[c.SCHEDULER_SETTING]
-    scheduler_setting[c.MAX_SCHEDULE] = math.ceil(args.trajectory_length / args.scheduler_period)
-    scheduler_setting[c.TEMPERATURE] = 10000.
-    scheduler_setting[c.TEMPERATURE_DECAY] = 1.
-    scheduler_setting[c.TEMPERATURE_MIN] = 10000.
-    scheduler = make_model(config[c.SCHEDULER_SETTING])
+    scheduler = UScheduler(num_tasks=config[c.NUM_TASKS])
 
     agent = SACXAgent(scheduler=scheduler,
                       intentions=intentions,
                       learning_algorithm=None,
-                      scheduler_period=scheduler_period,
+                      scheduler_period=args.scheduler_period,
                       preprocess=config[c.EVALUATION_PREPROCESSING])
 
     generate_trajectories(agent,
