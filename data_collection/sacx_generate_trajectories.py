@@ -36,7 +36,8 @@ def generate_trajectories(agent, env, preprocess, num_trajectories, trajectory_l
         "action": np.zeros((num_trajectories, trajectory_length, 2)),
         "reward": np.zeros((num_trajectories, trajectory_length)),
         "gt_plate_pos": np.zeros((num_trajectories, trajectory_length, 3)),
-        "config": env.get_config(),
+        # Current hacky way. Maybe it wrappers should expose base_env in rl_sandbox
+        "config": env._env._env._env.get_config(),
     }
 
     for traj_i in range(num_trajectories):
