@@ -1,8 +1,7 @@
 device="cuda:0"
 
-# dataset="/home/olimoyo/visual-haptic-dynamics/experiments/data/datasets/visual_haptic_1D_B1F515581A0A478A92AF1C58D4345408.pkl"
-# dataset="/home/olimoyo/visual-haptic-dynamics/experiments/data/datasets/visual_haptic_1D_bigger_action_magnitudes_DA3D5A6E36D54F52AC1496D1B46CF555.pkl"
-dataset="/home/olimoyo/visual-haptic-dynamics/experiments/data/datasets/visual_haptic_2D_9985E1798153438E880A8AD60B9146FE.pkl"
+dataset="/home/olimoyo/visual-haptic-dynamics/experiments/data/datasets/visual_haptic_2D_len16_569B46785E3F45BCA172AE53EA070D5E.pkl"
+# dataset="/home/olimoyo/visual-haptic-dynamics/experiments/data/datasets/visual_haptic_2D_9985E1798153438E880A8AD60B9146FE.pkl"
 storage_base_path="/home/olimoyo/visual-haptic-dynamics/saved_models/"
 
 n_batches=(32)
@@ -13,17 +12,16 @@ weight_inits=('custom')
 Ks=(15)
 rnn_nets=('gru')
 dyn_nets=('linearmix')
-n_epochs=(10)
+n_epochs=(4096)
 opt=('adam')
-opt_vae_base_epochs=(5)
-debug=('False')
+opt_vae_base_epochs=(1024)
+debug=('True')
 nl=('relu')
-traj_len=(7)
 frame_stack=(1)
 val_split=(0)
 lam_rec=(0.95)
 lam_kl=(0.80)
-n_checkpoint_epoch=(1)
+n_checkpoint_epoch=(64)
 task="push64vh"
 use_img_enc="True"
 use_haptic_enc="False"
@@ -32,6 +30,7 @@ use_joint_enc="False"
 use_haptic_dec="False"
 use_arm_dec="False"
 tcn_channels="128,64,32"
+n_step_pred=4
 
 for n in {1..1}; do
     for dyn_net in ${dyn_nets[@]}; do
@@ -52,6 +51,7 @@ for n in {1..1}; do
                                                                 --use_arm_enc $use_arm_enc \
                                                                 --use_joint_enc $use_joint_enc \
                                                                 --K $K \
+                                                                --n_step_pred $n_step_pred \
                                                                 --dim_u 2 \
                                                                 --dim_z 16 \
                                                                 --dim_x "1,64,64" \
@@ -81,7 +81,6 @@ for n in {1..1}; do
                                                                 --task $task \
                                                                 --val_split $val_split \
                                                                 --non_linearity $nl \
-                                                                --traj_len $traj_len \
                                                                 --frame_stacks $frame_stack \
                                                                 --n_checkpoint_epoch $n_checkpoint_epoch
                                         done
