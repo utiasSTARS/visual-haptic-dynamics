@@ -71,7 +71,6 @@ def parse_vh_training_args():
     parser.add_argument('--lr', type=float, default= 3e-4, help='Learning rate')
     parser.add_argument('--opt_vae_epochs', type=int, default=0, help='Number of epochs to train VAE only')
     parser.add_argument('--opt_vae_base_epochs', type=int, default=1024, help='Number of epochs to train VAE and base mixture matrices (must be >= opt_vae_epochs)')
-    parser.add_argument('--traj_len', type=int, default= 7, help='Size of trajectory to train on')
     parser.add_argument('--lam_rec', type=float, default=0.95, help='Weight of image reconstruction loss')
     parser.add_argument('--lam_kl', type=float, default=0.80, help='Weight of kl loss')
     parser.add_argument('--use_binary_ce', type=str2bool, default=False, help='Use Binary Cross Entropy loss insted of default Mean Squared Error loss')

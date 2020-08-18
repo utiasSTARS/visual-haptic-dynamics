@@ -83,24 +83,6 @@ def train(args):
         ).to(device=device)
         nets["img_enc"] = img_enc
         z_dim_in += args.dim_z_img
-
-    if args.use_haptic_enc:
-        haptic_enc = TCN(
-            input_size=6,
-            num_channels=list(args.tcn_channels) + 
-                [args.dim_z_haptic]
-        ).to(device=device)
-        nets["haptic_enc"] = haptic_enc
-        z_dim_in += args.dim_z_haptic
-
-    if args.use_arm_enc:
-        arm_enc = TCN(
-            input_size=6,
-            num_channels=list(args.tcn_channels) + 
-                [args.dim_z_arm]
-        ).to(device=device)
-        nets["arm_enc"] = arm_enc
-        z_dim_in += args.dim_z_arm
     
     if args.use_joint_enc:
         joint_enc = TCN(
@@ -110,6 +92,23 @@ def train(args):
         ).to(device=device)
         nets["joint_enc"] = joint_enc
         z_dim_in += args.dim_z_arm + args.dim_z_haptic
+    else:
+        if args.use_haptic_enc:
+            haptic_enc = TCN(
+                input_size=6,
+                num_channels=list(args.tcn_channels) + 
+                    [args.dim_z_haptic]
+            ).to(device=device)
+            nets["haptic_enc"] = haptic_enc
+            z_dim_in += args.dim_z_haptic
+        if args.use_arm_enc:
+            arm_enc = TCN(
+                input_size=6,
+                num_channels=list(args.tcn_channels) + 
+                    [args.dim_z_arm]
+            ).to(device=device)
+            nets["arm_enc"] = arm_enc
+            z_dim_in += args.dim_z_arm
 
     if args.use_img_dec:
         img_dec = FullyConvDecoderVAE(
@@ -303,14 +302,11 @@ def train(args):
             # XXX: all trajectories have same length
             x = {}
             x['img'] = data['img'].float().to(device=device) # (n, l, c, h, w)
-            n = x['img'].shape[0]
             x['img'] = frame_stack(x['img'], frames=args.frame_stacks)
-            l = x['img'].shape[1]
-
-            u = data['action'][:, args.frame_stacks:]
+            n, l = x['img'].shape[0], x['img'].shape[1]
             
-            start_idx = np.random.randint(l - args.traj_len + 1) # sample random range of traj_len
-            end_idx = start_idx + args.traj_len
+            u = data['action'].float().to(device=device)
+            u = u[:, args.frame_stacks:]
 
             if args.use_joint_enc:
                 x['joint'] = torch.cat((data['ft'], data['arm']), dim=-1) # (n, l, f, 12)
@@ -325,11 +321,8 @@ def train(args):
                     x['arm'] = x['arm'][:, args.frame_stacks:]
 
             for k in x:
-                x[k] = x[k][:, start_idx:end_idx]
                 x[k] = x[k].reshape(-1, *x[k].shape[2:])
             
-            u = data['action'][:, start_idx:end_idx].float().to(device=device)
-
             # 1. Encoding
             z_all = []
             if args.use_img_enc:
@@ -362,19 +355,17 @@ def train(args):
             
             for m in rec_modalities:
                 loss_rec += loss_recs[f"loss_rec_{m}"]
-
                 running_stats[f'rec_l_{m}'].append(loss_recs[f"loss_rec_{m}"].item())
 
             # 3. Dynamics constraint with KL
             assert u.shape[1] > args.n_step_pred, \
                 f"n step prediction of {args.n_step_pred} not possible \
-                for dataset with trajectories of length {args.traj_len}"
+                for dataset with trajectories of length {u.shape[1]}"
 
-            z = z.reshape(n, args.traj_len, *z.shape[1:])
-            mu_z = mu_z.reshape(n, args.traj_len, *mu_z.shape[1:])
-            logvar_z = logvar_z.reshape(n, args.traj_len, *logvar_z.shape[1:])
+            z = z.reshape(n, l, *z.shape[1:])
+            mu_z = mu_z.reshape(n, l, *mu_z.shape[1:])
+            logvar_z = logvar_z.reshape(n, l, *logvar_z.shape[1:])
             var_z = torch.diag_embed(torch.exp(logvar_z))
-            
             loss_kl = 0
 
             # Initial distribution
