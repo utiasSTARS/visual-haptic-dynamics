@@ -1,0 +1,40 @@
+import gym
+import numpy as np
+import os, sys, inspect, time
+
+currentdir = os.path.dirname(os.path.abspath(
+    inspect.getfile(inspect.currentframe())))
+parentdir = os.path.dirname(os.path.dirname(currentdir))
+os.sys.path.insert(0, parentdir + "/pixel-environments/")
+from gym_thing.gym_thing import reacher_env, pusher_env, visual_pusher_env, visual_reacher_env
+
+np.random.seed(1)
+env_1 = gym.make("ThingPusher-v0")
+env_2 = gym.make("ThingPusher-v0")
+obs_1 = env_1.reset()
+obs_2 = env_2.reset()
+env_1.seed(100)
+env_2.seed(110)
+# print(obs_1['plate'], obs_2['plate'], obs_1['ft'][-1].astype(np.float32), obs_2['ft'][-1].astype(np.float32))
+obs_1_next, _, _, _ = env_1.step([1, 1])
+assert np.all(np.isfinite(obs_1['ft']))
+assert np.all(np.isfinite(obs_2['ft']))
+assert np.all(np.isfinite(obs_1['arm']))
+assert np.all(np.isfinite(obs_2['arm']))
+assert np.all(np.isfinite(obs_1['plate']))
+assert np.all(np.isfinite(obs_2['plate']))
+assert np.all(np.isfinite(obs_1_next['ft']))
+assert np.all(np.isfinite(obs_1_next['arm']))
+assert np.all(np.isfinite(obs_1_next['plate']))
+# print(obs_1['plate'], obs_2['plate'], obs_1_next['plate'], obs_1['ft'][-1].astype(np.float32), obs_2['ft'][-1].astype(np.float32))
+obs_1 = env_1.reset()
+print(obs_1['plate'], obs_2['plate'], obs_1_next['plate'], obs_1['ft'][-1].astype(np.float32), obs_2['ft'][-1].astype(np.float32))
+assert np.all(np.isfinite(obs_1['ft']))
+assert np.all(np.isfinite(obs_2['ft']))
+assert np.all(np.isfinite(obs_1['arm']))
+assert np.all(np.isfinite(obs_2['arm']))
+assert np.all(np.isfinite(obs_1['plate']))
+assert np.all(np.isfinite(obs_2['plate']))
+assert np.all(np.isfinite(obs_1_next['ft']))
+assert np.all(np.isfinite(obs_1_next['arm']))
+assert np.all(np.isfinite(obs_1_next['plate']))

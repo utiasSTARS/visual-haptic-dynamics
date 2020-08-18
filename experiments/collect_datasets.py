@@ -20,7 +20,7 @@ def write_file_pkl(data, name, location="."):
     with open(f'{filename}.pkl', 'wb') as f:
         pkl.dump(data, f)
 
-def visual_haptic_2D_osc():
+def visual_haptic_2D_osc(frameskip=2):
     n_steps = 32
     env = ThingVisualPusher(
         is_render=False,
@@ -28,60 +28,66 @@ def visual_haptic_2D_osc():
         render_h=64, 
         goal_vis=False, 
         substeps=n_steps, 
-        frame_skip=2
+        frame_skip=frameskip
     )
     config = env.get_config()
 
     repeat = 32
 
-    mag_list = list(np.arange(1.0, 1.96, 0.03)) * repeat
+    mag_list = list(np.arange(1.0, 1.96, 0.03))
     n_mag = len(mag_list)
 
-    print(f"Collecting {n_mag} trajectories")
+    init_pos_list = list(np.arange(-0.125, 0.125, 0.005))
+    n_init = len(init_pos_list)
 
+    n = n_init * n_mag
+    print(f"Collecting {n} trajectories")
     ll = 16
 
     data = {
-        "img": np.zeros((n_mag, ll, 64, 64, 3), dtype=np.uint8), 
-        "ft": np.zeros((n_mag, ll, n_steps, 6)), 
-        "arm": np.zeros((n_mag, ll, n_steps, 6)),
-        "action": np.zeros((n_mag, ll, 2)), 
-        "gt_plate_pos": np.zeros((n_mag, ll, 3)),
+        "img": np.zeros((n, ll, 64, 64, 3), dtype=np.uint8), 
+        "ft": np.zeros((n, ll, n_steps, 6)), 
+        "arm": np.zeros((n, ll, n_steps, 6)),
+        "action": np.zeros((n, ll, 2)), 
+        "gt_plate_pos": np.zeros((n, ll, 3)),
         "config": config
     }
-    
-    for ii, m in enumerate(mag_list):
-        env.reset()
-        for jj in range(ll): 
-            u_x = 0.35 * m
-            u_y = np.clip(np.random.normal(0, 0.25), -0.30, 0.30) 
-            obs, reward, done, info = env.step(action=np.array([u_x, u_y]))
-            data["img"][ii, jj] = obs["img"]
-            data["ft"][ii, jj] = obs["ft"]
-            data["arm"][ii, jj] = obs["arm"]
-            data["action"][ii, jj] = np.array([u_x, u_y])
-            data["gt_plate_pos"][ii, jj] = info["achieved_goal"] 
+
+    for ii, h in enumerate(init_pos_list):
+        for m in mag_list:
+            env.reset()
+            for _ in range(5):
+                env.step(action=np.array([0, h]))
+            for jj in range(ll): 
+                u_x = 0.35 * m
+                u_y = np.clip(np.random.normal(0, 0.25), -0.30, 0.30) 
+                obs, reward, done, info = env.step(action=np.array([u_x, u_y]))
+                data["img"][ii, jj] = obs["img"]
+                data["ft"][ii, jj] = obs["ft"]
+                data["arm"][ii, jj] = obs["arm"]
+                data["action"][ii, jj] = np.array([u_x, u_y])
+                data["gt_plate_pos"][ii, jj] = info["achieved_goal"] 
 
     return data
 
-def visual_haptic_2D():
+def visual_haptic_2D(frameskip=2):
     n_steps = 32
     env = ThingVisualPusher(
-        is_render=False,
+        is_render=True,
         render_w=64, 
         render_h=64, 
         goal_vis=False, 
         substeps=n_steps, 
-        frame_skip=2
+        frame_skip=frameskip
     )
     config = env.get_config()
 
     mag_list = list(np.arange(1.0, 1.96, 0.03))  
     n_mag = len(mag_list)
 
-    init_pos_list = list(np.arange(-0.050, 0.060, 0.0025))
+    init_pos_list = list(np.arange(-0.125, 0.125, 0.005))
     n_init = len(init_pos_list)
-    
+
     n = n_init * n_mag
     print(f"Collecting {n} trajectories")
     ll = 16
@@ -92,7 +98,7 @@ def visual_haptic_2D():
         "ft": np.zeros((n, ll, n_steps, 6)), 
         "arm": np.zeros((n, ll, n_steps, 6)),
         "action": np.zeros((n, ll, 2)), 
-        "gt_plate_pos": np.zeros((n, ll, 3))
+        "gt_plate_pos": np.zeros((n, ll, 3)),
         "config": config
     }
     
@@ -104,6 +110,7 @@ def visual_haptic_2D():
             for jj in range(ll): 
                 u = np.array([0.35 * m, 0])
                 obs, reward, done, info = env.step(action=u)
+                print(np.min(obs["img"]), np.max(obs["img"]))
                 data["img"][ii, jj] = obs["img"]
                 data["ft"][ii, jj] = obs["ft"]
                 data["arm"][ii, jj] = obs["arm"]
@@ -112,14 +119,14 @@ def visual_haptic_2D():
 
     return data
 
-def visual_haptic_1D():
+def visual_haptic_1D(frameskip=2):
     n_steps = 32
     env = ThingVisualPusher(
         render_w=64, 
         render_h=64, 
         goal_vis=False, 
         substeps=n_steps, 
-        frame_skip=2
+        frame_skip=frameskip
     )
     config = env.get_config()
 
@@ -132,7 +139,7 @@ def visual_haptic_1D():
         "ft": np.zeros((n, ll, n_steps, 6)), 
         "arm": np.zeros((n, ll, n_steps, 6)),
         "action": np.zeros((n, ll, 2)), 
-        "gt_plate_pos": np.zeros((n, ll, 3))
+        "gt_plate_pos": np.zeros((n, ll, 3)),
         "config": config
     }
 
@@ -152,6 +159,9 @@ def visual_haptic_1D():
 if __name__ == "__main__":
     # data = visual_haptic_1D()
     # data = visual_haptic_2D()
-    data = visual_haptic_2D_osc()
+    
+    fs = 2
+    data = visual_haptic_2D(frameskip=fs)
+    # data = visual_haptic_2D_osc(frameskip=fs)
 
-    write_file_pkl(data=data, name="visual_haptic_2D_osc_len16", location="./data/datasets/")
+    write_file_pkl(data=data, name=f"visual_haptic_2D_len16_withGT", location="./data/datasets/")
