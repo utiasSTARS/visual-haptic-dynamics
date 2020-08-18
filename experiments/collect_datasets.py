@@ -53,7 +53,8 @@ def visual_haptic_2D_osc(frameskip=2):
         "config": config
     }
 
-    for ii, h in enumerate(init_pos_list):
+    ii = 0
+    for h in init_pos_list:
         for m in mag_list:
             env.reset()
             for _ in range(5):
@@ -67,13 +68,13 @@ def visual_haptic_2D_osc(frameskip=2):
                 data["arm"][ii, jj] = obs["arm"]
                 data["action"][ii, jj] = np.array([u_x, u_y])
                 data["gt_plate_pos"][ii, jj] = info["achieved_goal"] 
-
+            ii += 1
     return data
 
 def visual_haptic_2D(frameskip=2):
     n_steps = 32
     env = ThingVisualPusher(
-        is_render=True,
+        is_render=False,
         render_w=64, 
         render_h=64, 
         goal_vis=False, 
@@ -82,10 +83,10 @@ def visual_haptic_2D(frameskip=2):
     )
     config = env.get_config()
 
-    mag_list = list(np.arange(1.0, 1.96, 0.03))  
+    mag_list = list(np.arange(1.0, 1.96, 0.403))  
     n_mag = len(mag_list)
 
-    init_pos_list = list(np.arange(-0.125, 0.125, 0.005))
+    init_pos_list = list(np.arange(-0.125, 0.125, 0.1005))
     n_init = len(init_pos_list)
 
     n = n_init * n_mag
@@ -102,7 +103,8 @@ def visual_haptic_2D(frameskip=2):
         "config": config
     }
     
-    for ii, h in enumerate(init_pos_list):
+    ii = 0
+    for h in init_pos_list:
         for m in mag_list:
             env.reset()
             for _ in range(5):
@@ -116,6 +118,7 @@ def visual_haptic_2D(frameskip=2):
                 data["arm"][ii, jj] = obs["arm"]
                 data["action"][ii, jj] = u
                 data["gt_plate_pos"][ii, jj] = info["achieved_goal"] 
+            ii += 1
 
     return data
 
@@ -164,4 +167,4 @@ if __name__ == "__main__":
     data = visual_haptic_2D(frameskip=fs)
     # data = visual_haptic_2D_osc(frameskip=fs)
 
-    write_file_pkl(data=data, name=f"visual_haptic_2D_len16_withGT", location="./data/datasets/")
+    # write_file_pkl(data=data, name=f"visual_haptic_2D_len16_withGT", location="./data/datasets/")
