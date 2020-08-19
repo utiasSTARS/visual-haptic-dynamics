@@ -396,13 +396,14 @@ def train(args):
             # N-step transition distributions
             z_t, mu_z_t, var_z_t = z, mu_z, var_z
             for ii in range(1, args.n_step_pred + 1):
-                z_t1_hat, mu_z_t1_hat, var_z_t1_hat, h_t1 = nets["dyn"](
+                z_t1_hat, mu_z_t1_hat, var_z_t1_hat, (h_t, h_n) = nets["dyn"](
                     z_t=z_t[:, :-1].transpose(1,0), 
                     mu_t=mu_z_t[:, :-1].transpose(1,0), 
                     var_t=var_z_t[:, :-1].transpose(1,0), 
-                    u=u[:, ii:].transpose(1,0)
+                    u=u[:, ii:].transpose(1,0),
+                    return_all_hidden=True
                 )
-
+       
                 z_t = z_t1_hat.transpose(1,0)
                 mu_z_t = mu_z_t1_hat.transpose(1,0)
                 var_z_t = var_z_t1_hat.transpose(1,0)

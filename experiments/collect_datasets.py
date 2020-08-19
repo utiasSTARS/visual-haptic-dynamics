@@ -112,7 +112,6 @@ def visual_haptic_2D(frameskip=2):
             for jj in range(ll): 
                 u = np.array([0.35 * m, 0])
                 obs, reward, done, info = env.step(action=u)
-                print(np.min(obs["img"]), np.max(obs["img"]))
                 data["img"][ii, jj] = obs["img"]
                 data["ft"][ii, jj] = obs["ft"]
                 data["arm"][ii, jj] = obs["arm"]
