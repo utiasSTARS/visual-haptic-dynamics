@@ -23,3 +23,18 @@ def kl(mu0, cov0, mu1, cov1, eps=1e-5):
     c = -k
     d = torch.log(prodf(var1) / prodf(var0))
     return 0.5 * (a+b+c+d)
+
+def torch_kl(mu0, cov0, mu1, cov1):
+    p = torch.distributions.MultivariateNormal(
+        mu0, 
+        cov0
+    )
+    q = torch.distributions.MultivariateNormal(
+        mu1, 
+        cov1
+    )
+
+    loss_kl = torch.sum(
+        torch.distributions.kl_divergence(p, q)
+    ) 
+    return loss_kl

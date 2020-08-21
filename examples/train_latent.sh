@@ -24,13 +24,13 @@ lam_kl=(0.80)
 n_checkpoint_epoch=(64)
 task="push64vh"
 use_img_enc="True"
-use_joint_enc="True"
+use_joint_enc="False"
 use_haptic_enc="False"
 use_arm_enc="False"
 use_haptic_dec="False"
 use_arm_dec="False"
 tcn_channels="128,64,32"
-n_step_pred=1
+n_step_pred=4
 
 for n in {1..1}; do
     for dyn_net in ${dyn_nets[@]}; do

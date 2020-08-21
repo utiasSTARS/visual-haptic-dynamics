@@ -27,6 +27,7 @@ from models import (LinearMixSSM,
                     NonLinearSSM,
                     TCN)
 from datasets import VisualHaptic
+from losses import torch_kl
 
 def train(args):
     print(args)
@@ -339,17 +340,24 @@ def train(args):
             # Concatenate modalities and mix
             z_cat = torch.cat(z_all, dim=1)
             z, mu_z, logvar_z = nets["mix"](z_cat)
+            var_z = torch.diag_embed(torch.exp(logvar_z))
+            # Group sample, mean, covariance
+            q_z = {"z": z, "mu": mu_z, "cov": var_z}
 
             # 2. Reconstruction
             loss_recs = {}
             x_hat = {}
             for m in rec_modalities:
-                x_hat[f"{m}"] = nets[f"{m}_dec"](z)
+                x_hat[f"{m}"] = nets[f"{m}_dec"](q_z["z"])
                 if m in ["haptic", "arm"]:
                     x_hat[f"{m}"] = x_hat[f"{m}"].reshape(*x[f'{m}'].shape)
-                    loss_recs[f"loss_rec_{m}"] = (torch.sum(loss_REC(x_hat[f"{m}"], x[f'{m}']))) / n
+                    loss_recs[f"loss_rec_{m}"] = (torch.sum(
+                        loss_REC(x_hat[f"{m}"], x[f'{m}'])
+                    )) / n
                 else:
-                    loss_recs[f"loss_rec_{m}"] = (torch.sum(loss_REC(x_hat[f"{m}"], x[f'{m}']))) / n
+                    loss_recs[f"loss_rec_{m}"] = (torch.sum(
+                        loss_REC(x_hat[f"{m}"], x[f'{m}'])
+                    )) / n
 
             loss_rec = 0
             
@@ -362,63 +370,101 @@ def train(args):
                 f"n step prediction of {args.n_step_pred} not possible \
                 for dataset with trajectories of length {u.shape[1]}"
 
-            z = z.reshape(n, l, *z.shape[1:])
-            mu_z = mu_z.reshape(n, l, *mu_z.shape[1:])
-            logvar_z = logvar_z.reshape(n, l, *logvar_z.shape[1:])
-            var_z = torch.diag_embed(torch.exp(logvar_z))
+            # Unflatten and transpose seq_len and batch for convenience
+            q_z = {k:v.reshape(n, l, *v.shape[1:]).transpose(1,0) for k, v in q_z.items()}
+            u = u.transpose(1,0)
+
             loss_kl = 0
 
-            # Initial distribution
-            mu_z_i = torch.zeros(
-                args.dim_z, 
-                requires_grad=False, 
-                device=device
-            ).repeat(n, 1, 1)
+            # Iterate over starting initial index ll of trajectory to generate as much training data
+            for ll in range(0, l-1):
+                h = None
 
-            var_z_i = 20.00 * torch.eye(
-                args.dim_z, 
-                requires_grad=False, 
-                device=device
-            ).repeat(n, 1, 1, 1) 
+                # Initial distribution
+                mu_z_i = torch.zeros(
+                    args.dim_z, 
+                    requires_grad=False, 
+                    device=device
+                ).repeat(1, n, 1)
 
-            p = torch.distributions.MultivariateNormal(
-                mu_z[:, 0:1].reshape(-1, *mu_z[:, 0:1].shape[2:]), 
-                var_z[:, 0:1].reshape(-1, *var_z[:, 0:1].shape[2:])
-            )
-            q = torch.distributions.MultivariateNormal(
-                mu_z_i.reshape(-1, *mu_z_i.shape[2:]), 
-                var_z_i.reshape(-1, *var_z_i.shape[2:])
-            )
-            loss_kl += torch.sum(
-                torch.distributions.kl_divergence(p, q)
-            ) / n
+                var_z_i = 20.00 * torch.eye(
+                    args.dim_z, 
+                    requires_grad=False, 
+                    device=device
+                ).repeat(1, n, 1, 1) 
 
-            # N-step transition distributions
-            z_t, mu_z_t, var_z_t = z, mu_z, var_z
-            for ii in range(1, args.n_step_pred + 1):
-                z_t1_hat, mu_z_t1_hat, var_z_t1_hat, (h_t, h_n) = nets["dyn"](
-                    z_t=z_t[:, :-1].transpose(1,0), 
-                    mu_t=mu_z_t[:, :-1].transpose(1,0), 
-                    var_t=var_z_t[:, :-1].transpose(1,0), 
-                    u=u[:, ii:].transpose(1,0),
+                loss_kl += torch_kl(
+                    mu0=q_z["mu"][ll:][0:1],
+                    cov0=q_z["cov"][ll:][0:1],
+                    mu1=mu_z_i,
+                    cov1=var_z_i
+                ) / n
+
+                # Prior transition distributions
+                z_t1_hat, mu_z_t1_hat, var_z_t1_hat, (h_t, _) = nets["dyn"](
+                    z_t=q_z["z"][ll:][:-1], 
+                    mu_t=q_z["mu"][ll:][:-1], 
+                    var_t=q_z["cov"][ll:][:-1], 
+                    u=u[ll:][1:],
+                    h_0=h,
                     return_all_hidden=True
                 )
-       
-                z_t = z_t1_hat.transpose(1,0)
-                mu_z_t = mu_z_t1_hat.transpose(1,0)
-                var_z_t = var_z_t1_hat.transpose(1,0)
+                p_z = {"z": z_t1_hat, "mu": mu_z_t1_hat, "cov": var_z_t1_hat}
 
-                p = torch.distributions.MultivariateNormal(
-                    mu_z[:, ii:].reshape(-1, *mu_z[:, ii:].shape[2:]), 
-                    var_z[:, ii:].reshape(-1, *var_z[:, ii:].shape[2:])
-                )
-                q = torch.distributions.MultivariateNormal(
-                    mu_z_t.reshape(-1, *mu_z_t.shape[2:]), 
-                    var_z_t.reshape(-1, *var_z_t.shape[2:])
-                )
-                loss_kl += torch.sum(
-                    torch.distributions.kl_divergence(p, q)
+                loss_kl += torch_kl(
+                    mu0=q_z["mu"][ll:][1:],
+                    cov0=q_z["cov"][ll:][1:],
+                    mu1=p_z["mu"],
+                    cov1=p_z["cov"]
                 ) / n
+
+                # Original length before calculating n-step predictions
+                length = p_z["mu"].shape[0]
+
+                # New references for convenience
+                p_z_nstep = p_z
+                q_z_nstep = {k:v[ll:][1:] for k, v in q_z.items()}
+                u_nstep = u[ll:][1:]
+                
+                # N-step transition distributions
+                for ii in range(min(args.n_step_pred - 1, length - 1)):
+                    p_z_nstep = {k:v[:-1] for k, v in p_z_nstep.items()}
+                    h_t = h_t[:-1]
+                    u_nstep = u_nstep[1:]
+                    q_z_nstep = {k:v[1:] for k, v in q_z_nstep.items()}
+    
+                    l_nstep = p_z_nstep["z"].shape[0]
+                    n_nstep = p_z_nstep["z"].shape[1]
+
+                    p_z_nstep = {k:v.reshape(-1, *v.shape[2:]) for k, v in p_z_nstep.items()}
+                    u_nstep = u_nstep.reshape(-1, *u_nstep.shape[2:])
+                    h_t = h_t.reshape(-1, *h_t.shape[2:])
+
+                    z_nstep_t1, mu_z_nstep_t1, var_z_nstep_t1, (h_t1, _) = nets["dyn"](
+                        z_t=p_z_nstep["z"], 
+                        mu_t=p_z_nstep["mu"], 
+                        var_t=p_z_nstep["cov"], 
+                        u=u_nstep,
+                        h_0=h_t,
+                        return_all_hidden=True,
+                        single=True
+                    )
+
+                    p_z_nstep["z"] = z_nstep_t1
+                    p_z_nstep["mu"] = mu_z_nstep_t1
+                    p_z_nstep["cov"] = var_z_nstep_t1
+                    h_t = h_t1
+
+                    p_z_nstep = {k:v.reshape(l_nstep, n_nstep, *v.shape[1:]) for k, v in p_z_nstep.items()}
+                    u_nstep = u_nstep.reshape(l_nstep, n_nstep, *u_nstep.shape[1:])
+                    h_t = h_t.reshape(l_nstep, n_nstep, *h_t.shape[1:])
+
+                    loss_kl += torch_kl(
+                        mu0=q_z_nstep["mu"],
+                        cov0=q_z_nstep["cov"],
+                        mu1=p_z_nstep["mu"],
+                        cov1=p_z_nstep["cov"]
+                    ) / n
 
             running_stats['kl_l'].append(
                 loss_kl.item()
