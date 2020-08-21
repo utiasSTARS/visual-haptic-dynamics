@@ -15,14 +15,13 @@ dyn_nets=('linearmix')
 n_epochs=(4096)
 opt=('adam')
 opt_vae_base_epochs=(1024)
-debug=('True')
+debug=('False')
 nl=('relu')
 frame_stack=(1)
 val_split=(0)
 lam_rec=(0.95)
 lam_kl=(0.80)
 n_checkpoint_epoch=(64)
-task="push64vh"
 use_img_enc="True"
 use_joint_enc="False"
 use_haptic_enc="False"
@@ -30,7 +29,9 @@ use_arm_enc="False"
 use_haptic_dec="False"
 use_arm_dec="False"
 tcn_channels="128,64,32"
-n_step_pred=4
+n_step_pred=1
+task="push64vh"
+comment="${task}_gru_lm_v"
 
 for n in {1..1}; do
     for dyn_net in ${dyn_nets[@]}; do
@@ -61,7 +62,7 @@ for n in {1..1}; do
                                                                 --n_epoch $n_epoch \
                                                                 --n_batch $n_batch \
                                                                 --debug $debug \
-                                                                --comment "${task}_lm_vha" \
+                                                                --comment $comment \
                                                                 --device $device \
                                                                 --lr $lr \
                                                                 --weight_init $weight_init \

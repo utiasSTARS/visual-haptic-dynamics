@@ -21,7 +21,8 @@ from torch.utils.data.sampler import SubsetRandomSampler
 from networks import (FullyConvEncoderVAE,
                         FullyConvDecoderVAE,
                         FCNEncoderVAE,
-                        FCNDecoderVAE)
+                        FCNDecoderVAE,
+                        CNNEncoder1D)
 from models import (LinearMixSSM, 
                     LinearSSM, 
                     NonLinearSSM,
@@ -86,27 +87,51 @@ def train(args):
         z_dim_in += args.dim_z_img
     
     if args.use_joint_enc:
-        joint_enc = TCN(
-            input_size=12,
-            num_channels=list(args.tcn_channels) + 
-                [args.dim_z_haptic + args.dim_z_arm] 
+        # joint_enc = TCN(
+        #     input_size=12,
+        #     num_channels=list(args.tcn_channels) + 
+        #         [args.dim_z_haptic + args.dim_z_arm] 
+        # ).to(device=device)
+        joint_enc = CNNEncoder1D(
+            input=12,
+            latent_size=args.dim_z_arm + args.dim_z_haptic,
+            bn=args.use_batch_norm,
+            drop=args.use_dropout,
+            nl=nl,
+            stochastic=False
         ).to(device=device)
         nets["joint_enc"] = joint_enc
         z_dim_in += args.dim_z_arm + args.dim_z_haptic
     else:
         if args.use_haptic_enc:
-            haptic_enc = TCN(
-                input_size=6,
-                num_channels=list(args.tcn_channels) + 
-                    [args.dim_z_haptic]
+        #     haptic_enc = TCN(
+        #         input_size=6,
+        #         num_channels=list(args.tcn_channels) + 
+        #             [args.dim_z_haptic]
+        #     ).to(device=device)
+            haptic_enc = CNNEncoder1D(
+                input=6,
+                latent_size=args.dim_z_haptic,
+                bn=args.use_batch_norm,
+                drop=args.use_dropout,
+                nl=nl,
+                stochastic=False
             ).to(device=device)
             nets["haptic_enc"] = haptic_enc
             z_dim_in += args.dim_z_haptic
         if args.use_arm_enc:
-            arm_enc = TCN(
-                input_size=6,
-                num_channels=list(args.tcn_channels) + 
-                    [args.dim_z_arm]
+            # arm_enc = TCN(
+            #     input_size=6,
+            #     num_channels=list(args.tcn_channels) + 
+            #         [args.dim_z_arm]
+            # ).to(device=device)
+            arm_enc = CNNEncoder1D(
+                input=6,
+                latent_size=args.dim_z_arm,
+                bn=args.use_batch_norm,
+                drop=args.use_dropout,
+                nl=nl,
+                stochastic=False
             ).to(device=device)
             nets["arm_enc"] = arm_enc
             z_dim_in += args.dim_z_arm
@@ -311,14 +336,17 @@ def train(args):
 
             if args.use_joint_enc:
                 x['joint'] = torch.cat((data['ft'], data['arm']), dim=-1) # (n, l, f, 12)
+                x['joint'] = x['joint'].transpose(-1, -2)
                 x['joint'] = x['joint'].float().to(device=device) 
                 x['joint'] = x['joint'][:, args.frame_stacks:]
             else:
                 if args.use_haptic_enc:
                     x['haptic'] = data['ft'].float().to(device=device) # (n, l, f, 6)
+                    x['haptic'] = x['haptic'].transpose(-1, -2)
                     x['haptic'] = x['haptic'][:, args.frame_stacks:]
                 if args.use_arm_enc:
                     x['arm'] = data['arm'].float().to(device=device) # (n, l, f, 6)
+                    x['arm'] = x['arm'].transpose(-1, -2)                   
                     x['arm'] = x['arm'][:, args.frame_stacks:]
 
             for k in x:
@@ -328,14 +356,17 @@ def train(args):
             z_all = []
             if args.use_img_enc:
                 z_all.append(nets["img_enc"](x['img']))
-
             if args.use_joint_enc:
-                z_all.append(nets["joint_enc"](x['joint'])[:, -1])
+                # z_all.append(nets["joint_enc"](x['joint'])[:, -1])
+                z_all.append(nets["joint_enc"](x['joint']))
+
             else:
                 if args.use_haptic_enc:
-                    z_all.append(nets["haptic_enc"](x['haptic'])[:, -1])
+                    # z_all.append(nets["haptic_enc"](x['haptic'])[:, -1])
+                    z_all.append(nets["haptic_enc"](x['haptic']))
                 if args.use_arm_enc:
-                    z_all.append(nets["arm_enc"](x['arm'])[:, -1])
+                    # z_all.append(nets["arm_enc"](x['arm'])[:, -1])
+                    z_all.append(nets["arm_enc"](x['arm']))
 
             # Concatenate modalities and mix
             z_cat = torch.cat(z_all, dim=1)

@@ -274,3 +274,48 @@ class TemporalConvNet(nn.Module):
 
     def forward(self, x):
         return self.network(x)
+
+
+class CNNEncoder1D(nn.Module):
+    def __init__(self, input=6, latent_size=12, bn=True, hidden_size=256, 
+        drop=False, nl=nn.ReLU(), stochastic=True, kernel_size=3, datalength=32):
+        super(CNNEncoder1D, self).__init__()
+        self.stochastic = stochastic
+        self.layers = nn.ModuleList()
+        # 1D CNN (batch, channels, length)
+
+        self.layers.append(torch.nn.Conv1d(input, hidden_size, kernel_size, stride=1, padding=1))
+        if bn: self.layers.append(nn.BatchNorm1d(hidden_size, track_running_stats=True))
+        if drop: self.layers.append(nn.Dropout(p=0.5))
+        self.layers.append(nl)
+
+        self.layers.append(torch.nn.Conv1d(hidden_size, hidden_size, kernel_size, stride=1, padding=1))
+        if bn: self.layers.append(nn.BatchNorm1d(hidden_size, track_running_stats=True))
+        if drop: self.layers.append(nn.Dropout(p=0.5))
+        self.layers.append(nl)
+
+        n_size = hidden_size * datalength
+
+        if self.stochastic:
+            self.fc_mu = nn.Linear(n_size, latent_size)
+            self.fc_logvar = nn.Linear(n_size, latent_size)
+        else:
+            self.fc = nn.Linear(n_size, latent_size)
+        self.flatten = Flatten()
+
+    def forward(self, x):
+        for l in self.layers:
+            x = l(x)
+
+        x = self.flatten(x)
+
+        if self.stochastic:
+            mu = self.fc_mu(x)
+            logvar = self.fc_logvar(x)
+            # Reparameterize
+            std = torch.exp(logvar / 2.0)
+            eps = torch.randn_like(std)
+            z = mu + eps * std
+            return z, mu, logvar
+        else: 
+            return self.fc(x)
