@@ -9,7 +9,8 @@ import random
 from networks import (FullyConvEncoderVAE,
                         FullyConvDecoderVAE,
                         FCNEncoderVAE,
-                        FCNDecoderVAE)
+                        FCNDecoderVAE,
+                        CNNEncoder1D)
 from models import (LinearMixSSM, 
                     LinearSSM, 
                     NonLinearSSM,
@@ -283,28 +284,58 @@ def load_vh_models(path, args, mode='eval', device='cuda:0'):
 
 
     if args.use_haptic_enc:
-        haptic_enc = TCN(
-            input_size=6,
-            num_channels=list(args.tcn_channels) + 
-                [args.dim_z_haptic]
+        # haptic_enc = TCN(
+        #     input_size=6,
+        #     num_channels=list(args.tcn_channels) + 
+        #         [args.dim_z_haptic]
+        # ).to(device=device)
+        # models["haptic_enc"] = haptic_enc
+        # z_dim_in += args.dim_z_haptic
+        haptic_enc = CNNEncoder1D(
+            input=6,
+            latent_size=args.dim_z_haptic,
+            bn=args.use_batch_norm,
+            drop=args.use_dropout,
+            nl=nl,
+            stochastic=False
         ).to(device=device)
         models["haptic_enc"] = haptic_enc
         z_dim_in += args.dim_z_haptic
 
     if args.use_arm_enc:
-        arm_enc = TCN(
-            input_size=6,
-            num_channels=list(args.tcn_channels) + 
-                [args.dim_z_arm]
+        # arm_enc = TCN(
+        #     input_size=6,
+        #     num_channels=list(args.tcn_channels) + 
+        #         [args.dim_z_arm]
+        # ).to(device=device)
+        # models["arm_enc"] = arm_enc
+        # z_dim_in += args.dim_z_arm
+        arm_enc = CNNEncoder1D(
+            input=6,
+            latent_size=args.dim_z_arm,
+            bn=args.use_batch_norm,
+            drop=args.use_dropout,
+            nl=nl,
+            stochastic=False
         ).to(device=device)
         models["arm_enc"] = arm_enc
         z_dim_in += args.dim_z_arm
     
     if args.use_joint_enc:
-        joint_enc = TCN(
-            input_size=12,
-            num_channels=list(args.tcn_channels) + 
-                [args.dim_z_haptic + args.dim_z_arm] 
+        # joint_enc = TCN(
+        #     input_size=12,
+        #     num_channels=list(args.tcn_channels) + 
+        #         [args.dim_z_haptic + args.dim_z_arm] 
+        # ).to(device=device)
+        # models["joint_enc"] = joint_enc
+        # z_dim_in += args.dim_z_arm + args.dim_z_haptic
+        joint_enc = CNNEncoder1D(
+            input=12,
+            latent_size=args.dim_z_arm + args.dim_z_haptic,
+            bn=args.use_batch_norm,
+            drop=args.use_dropout,
+            nl=nl,
+            stochastic=False
         ).to(device=device)
         models["joint_enc"] = joint_enc
         z_dim_in += args.dim_z_arm + args.dim_z_haptic

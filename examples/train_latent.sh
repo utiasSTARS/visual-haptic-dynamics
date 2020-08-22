@@ -1,4 +1,4 @@
-device="cuda:1"
+device="cuda:0"
 
 dataset="/home/olimoyo/visual-haptic-dynamics/experiments/data/datasets/visual_haptic_2D_len16_withGT_3D9E4376CF4746EEA20DCD520218038D.pkl"
 # dataset="/home/olimoyo/visual-haptic-dynamics/experiments/data/datasets/visual_haptic_2D_9985E1798153438E880A8AD60B9146FE.pkl"
@@ -12,10 +12,10 @@ weight_inits=('custom')
 Ks=(15)
 rnn_nets=('gru')
 dyn_nets=('linearmix')
-n_epochs=(4096)
+n_epochs=(1024)
 opt=('adam')
-opt_vae_base_epochs=(1024)
-debug=('False')
+opt_vae_base_epochs=(256)
+debug=('True')
 nl=('relu')
 frame_stack=(1)
 val_split=(0)
@@ -31,7 +31,7 @@ use_arm_dec="False"
 tcn_channels="128,64,32"
 n_step_pred=1
 task="push64vh"
-comment="${task}_gru_lm_v"
+comment="${task}_gru_lm_v_optperloop"
 
 for n in {1..1}; do
     for dyn_net in ${dyn_nets[@]}; do

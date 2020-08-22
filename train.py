@@ -329,8 +329,8 @@ def train(args):
             x = {}
             x['img'] = data['img'].float().to(device=device) # (n, l, c, h, w)
             x['img'] = frame_stack(x['img'], frames=args.frame_stacks)
-            n, l = x['img'].shape[0], x['img'].shape[1]
-            
+            ep_len = x['img'].shape[1]
+
             u = data['action'].float().to(device=device)
             u = u[:, args.frame_stacks:]
 
@@ -349,66 +349,71 @@ def train(args):
                     x['arm'] = x['arm'].transpose(-1, -2)                   
                     x['arm'] = x['arm'][:, args.frame_stacks:]
 
-            for k in x:
-                x[k] = x[k].reshape(-1, *x[k].shape[2:])
-            
-            # 1. Encoding
-            z_all = []
-            if args.use_img_enc:
-                z_all.append(nets["img_enc"](x['img']))
-            if args.use_joint_enc:
-                # z_all.append(nets["joint_enc"](x['joint'])[:, -1])
-                z_all.append(nets["joint_enc"](x['joint']))
+            # "Bootstrap" to generate as much data
+            for ll in range(0, ep_len-1):
+                x_ll = {}
+                for k in x:
+                    x_ll[k] = x[k][:, ll:]
+                u_ll = u[:, ll:]
+                
+                n, l = x_ll['img'].shape[0], x_ll['img'].shape[1]
+                x_ll = {k:v.reshape(-1, *v.shape[2:]) for k, v in x_ll.items()}
+                
+                # 1. Encoding
+                z_all = []
+                if args.use_img_enc:
+                    z_all.append(nets["img_enc"](x_ll['img']))
+                if args.use_joint_enc:
+                    # z_all.append(nets["joint_enc"](x_ll['joint'])[:, -1])
+                    z_all.append(nets["joint_enc"](x_ll['joint']))
 
-            else:
-                if args.use_haptic_enc:
-                    # z_all.append(nets["haptic_enc"](x['haptic'])[:, -1])
-                    z_all.append(nets["haptic_enc"](x['haptic']))
-                if args.use_arm_enc:
-                    # z_all.append(nets["arm_enc"](x['arm'])[:, -1])
-                    z_all.append(nets["arm_enc"](x['arm']))
-
-            # Concatenate modalities and mix
-            z_cat = torch.cat(z_all, dim=1)
-            z, mu_z, logvar_z = nets["mix"](z_cat)
-            var_z = torch.diag_embed(torch.exp(logvar_z))
-            # Group sample, mean, covariance
-            q_z = {"z": z, "mu": mu_z, "cov": var_z}
-
-            # 2. Reconstruction
-            loss_recs = {}
-            x_hat = {}
-            for m in rec_modalities:
-                x_hat[f"{m}"] = nets[f"{m}_dec"](q_z["z"])
-                if m in ["haptic", "arm"]:
-                    x_hat[f"{m}"] = x_hat[f"{m}"].reshape(*x[f'{m}'].shape)
-                    loss_recs[f"loss_rec_{m}"] = (torch.sum(
-                        loss_REC(x_hat[f"{m}"], x[f'{m}'])
-                    )) / n
                 else:
-                    loss_recs[f"loss_rec_{m}"] = (torch.sum(
-                        loss_REC(x_hat[f"{m}"], x[f'{m}'])
-                    )) / n
+                    if args.use_haptic_enc:
+                        # z_all.append(nets["haptic_enc"](x_ll['haptic'])[:, -1])
+                        z_all.append(nets["haptic_enc"](x_ll['haptic']))
+                    if args.use_arm_enc:
+                        # z_all.append(nets["arm_enc"](x_ll['arm'])[:, -1])
+                        z_all.append(nets["arm_enc"](x_ll['arm']))
 
-            loss_rec = 0
-            
-            for m in rec_modalities:
-                loss_rec += loss_recs[f"loss_rec_{m}"]
-                running_stats[f'rec_l_{m}'].append(loss_recs[f"loss_rec_{m}"].item())
+                # Concatenate modalities and mix
+                z_cat = torch.cat(z_all, dim=1)
+                z, mu_z, logvar_z = nets["mix"](z_cat)
+                var_z = torch.diag_embed(torch.exp(logvar_z))
 
-            # 3. Dynamics constraint with KL
-            assert u.shape[1] > args.n_step_pred, \
-                f"n step prediction of {args.n_step_pred} not possible \
-                for dataset with trajectories of length {u.shape[1]}"
+                # Group sample, mean, covariance
+                q_z = {"z": z, "mu": mu_z, "cov": var_z}
 
-            # Unflatten and transpose seq_len and batch for convenience
-            q_z = {k:v.reshape(n, l, *v.shape[1:]).transpose(1,0) for k, v in q_z.items()}
-            u = u.transpose(1,0)
+                # 2. Reconstruction
+                loss_recs = {}
+                x_hat = {}
+                for m in rec_modalities:
+                    x_hat[f"{m}"] = nets[f"{m}_dec"](q_z["z"])
+                    if m in ["haptic", "arm"]:
+                        x_hat[f"{m}"] = x_hat[f"{m}"].reshape(*x[f'{m}'].shape)
+                        loss_recs[f"loss_rec_{m}"] = (torch.sum(
+                            loss_REC(x_hat[f"{m}"], x_ll[f'{m}'])
+                        )) / n
+                    else:
+                        loss_recs[f"loss_rec_{m}"] = (torch.sum(
+                            loss_REC(x_hat[f"{m}"], x_ll[f'{m}'])
+                        )) / n
 
-            loss_kl = 0
+                loss_rec = 0
+                
+                for m in rec_modalities:
+                    loss_rec += loss_recs[f"loss_rec_{m}"]
+                    running_stats[f'rec_l_{m}'].append(loss_recs[f"loss_rec_{m}"].item())
 
-            # Iterate over starting initial index ll of trajectory to generate as much training data
-            for ll in range(0, l-1):
+                # 3. Dynamics constraint with KL
+                assert u.shape[1] > args.n_step_pred, \
+                    f"n step prediction of {args.n_step_pred} not possible \
+                    for dataset with trajectories of length {u.shape[1]}"
+
+                # Unflatten and transpose seq_len and batch for convenience
+                q_z = {k:v.reshape(n, l, *v.shape[1:]).transpose(1,0) for k, v in q_z.items()}
+                u_ll = u_ll.transpose(1,0)
+
+                loss_kl = 0
                 h = None
 
                 # Initial distribution
@@ -422,29 +427,29 @@ def train(args):
                     args.dim_z, 
                     requires_grad=False, 
                     device=device
-                ).repeat(1, n, 1, 1) 
+                ).repeat(1, n, 1, 1)
 
                 loss_kl += torch_kl(
-                    mu0=q_z["mu"][ll:][0:1],
-                    cov0=q_z["cov"][ll:][0:1],
+                    mu0=q_z["mu"][0:1],
+                    cov0=q_z["cov"][0:1],
                     mu1=mu_z_i,
                     cov1=var_z_i
                 ) / n
 
                 # Prior transition distributions
                 z_t1_hat, mu_z_t1_hat, var_z_t1_hat, (h_t, _) = nets["dyn"](
-                    z_t=q_z["z"][ll:][:-1], 
-                    mu_t=q_z["mu"][ll:][:-1], 
-                    var_t=q_z["cov"][ll:][:-1], 
-                    u=u[ll:][1:],
+                    z_t=q_z["z"][:-1], 
+                    mu_t=q_z["mu"][:-1], 
+                    var_t=q_z["cov"][:-1], 
+                    u=u_ll[1:],
                     h_0=h,
                     return_all_hidden=True
                 )
                 p_z = {"z": z_t1_hat, "mu": mu_z_t1_hat, "cov": var_z_t1_hat}
 
                 loss_kl += torch_kl(
-                    mu0=q_z["mu"][ll:][1:],
-                    cov0=q_z["cov"][ll:][1:],
+                    mu0=q_z["mu"][1:],
+                    cov0=q_z["cov"][1:],
                     mu1=p_z["mu"],
                     cov1=p_z["cov"]
                 ) / n
@@ -454,8 +459,8 @@ def train(args):
 
                 # New references for convenience
                 p_z_nstep = p_z
-                q_z_nstep = {k:v[ll:][1:] for k, v in q_z.items()}
-                u_nstep = u[ll:][1:]
+                q_z_nstep = {k:v[1:] for k, v in q_z.items()}
+                u_nstep = u_ll[1:]
                 
                 # N-step transition distributions
                 for ii in range(min(args.n_step_pred - 1, length - 1)):
@@ -463,7 +468,7 @@ def train(args):
                     h_t = h_t[:-1]
                     u_nstep = u_nstep[1:]
                     q_z_nstep = {k:v[1:] for k, v in q_z_nstep.items()}
-    
+
                     l_nstep = p_z_nstep["z"].shape[0]
                     n_nstep = p_z_nstep["z"].shape[1]
 
@@ -481,9 +486,12 @@ def train(args):
                         single=True
                     )
 
-                    p_z_nstep["z"] = z_nstep_t1
-                    p_z_nstep["mu"] = mu_z_nstep_t1
-                    p_z_nstep["cov"] = var_z_nstep_t1
+                    p_z_nstep.update({
+                        "z": z_nstep_t1, 
+                        "mu": mu_z_nstep_t1, 
+                        "cov": var_z_nstep_t1
+                    })
+
                     h_t = h_t1
 
                     p_z_nstep = {k:v.reshape(l_nstep, n_nstep, *v.shape[1:]) for k, v in p_z_nstep.items()}
@@ -497,26 +505,26 @@ def train(args):
                         cov1=p_z_nstep["cov"]
                     ) / n
 
-            running_stats['kl_l'].append(
-                loss_kl.item()
-            )
+                running_stats['kl_l'].append(
+                    loss_kl.item()
+                )
 
-            # Jointly optimize everything
-            total_loss = args.lam_rec * loss_rec + \
-                args.lam_kl * loss_kl
-                
-            running_stats['total_l'].append(
-                loss_rec.item() +
-                loss_kl.item()
-            )
+                # Jointly optimize everything
+                total_loss = args.lam_rec * loss_rec + \
+                    args.lam_kl * loss_kl
+                    
+                running_stats['total_l'].append(
+                    loss_rec.item() +
+                    loss_kl.item()
+                )
 
-            if opt:
-                opt.zero_grad()
-                total_loss.backward()
-                # clip for stable RNN training
-                for k, v in nets.items():
-                    torch.nn.utils.clip_grad_norm_(v.parameters(), 0.5)
-                opt.step()
+                if opt:
+                    opt.zero_grad()
+                    total_loss.backward()
+                    # clip for stable RNN training
+                    for k, v in nets.items():
+                        torch.nn.utils.clip_grad_norm_(v.parameters(), 0.5)
+                    opt.step()
 
         # Summary stats from epoch
         summary_stats = {f'avg_{k}':sum(v)/len(v) for k, v in running_stats.items()}
