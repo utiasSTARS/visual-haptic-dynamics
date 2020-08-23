@@ -353,15 +353,6 @@ class NonLinearSSM(nn.Module):
                 h_0 = h_0.unsqueeze(0)
             h_t, h_n = self.rnn(inp, h_0)
 
-        l, n, _ = z_t.shape
-        inp = torch.cat([z_t, u], dim=-1)
-        if h_0 is None:
-            h_t, h_n = self.rnn(inp)
-        else:
-            if single:
-                h_0 = h_0.unsqueeze(0)
-            h_t, h_n = self.rnn(inp, h_0)
-
         if self.bidirectional:
             mu_t1 = self.fc_mu(h_t.reshape(-1, 2*self.hidden_size)) # (seq_len * batch_size, dim_z)
             logvar_t1 = self.fc_logvar(h_t.reshape(-1, 2*self.hidden_size)) # (seq_len * batch_size, dim_z)
@@ -384,7 +375,9 @@ class NonLinearSSM(nn.Module):
             z_t1 = z_t1[0]
             mu_t1 = mu_t1[0]
             var_t1 = var_t1[0]
-
+            h_t = h_t[0]
+            h_n = h_n[0]
+            
         if return_all_hidden:
             h = (h_t, h_n)
         else:
