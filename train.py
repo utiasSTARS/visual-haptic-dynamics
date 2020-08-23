@@ -355,7 +355,6 @@ def train(args):
                 for k in x:
                     x_ll[k] = x[k][:, ll:]
                 u_ll = u[:, ll:]
-                
                 n, l = x_ll['img'].shape[0], x_ll['img'].shape[1]
                 x_ll = {k:v.reshape(-1, *v.shape[2:]) for k, v in x_ll.items()}
                 
@@ -384,8 +383,10 @@ def train(args):
                 q_z = {"z": z, "mu": mu_z, "cov": var_z}
 
                 # 2. Reconstruction
+                loss_rec = 0
                 loss_recs = {}
                 x_hat = {}
+
                 for m in rec_modalities:
                     x_hat[f"{m}"] = nets[f"{m}_dec"](q_z["z"])
                     if m in ["haptic", "arm"]:
@@ -397,24 +398,18 @@ def train(args):
                         loss_recs[f"loss_rec_{m}"] = (torch.sum(
                             loss_REC(x_hat[f"{m}"], x_ll[f'{m}'])
                         )) / n
-
-                loss_rec = 0
                 
                 for m in rec_modalities:
                     loss_rec += loss_recs[f"loss_rec_{m}"]
                     running_stats[f'rec_l_{m}'].append(loss_recs[f"loss_rec_{m}"].item())
 
                 # 3. Dynamics constraint with KL
-                assert u.shape[1] > args.n_step_pred, \
-                    f"n step prediction of {args.n_step_pred} not possible \
-                    for dataset with trajectories of length {u.shape[1]}"
+                loss_kl = 0
+                h = None
 
                 # Unflatten and transpose seq_len and batch for convenience
                 q_z = {k:v.reshape(n, l, *v.shape[1:]).transpose(1,0) for k, v in q_z.items()}
                 u_ll = u_ll.transpose(1,0)
-
-                loss_kl = 0
-                h = None
 
                 # Initial distribution
                 mu_z_i = torch.zeros(
@@ -528,10 +523,6 @@ def train(args):
 
         # Summary stats from epoch
         summary_stats = {f'avg_{k}':sum(v)/len(v) for k, v in running_stats.items()}
-        n_images = 16 # random sample of images to visualize reconstruction quality
-        rng = random.randint(0, x["img"].shape[0] - n_images)
-        summary_stats['og_imgs'] = x["img"][rng:(rng + n_images), np.newaxis, -1].detach().cpu()
-        summary_stats['rec_imgs'] = x_hat["img"][rng:(rng + n_images), np.newaxis, -1].detach().cpu()
 
         return summary_stats
 
@@ -565,16 +556,12 @@ def train(args):
                     writer.add_scalar(f"loss/{m}/train", summary_train[f'avg_rec_l_{m}'], epoch)
                 for loss in ['total', 'kl']:
                     writer.add_scalar(f"loss/{loss}/train", summary_train[f'avg_{loss}_l'], epoch)
-                writer.add_images(f'reconstructed_images/{args.comment}/train/original', summary_train['og_imgs'])
-                writer.add_images(f'reconstructed_images/{args.comment}/train/reconstructed', summary_train['rec_imgs'])
 
                 if args.val_split > 0:
                     for m in rec_modalities:
                         writer.add_scalar(f"loss/{m}/val", summary_val[f'avg_rec_l_{m}'], epoch)
                     for loss in ['total', 'kl']:
                         writer.add_scalar(f"loss/{loss}/val", summary_val[f'avg_{loss}_l'], epoch)
-                    writer.add_images(f'reconstructed_images/{args.comment}/val/original', summary_val['og_imgs'])
-                    writer.add_images(f'reconstructed_images/{args.comment}/val/reconstructed', summary_val['rec_imgs'])
 
                 # Save model at intermittent checkpoints 
                 if epoch % args.n_checkpoint_epoch == 0:
