@@ -319,39 +319,39 @@ class NonLinearSSM(nn.Module):
             self.fc_logvar = nn.Linear(hidden_size, dim_z)
 
     def forward(self, z_t, mu_t, var_t, u, h_0=None, single=False, return_all_hidden=False):
-            """
-            Forward call to produce the subsequent state.
+        """
+        Forward call to produce the subsequent state.
 
-            Args:
-                z_t: sampled state (seq_len, batch_size, dim_z)
-                mu_t: state input mean (seq_len, batch_size, dim_z)
-                var_t: state input covariance (seq_len, batch_size, dim_z, dim_z)
-                u: control input (seq_len, batch_size, dim_u)
-                h_0: hidden state of the LSTM (num_layers * num_directions, batch_size, hidden_size) or None. 
-                If None, h is defaulted as 0-tensor
-                single: If True then remove the need for a placeholder unsqueezed dimension for seq_len
-                return_all_hidden: Return all hidden states h_t instead of only h_n
-            Returns:
-                z_t1: next sampled stats (seq_len, batch_size, dim_z)
-                mu_t1: next state input mean (seq_len, batch_size, dim_z)
-                var_t1: next state input covariance (seq_len, batch_size, dim_z, dim_z)
-                h: hidden state(s) of the LSTM
-            """
+        Args:
+            z_t: sampled state (seq_len, batch_size, dim_z)
+            mu_t: state input mean (seq_len, batch_size, dim_z)
+            var_t: state input covariance (seq_len, batch_size, dim_z, dim_z)
+            u: control input (seq_len, batch_size, dim_u)
+            h_0: hidden state of the LSTM (num_layers * num_directions, batch_size, hidden_size) or None. 
+            If None, h is defaulted as 0-tensor
+            single: If True then remove the need for a placeholder unsqueezed dimension for seq_len
+            return_all_hidden: Return all hidden states h_t instead of only h_n
+        Returns:
+            z_t1: next sampled stats (seq_len, batch_size, dim_z)
+            mu_t1: next state input mean (seq_len, batch_size, dim_z)
+            var_t1: next state input covariance (seq_len, batch_size, dim_z, dim_z)
+            h: hidden state(s) of the LSTM
+        """
+        if single:
+            z_t = z_t.unsqueeze(0)
+            u = u.unsqueeze(0)
+            mu_t = mu_t.unsqueeze(0)
+            var_t = var_t.unsqueeze(0)
+
+        l, n, _ = z_t.shape
+
+        inp = torch.cat([z_t, u], dim=-1)
+        if h_0 is None:
+            h_t, h_n = self.rnn(inp)
+        else:
             if single:
-                z_t = z_t.unsqueeze(0)
-                u = u.unsqueeze(0)
-                mu_t = mu_t.unsqueeze(0)
-                var_t = var_t.unsqueeze(0)
-
-            l, n, _ = z_t.shape
-
-            inp = torch.cat([z_t, u], dim=-1)
-            if h_0 is None:
-                h_t, h_n = self.rnn(inp)
-            else:
-                if single:
-                    h_0 = h_0.unsqueeze(0)
-                h_t, h_n = self.rnn(inp, h_0)
+                h_0 = h_0.unsqueeze(0)
+            h_t, h_n = self.rnn(inp, h_0)
 
         l, n, _ = z_t.shape
         inp = torch.cat([z_t, u], dim=-1)
@@ -362,35 +362,35 @@ class NonLinearSSM(nn.Module):
                 h_0 = h_0.unsqueeze(0)
             h_t, h_n = self.rnn(inp, h_0)
 
-            if self.bidirectional:
-                mu_t1 = self.fc_mu(h_t.reshape(-1, 2*self.hidden_size)) # (seq_len * batch_size, dim_z)
-                logvar_t1 = self.fc_logvar(h_t.reshape(-1, 2*self.hidden_size)) # (seq_len * batch_size, dim_z)
-            else:
-                mu_t1 = self.fc_mu(h_t.reshape(-1, self.hidden_size)) # (seq_len * batch_size, dim_z)
-                logvar_t1 = self.fc_logvar(h_t.reshape(-1, self.hidden_size)) # (seq_len * batch_size, dim_z)
+        if self.bidirectional:
+            mu_t1 = self.fc_mu(h_t.reshape(-1, 2*self.hidden_size)) # (seq_len * batch_size, dim_z)
+            logvar_t1 = self.fc_logvar(h_t.reshape(-1, 2*self.hidden_size)) # (seq_len * batch_size, dim_z)
+        else:
+            mu_t1 = self.fc_mu(h_t.reshape(-1, self.hidden_size)) # (seq_len * batch_size, dim_z)
+            logvar_t1 = self.fc_logvar(h_t.reshape(-1, self.hidden_size)) # (seq_len * batch_size, dim_z)
 
-            var_t1 = torch.diag_embed(torch.exp(logvar_t1)) # (seq_len * batch_size, dim_z, dim_z)
+        var_t1 = torch.diag_embed(torch.exp(logvar_t1)) # (seq_len * batch_size, dim_z, dim_z)
 
-            # Reparameterized sample
-            std_t1 = torch.exp(logvar_t1 / 2.0)
-            eps = torch.randn_like(std_t1)
-            z_t1 = mu_t1 + eps * std_t1
+        # Reparameterized sample
+        std_t1 = torch.exp(logvar_t1 / 2.0)
+        eps = torch.randn_like(std_t1)
+        z_t1 = mu_t1 + eps * std_t1
 
-            z_t1 = z_t1.reshape(l, n, *z_t1.shape[1:])
-            mu_t1 = mu_t1.reshape(l, n, *mu_t1.shape[1:])
-            var_t1 = var_t1.reshape(l, n, *var_t1.shape[1:])
+        z_t1 = z_t1.reshape(l, n, *z_t1.shape[1:])
+        mu_t1 = mu_t1.reshape(l, n, *mu_t1.shape[1:])
+        var_t1 = var_t1.reshape(l, n, *var_t1.shape[1:])
 
-            if single:
-                z_t1 = z_t1[0]
-                mu_t1 = mu_t1[0]
-                var_t1 = var_t1[0]
+        if single:
+            z_t1 = z_t1[0]
+            mu_t1 = mu_t1[0]
+            var_t1 = var_t1[0]
 
-            if return_all_hidden:
-                h = (h_t, h_n)
-            else:
-                h = h_n
+        if return_all_hidden:
+            h = (h_t, h_n)
+        else:
+            h = h_n
 
-            return z_t1, mu_t1, var_t1, h
+        return z_t1, mu_t1, var_t1, h
 
 
 class TCN(nn.Module):
