@@ -16,39 +16,43 @@ class LinearMixWrapper():
     def to(self, device):
         self.device = device
         self.dyn_model.to(device=device)
-
-    def rollout(self, z_0, mu_0, var_0, u):
+    
+    def rollout(self, z_0, u):
         """
         Args:
-            z_0: Initial state sample (batch_size, dim_z)
-            mu_0: Initial state mean (batch_size, dim_z)
-            var_0: Initial distribution variance (batch_size, dim_z, dim_z)
+            z_0: State distribution (dict, {
+                z:(batch_size, dim_z), 
+                mu:(batch_size, dim_z), 
+                cov:(batch_size, dim_z, dim_z)
+            })              
             u: Controls (pred_len, batch_size, dim_u)
         Returns:
-            mu_hat: Predicted future states (pred_len, batch_size, dim_z)
+            z_hat: Predicted future sampled states (pred_len, batch_size, dim_z)
             info: Any extra information needed {
                 A: Locally linear transition matrices (pred_len, batch_size, dim_z, dim_z)
                 B: Locally linear control matrices (pred_len, batch_size, dim_z, dim_u)
             }
         """
+        z_0_sample, mu_0, var_0 = z_0["z"], z_0["mu"], z_0["cov"]
+
         pred_len, batch_size = u.shape[0], u.shape[1]
-        dim_z, dim_u = z_0.shape[-1], u.shape[-1]
+        dim_z, dim_u = z_0_sample.shape[-1], u.shape[-1]
 
         z_hat = torch.zeros((pred_len, batch_size, dim_z)).float().to(device=self.device)
         mu_hat = torch.zeros((pred_len, batch_size, dim_z)).float().to(device=self.device)
         var_hat = torch.zeros((pred_len, batch_size, dim_z, dim_z)).float().to(device=self.device)
         A = torch.zeros((pred_len, batch_size, dim_z, dim_z)).float().to(device=self.device)
         B = torch.zeros((pred_len, batch_size, dim_z, dim_u)).float().to(device=self.device)
-
         h_0 = None
+
         for ll in range(pred_len):
             z_t1_hat, mu_z_t1_hat, var_z_t1_hat, h_t1, A_t1, B_t1 = \
                 self.dyn_model(
-                    z_t=z_0, 
+                    z_t=z_0_sample, 
                     mu_t=mu_0, 
                     var_t=var_0, 
                     u=u[ll],
-                    h=h_0,
+                    h_0=h_0,
                     single=True,
                     return_matrices=True
                 )
@@ -58,15 +62,15 @@ class LinearMixWrapper():
             var_hat[ll] = var_z_t1_hat
             A[ll] = A_t1
             B[ll] = B_t1
-            z_0, mu_0, var_0, h_0 = z_t1_hat, mu_z_t1_hat, var_z_t1_hat, h_t1    
+            z_0_sample, mu_0, var_0, h_0 = z_t1_hat, mu_z_t1_hat, var_z_t1_hat, h_t1    
 
         info = {
             "A": A,
             "B": B
         }
 
-        #XXX: Track based on mean for now
-        return mu_hat, info
+        #XXX: Track based on sample for now
+        return z_hat, info
 
 class MPC():
     """
@@ -154,18 +158,24 @@ class CVXLinear(MPC):
 
         self.prob = cp.Problem(cp.Minimize(cost), constraints)
 
-    def solve(self, z_0, mu_0, var_0, z_g, u_0=None):
+    def solve(self, z_0, z_g, u_0=None):
         """
         Args: 
-            z_0: the initial sampled state (torch.tensor)
-            mu_0: the initial mean of the state (torch.tensor)
-            var_0: the initial variance of the state (torch.tensor)
-            z_g: the goal state (torch.tensor)
-            u_0: the initial guess for the controls (torch.tensor)
+            z_0: The initial state (torch.tensor, (batch_size, dim_z) 
+            or state distribution (dict, {
+                z:(batch_size, dim_z), 
+                mu:(batch_size, dim_z), 
+                cov:(batch_size, dim_z, dim_z)
+            })               
+            z_g: The goal state (torch.tensor, (dim_z,))
+            u_0: The initial guess for the controls (torch.tensor, (pred_len, batch_size, dim_u))
         Returns:
-            u_0: the final solution (torch.tensor)
+            u_0: The final solution (torch.tensor)
         """
         with torch.no_grad():
+            if type(z_0) is dict:
+                z_0_sample = z_0["z"]
+
             if u_0 == None:
                 u_0 = torch.zeros(
                     (self.H, 1, self.nu), 
@@ -176,8 +186,6 @@ class CVXLinear(MPC):
 
                 z_hat, info = self.model.rollout(
                     z_0=z_0, 
-                    mu_0=mu_0, 
-                    var_0=var_0, 
                     u=u_0
                 )
 
@@ -185,7 +193,7 @@ class CVXLinear(MPC):
                     self.A[h].value = info["A"][h, 0].cpu().numpy()
                     self.B[h].value = info["B"][h, 0].cpu().numpy()
          
-                self.z_i.value = z_0.squeeze(0).cpu().numpy()
+                self.z_i.value = z_0_sample.squeeze(0).cpu().numpy()
                 self.z_g.value = z_g.cpu().numpy()
  
                 self.prob.solve(warm_start=True)
@@ -193,7 +201,7 @@ class CVXLinear(MPC):
                 # Update operational point u_0
                 u_0 = self.u.value
                 u_0 = np.expand_dims(u_0, axis=1)
-                u_0 = torch.tensor(u_0)
+                u_0 = torch.tensor(u_0).float()
 
             return u_0
 
@@ -225,22 +233,26 @@ class CEM(MPC):
         self.nz = nz
         self.t = nn.Tanh()
 
-    def solve(self, z_0, mu_0, var_0, z_g):
+    def solve(self, z_0, z_g):
         """
         Args: 
-            z_0: the initial sampled state (torch.tensor)
-            mu_0: the initial mean of the state (torch.tensor)
-            var_0: the initial variance of the state (torch.tensor)
-            z_g: the goal state (torch.tensor)
+            z_0: The initial state (torch.tensor, (batch_size, dim_z) 
+            or state distribution (dict, {
+                z:(batch_size, dim_z), 
+                mu:(batch_size, dim_z), 
+                cov:(batch_size, dim_z, dim_z)
+            })   
+            z_g: The goal state (torch.tensor, (dim_z,))
         Returns:
-            u_0: the final solution (torch.tensor)
+            u_0: The final solution (torch.tensor)
         """
         #TODO: Option to warm start with previous solution
         with torch.no_grad():
             if self.samples > 1:
-                z_0 = z_0.repeat(self.samples, 1)
-                mu_0 = mu_0.repeat(self.samples, 1)
-                var_0 = var_0.repeat(self.samples, 1, 1)
+                if type(z_0) is dict:
+                    z_0 = {k:v.repeat(self.samples, *((1,) * (v.dim() - 1))) for k, v in z_0.items()}
+                else:
+                    z_0 = z_0.repeat(self.samples, 1)
 
             # Initialize factorized belief over action sequences q(u_t:t+H) ~ N(0, I)
             u_mu = torch.zeros(
@@ -260,11 +272,8 @@ class CEM(MPC):
             for _ in range(self.opt_iters):
                 eps = torch.randn_like(u_std)
                 u = self.t(u_mu + eps * u_std)
-
                 z_hat, info = self.model.rollout(
                     z_0=z_0, 
-                    mu_0=mu_0, 
-                    var_0=var_0, 
                     u=u
                 )          
 
@@ -281,7 +290,8 @@ class CEM(MPC):
                 for ii in range(self.H):
                     u_mu[ii] = u[ii, top_k_idx[ii]].mean(dim=0)
                     u_std[ii] = u[ii, top_k_idx[ii]].std(dim=0)
-                                
+
+            return (u_mu[:, 0], u_std[:, 0])                   
             
 class Grad(MPC):
     """
@@ -307,16 +317,19 @@ class Grad(MPC):
         self.grad_clip = grad_clip
         self.nu = nu
         self.nz = nz
-        self.t = nn.Tanh()
+        self.tanh = nn.Tanh()
         
-    def solve(self, z_0, mu_0, var_0, z_g, u_0=None):
+    def solve(self, z_0, z_g, u_0=None):
         """
         Args: 
-            z_0: the initial sampled state (torch.tensor)
-            mu_0: the initial mean of the state (torch.tensor)
-            var_0: the initial variance of the state (torch.tensor)
-            z_g: the goal state (torch.tensor)
-            u_0: the initial guess for the controls (torch.tensor)
+            z_0: the initial state (torch.tensor, (batch_size, dim_z) 
+            or state distribution (dict, {
+                z:(batch_size, dim_z), 
+                mu:(batch_size, dim_z), 
+                cov:(batch_size, dim_z, dim_z)
+            })            
+        z_g: the goal state (torch.tensor, (dim_z,))
+            u_0: the initial guess for the controls (torch.tensor, (pred_len, batch_size, dim_u))
         Returns:
             u_0: the final solution (torch.tensor)
         """
@@ -326,20 +339,17 @@ class Grad(MPC):
                 (self.H, 1, self.nu), 
                 device=self.device
             )
-        u_0 = u_0.clone().detach()
-        u_0.requires_grad = True
+        u_0 = u_0.clone()
 
         #TODO: Perturb guess randomly or perturb and run multiple solves and take best result?
 
         opt = optim.SGD([u_0], lr=0.1, momentum=0)
         
-        u_0 = self.t(u_0)
-        
-        for _ in range(self.opt_iters):
+        for ii in range(self.opt_iters):
+            u_0 = u_0.detach().requires_grad_()
+            u_0 = self.tanh(u_0)
             z_hat, info = self.model.rollout(
                 z_0=z_0, 
-                mu_0=mu_0, 
-                var_0=var_0, 
                 u=u_0
             )            
             cost = torch.sum(z_g - z_hat)
@@ -348,5 +358,6 @@ class Grad(MPC):
             opt.zero_grad()
             (-cost).backward()
             opt.step()
+            
             
         return u_0.detach()

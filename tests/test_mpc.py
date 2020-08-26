@@ -13,28 +13,53 @@ dyn = LinearMixSSM(
     bidirectional=False,
     net_type="gru",
     K=15
-).to(device="cpu")
+).to(device="cpu").eval()
+
+for param in dyn.parameters():
+    param.requires_grad = False
 
 dyn_wrapped = LinearMixWrapper(
     dyn_model=dyn
 )
 
-mpc = CEM(
+u_cem = cem_mpc = CEM(
     planning_horizon=12,
     opt_iters=10,
     model=dyn_wrapped,
 )
+cem_mpc.to(device="cpu")
 
-mpc.to(device="cpu")
+u_cvx = cvx_mpc = CVXLinear(
+    planning_horizon=12,
+    opt_iters=10,
+    model=dyn_wrapped,
+)
+cvx_mpc.to(device="cpu")
 
-z_0 = torch.zeros((1, 16))
-mu_0 = torch.zeros((1, 16))
-var_0 = torch.zeros((1, 16, 16))
+u_grad = grad_mpc = Grad(
+    planning_horizon=12,
+    opt_iters=10,
+    model=dyn_wrapped,
+)
+grad_mpc.to(device="cpu")
+
+z = torch.zeros((1, 16))
+mu = torch.zeros((1, 16))
+var = torch.zeros((1, 16, 16))
+z_0 = {"z":z, "mu":mu, "cov":var}
 z_g = torch.zeros((16))
 
-mpc.solve(
-    z_0=z_0, 
-    mu_0=mu_0, 
-    var_0=var_0, 
+u_cvx = cvx_mpc.solve(
+    z_0=z_0,
+    z_g=z_g
+)
+
+u_grad = grad_mpc.solve(
+    z_0=z_0,
+    z_g=z_g
+)
+
+(u_cem_mu, u_cem_std) = cem_mpc.solve(
+    z_0=z_0,
     z_g=z_g
 )
