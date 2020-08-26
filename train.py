@@ -325,7 +325,6 @@ def train(args):
                 break
             
             # Load and shape trajectory data
-            # XXX: all trajectories have same length
             x = {}
             x['img'] = data['img'].float().to(device=device) # (n, l, c, h, w)
             x['img'] = frame_stack(x['img'], frames=args.frame_stacks)
@@ -362,10 +361,10 @@ def train(args):
                 z_all = []
                 if args.use_img_enc:
                     z_all.append(nets["img_enc"](x_ll['img']))
+                
                 if args.use_joint_enc:
                     # z_all.append(nets["joint_enc"](x_ll['joint'])[:, -1])
                     z_all.append(nets["joint_enc"](x_ll['joint']))
-
                 else:
                     if args.use_haptic_enc:
                         # z_all.append(nets["haptic_enc"](x_ll['haptic'])[:, -1])
@@ -389,6 +388,7 @@ def train(args):
 
                 for m in rec_modalities:
                     x_hat[f"{m}"] = nets[f"{m}_dec"](q_z["z"])
+
                     if m in ["haptic", "arm"]:
                         x_hat[f"{m}"] = x_hat[f"{m}"].reshape(*x[f'{m}'].shape)
                         loss_recs[f"loss_rec_{m}"] = (torch.sum(
@@ -405,7 +405,6 @@ def train(args):
 
                 # 3. Dynamics constraint with KL
                 loss_kl = 0
-                h = None
 
                 # Unflatten and transpose seq_len and batch for convenience
                 q_z = {k:v.reshape(n, l, *v.shape[1:]).transpose(1,0) for k, v in q_z.items()}
@@ -437,7 +436,7 @@ def train(args):
                     mu_t=q_z["mu"][:-1], 
                     var_t=q_z["cov"][:-1], 
                     u=u_ll[1:],
-                    h_0=h,
+                    h_0=None,
                     return_all_hidden=True
                 )
                 p_z = {"z": z_t1_hat, "mu": mu_z_t1_hat, "cov": var_z_t1_hat}
