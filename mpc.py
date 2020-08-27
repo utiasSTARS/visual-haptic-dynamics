@@ -202,7 +202,6 @@ class CVXLinear(MPC):
                 u_0 = self.u.value
                 u_0 = np.expand_dims(u_0, axis=1)
                 u_0 = torch.tensor(u_0).float()
-
             return u_0
 
 class CEM(MPC):
@@ -231,7 +230,7 @@ class CEM(MPC):
         self.top_samples = top_samples
         self.nu = nu
         self.nz = nz
-        self.t = nn.Tanh()
+        self.tanh = nn.Tanh()
 
     def solve(self, z_0, z_g):
         """
@@ -246,7 +245,6 @@ class CEM(MPC):
         Returns:
             u_0: The final solution (torch.tensor)
         """
-        #TODO: Option to warm start with previous solution
         with torch.no_grad():
             if self.samples > 1:
                 if type(z_0) is dict:
@@ -271,13 +269,13 @@ class CEM(MPC):
 
             for _ in range(self.opt_iters):
                 eps = torch.randn_like(u_std)
-                u = self.t(u_mu + eps * u_std)
+                u = u_mu + eps * u_std
                 z_hat, info = self.model.rollout(
                     z_0=z_0, 
-                    u=u
+                    u=self.tanh(u)
                 )          
 
-                cost = (z_g - z_hat).sum(-1)
+                cost = ((z_g - z_hat)**2).sum(-1)
 
                 # Find top k lowest costs
                 _, top_k_idx = cost.topk(
@@ -291,7 +289,7 @@ class CEM(MPC):
                     u_mu[ii] = u[ii, top_k_idx[ii]].mean(dim=0)
                     u_std[ii] = u[ii, top_k_idx[ii]].std(dim=0)
 
-            return (u_mu[:, 0], u_std[:, 0])                   
+            return self.tanh(u_mu[:, 0])                  
             
 class Grad(MPC):
     """
@@ -304,7 +302,6 @@ class Grad(MPC):
         opt_iters, 
         model, 
         device="cpu", 
-        grad_clip=True,
         nu=2,
         nz=16):
 
@@ -314,7 +311,6 @@ class Grad(MPC):
             model=model,
             device=device
         )
-        self.grad_clip = grad_clip
         self.nu = nu
         self.nz = nz
         self.tanh = nn.Tanh()
@@ -333,31 +329,26 @@ class Grad(MPC):
         Returns:
             u_0: the final solution (torch.tensor)
         """
-        #TODO: Option to warm start with previous solution
         if u_0 == None:
             u_0 = torch.zeros(
                 (self.H, 1, self.nu), 
-                device=self.device
+                device=self.device,
+                requires_grad=True
             )
-        u_0 = u_0.clone()
 
         #TODO: Perturb guess randomly or perturb and run multiple solves and take best result?
-
-        opt = optim.SGD([u_0], lr=0.1, momentum=0)
+        opt = optim.SGD([u_0], lr=0.001, momentum=0.9)
         
         for ii in range(self.opt_iters):
-            u_0 = u_0.detach().requires_grad_()
-            u_0 = self.tanh(u_0)
             z_hat, info = self.model.rollout(
                 z_0=z_0, 
-                u=u_0
-            )            
-            cost = torch.sum(z_g - z_hat)
+                u=self.tanh(u_0)
+            )       
 
-            #TODO: Grad clip?
+            cost = torch.sum((z_g - z_hat)**2)
+
             opt.zero_grad()
-            (-cost).backward()
+            cost.backward()
             opt.step()
             
-            
-        return u_0.detach()
+        return self.tanh(u_0).detach()
