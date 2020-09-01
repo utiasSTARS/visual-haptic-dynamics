@@ -524,10 +524,10 @@ def train(args):
                     torch.nn.utils.clip_grad_norm_(v.parameters(), 0.5)
                 opt.step()
 
-    # Summary stats from epoch
-    summary_stats = {f'avg_{k}':sum(v)/len(v) for k, v in running_stats.items()}
+        # Summary stats from epoch
+        summary_stats = {f'avg_{k}':sum(v)/len(v) for k, v in running_stats.items()}
 
-    return summary_stats
+        return summary_stats
 
     # Training loop
     opt = opt_vae
