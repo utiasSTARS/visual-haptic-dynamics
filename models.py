@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from torch.distributions import MultivariateNormal
-from networks import FullyConvEncoderVAE, FullyConvDecoderVAE, TemporalConvNet
+from networks import FullyConvEncoderVAE, FullyConvDecoderVAE
 
 class LinearMixSSM(nn.Module):
     """
@@ -384,13 +384,3 @@ class NonLinearSSM(nn.Module):
             h = h_n
 
         return z_t1, mu_t1, var_t1, h
-
-
-class TCN(nn.Module):
-    def __init__(self, input_size, num_channels, kernel_size=3, dropout=0.2):
-        super(TCN, self).__init__()
-        self.tcn = TemporalConvNet(input_size, num_channels, kernel_size=kernel_size, dropout=dropout) # num_channels = [450, 450, 100]
-
-    def forward(self, x):
-        y = self.tcn(x.transpose(1, 2))
-        return y.transpose(1, 2)

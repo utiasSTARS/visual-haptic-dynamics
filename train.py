@@ -22,11 +22,11 @@ from networks import (FullyConvEncoderVAE,
                         FullyConvDecoderVAE,
                         FCNEncoderVAE,
                         FCNDecoderVAE,
-                        CNNEncoder1D)
+                        CNNEncoder1D,
+                        CNNDecoder1D)
 from models import (LinearMixSSM, 
                     LinearSSM, 
-                    NonLinearSSM,
-                    TCN)
+                    NonLinearSSM)
 from datasets import VisualHaptic
 from losses import torch_kl
 
@@ -37,8 +37,6 @@ def train(args):
     def _init_fn(worker_id):
         np.random.seed(int(args.random_seed))
 
-    if (args.use_arm_enc or args.use_haptic_enc or args.use_joint_enc):
-        assert (args.use_arm_enc or args.use_haptic_enc) != args.use_joint_enc
     assert 0 <= args.opt_vae_epochs <= args.opt_vae_base_epochs <= args.n_epoch
     device = torch.device(args.device)
     torch.backends.cudnn.deterministic = args.cudnn_deterministic
@@ -73,8 +71,55 @@ def train(args):
     rec_modalities = []
 
     # Networks
-    if args.use_img_enc:
-        img_enc = FullyConvEncoderVAE(
+    img_enc = FullyConvEncoderVAE(
+        input=args.dim_x[0] * (args.frame_stacks + 1),
+        latent_size=args.dim_z_img,
+        bn=args.use_batch_norm,
+        drop=args.use_dropout,
+        nl=nl,
+        img_dim=args.dim_x[1],
+        stochastic=False
+    ).to(device=device)
+    nets["img_enc"] = img_enc
+    z_dim_in += args.dim_z_img
+
+    dim_z_rec = args.dim_z
+
+    if args.context_modality != "none":
+        dim_z_rec += args.dim_z_context
+    if args.use_context_img:
+        dim_z_rec += args.dim_z_context
+
+    img_dec = FullyConvDecoderVAE(
+        input=args.dim_x[0] * (args.frame_stacks + 1),
+        latent_size=dim_z_rec,
+        bn=args.use_batch_norm,
+        drop=args.use_dropout,
+        nl=nl,
+        img_dim=args.dim_x[1],
+        output_nl=None if args.use_binary_ce else nn.Sigmoid()
+    ).to(device=device)
+    nets["img_dec"] = img_dec
+
+    if args.context_modality != "none":
+        if args.context_modality == "joint": 
+            data_dim = 12
+        elif args.context_modality == "arm" or "ft": 
+            data_dim=6
+
+        context_enc = CNNEncoder1D(
+            input=data_dim,
+            latent_size=args.dim_z_context,
+            bn=args.use_batch_norm,
+            drop=args.use_dropout,
+            nl=nl,
+            stochastic=False
+        ).to(device=device)
+        nets["context_enc"] = context_enc
+        z_dim_in += args.dim_z_context
+
+    if args.use_context_img:
+        context_img_enc = FullyConvEncoderVAE(
             input=args.dim_x[0] * (args.frame_stacks + 1),
             latent_size=args.dim_z_img,
             bn=args.use_batch_norm,
@@ -83,97 +128,19 @@ def train(args):
             img_dim=args.dim_x[1],
             stochastic=False
         ).to(device=device)
-        nets["img_enc"] = img_enc
-        z_dim_in += args.dim_z_img
-    
-    if args.use_joint_enc:
-        # joint_enc = TCN(
-        #     input_size=12,
-        #     num_channels=list(args.tcn_channels) + 
-        #         [args.dim_z_haptic + args.dim_z_arm] 
+        nets["context_img_enc"] = context_img_enc
+        z_dim_in += args.dim_z_context
+
+        # context_img_dec = FullyConvDecoderVAE(
+        #     input=args.dim_x[0] * (args.frame_stacks + 1),
+        #     latent_size=dim_z_rec,
+        #     bn=args.use_batch_norm,
+        #     drop=args.use_dropout,
+        #     nl=nl,
+        #     img_dim=args.dim_x[1],
+        #     output_nl=None if args.use_binary_ce else nn.Sigmoid()
         # ).to(device=device)
-        joint_enc = CNNEncoder1D(
-            input=12,
-            latent_size=args.dim_z_arm + args.dim_z_haptic,
-            bn=args.use_batch_norm,
-            drop=args.use_dropout,
-            nl=nl,
-            stochastic=False
-        ).to(device=device)
-        nets["joint_enc"] = joint_enc
-        z_dim_in += args.dim_z_arm + args.dim_z_haptic
-    else:
-        if args.use_haptic_enc:
-        #     haptic_enc = TCN(
-        #         input_size=6,
-        #         num_channels=list(args.tcn_channels) + 
-        #             [args.dim_z_haptic]
-        #     ).to(device=device)
-            haptic_enc = CNNEncoder1D(
-                input=6,
-                latent_size=args.dim_z_haptic,
-                bn=args.use_batch_norm,
-                drop=args.use_dropout,
-                nl=nl,
-                stochastic=False
-            ).to(device=device)
-            nets["haptic_enc"] = haptic_enc
-            z_dim_in += args.dim_z_haptic
-        if args.use_arm_enc:
-            # arm_enc = TCN(
-            #     input_size=6,
-            #     num_channels=list(args.tcn_channels) + 
-            #         [args.dim_z_arm]
-            # ).to(device=device)
-            arm_enc = CNNEncoder1D(
-                input=6,
-                latent_size=args.dim_z_arm,
-                bn=args.use_batch_norm,
-                drop=args.use_dropout,
-                nl=nl,
-                stochastic=False
-            ).to(device=device)
-            nets["arm_enc"] = arm_enc
-            z_dim_in += args.dim_z_arm
-
-    if args.use_img_dec:
-        img_dec = FullyConvDecoderVAE(
-            input=args.dim_x[0] * (args.frame_stacks + 1),
-            latent_size=args.dim_z,
-            bn=args.use_batch_norm,
-            drop=args.use_dropout,
-            nl=nl,
-            img_dim=args.dim_x[1],
-            output_nl=None if args.use_binary_ce else nn.Sigmoid()
-        ).to(device=device)
-        nets["img_dec"] = img_dec
-        rec_modalities.append("img")
-
-    if args.use_haptic_dec:
-        haptic_dec = FCNDecoderVAE(
-            dim_in=args.dim_z, 
-            dim_out=6 * 32 * (args.frame_stacks + 1), 
-            bn=args.use_batch_norm, 
-            drop=args.use_dropout, 
-            nl=nn.ReLU(), 
-            output_nl=None, 
-            hidden_size=args.fc_hidden_size
-        ).to(device=device)
-        nets["haptic_dec"] = haptic_dec
-        rec_modalities.append("haptic")
-
-    if args.use_arm_dec:
-        arm_dec = FCNDecoderVAE(
-            dim_in=args.dim_z, 
-            dim_out=6 * 32 * (args.frame_stacks + 1), 
-            bn=args.use_batch_norm, 
-            drop=args.use_dropout, 
-            nl=nn.ReLU(), 
-            output_nl=None, 
-            hidden_size=args.fc_hidden_size
-        ).to(device=device)
-        nets["arm_dec"] = arm_dec
-        rec_modalities.append("arm")
+        # nets["img_dec"] = img_dec
 
     mix = FCNEncoderVAE(
         dim_in=z_dim_in,
@@ -316,9 +283,7 @@ def train(args):
             loader = val_loader
         
         # Keep track of losses
-        running_stats = {"total_l": [], "kl_l": []}
-        for m in rec_modalities:
-            running_stats[f'rec_l_{m}'] = []
+        running_stats = {"total_l": [], "kl_l": [], "rec_l_img": []}
 
         for idx, data in enumerate(loader):
             if idx == args.n_example:
@@ -333,23 +298,14 @@ def train(args):
             u = data['action'].float().to(device=device)
             u = u[:, args.frame_stacks:]
 
-            if args.use_joint_enc:
-                x['joint'] = torch.cat((data['ft'], data['arm']), dim=-1) # (n, l, f, 12)
-                x['joint'] = x['joint'].transpose(-1, -2)
-                x['joint'] = x['joint'].float().to(device=device) 
-                x['joint'] = x['joint'][:, args.frame_stacks:]
-            else:
-                if args.use_haptic_enc:
-                    x['haptic'] = data['ft'].float().to(device=device) # (n, l, f, 6)
-                    x['haptic'] = x['haptic'].transpose(-1, -2)
-                    x['haptic'] = x['haptic'][:, args.frame_stacks:]
-                if args.use_arm_enc:
-                    x['arm'] = data['arm'].float().to(device=device) # (n, l, f, 6)
-                    x['arm'] = x['arm'].transpose(-1, -2)                   
-                    x['arm'] = x['arm'][:, args.frame_stacks:]
-
-            # "Bootstrap" to generate as much data
-            # for ll in range(0, ep_len-1):
+            if args.context_modality != "none":
+                if args.context_modality == "joint": 
+                    x["context"] = torch.cat((data['ft'], data['arm']), dim=-1) # (n, l, f, 12)
+                elif args.context_modality == "ft" or "arm": 
+                    x["context"] = data[args.context_modality]
+                x["context"] = x["context"].float().to(device=device) # (n, l, f, 6)
+                x["context"] = x["context"].transpose(-1, -2)
+                x["context"] = x["context"][:, args.frame_stacks:]
 
             # Randomly and uniformly sample
             ll = np.random.randint(ep_len-1)
@@ -359,53 +315,46 @@ def train(args):
                 x_ll[k] = x[k][:, ll:]
             u_ll = u[:, ll:]
             n, l = x_ll['img'].shape[0], x_ll['img'].shape[1]
+
+            x_ll['context_img'] = x_ll["img"][:, 0].unsqueeze(1).repeat(1, l, 1, 1, 1)
             x_ll = {k:v.reshape(-1, *v.shape[2:]) for k, v in x_ll.items()}
+
+            # 1. Encoding            
+            z_all_enc = []
+            z_all_enc.append(nets["img_enc"](x_ll['img']))
             
-            # 1. Encoding
-            z_all = []
-            if args.use_img_enc:
-                z_all.append(nets["img_enc"](x_ll['img']))
-            
-            if args.use_joint_enc:
-                # z_all.append(nets["joint_enc"](x_ll['joint'])[:, -1])
-                z_all.append(nets["joint_enc"](x_ll['joint']))
-            else:
-                if args.use_haptic_enc:
-                    # z_all.append(nets["haptic_enc"](x_ll['haptic'])[:, -1])
-                    z_all.append(nets["haptic_enc"](x_ll['haptic']))
-                if args.use_arm_enc:
-                    # z_all.append(nets["arm_enc"](x_ll['arm'])[:, -1])
-                    z_all.append(nets["arm_enc"](x_ll['arm']))
+            if args.context_modality != "none":
+                z_context = nets["context_enc"](x_ll["context"])
+                z_all_enc.append(z_context)
+            if args.use_context_img:
+                z_img_context = nets["context_img_enc"](x_ll['context_img'])
+                z_all_enc.append(z_img_context)
 
             # Concatenate modalities and mix
-            z_cat = torch.cat(z_all, dim=1)
-            z, mu_z, logvar_z = nets["mix"](z_cat)
+            z_cat_enc = torch.cat(z_all_enc, dim=1)
+            z, mu_z, logvar_z = nets["mix"](z_cat_enc)
             var_z = torch.diag_embed(torch.exp(logvar_z))
 
             # Group sample, mean, covariance
             q_z = {"z": z, "mu": mu_z, "cov": var_z}
-
-            # 2. Reconstruction
-            loss_rec = 0
-            loss_recs = {}
-            x_hat = {}
-
-            for m in rec_modalities:
-                x_hat[f"{m}"] = nets[f"{m}_dec"](q_z["z"])
-
-                if m in ["haptic", "arm"]:
-                    x_hat[f"{m}"] = x_hat[f"{m}"].reshape(*x[f'{m}'].shape)
-                    loss_recs[f"loss_rec_{m}"] = (torch.sum(
-                        loss_REC(x_hat[f"{m}"], x_ll[f'{m}'])
-                    )) / n
-                else:
-                    loss_recs[f"loss_rec_{m}"] = (torch.sum(
-                        loss_REC(x_hat[f"{m}"], x_ll[f'{m}'])
-                    )) / n
             
-            for m in rec_modalities:
-                loss_rec += loss_recs[f"loss_rec_{m}"]
-                running_stats[f'rec_l_{m}'].append(loss_recs[f"loss_rec_{m}"].item())
+            # 2. Reconstruction
+            z_all_dec = []
+            z_all_dec.append(q_z["z"])
+
+            if args.context_modality != "none":
+                z_all_dec.append(z_context)
+            if args.use_context_img:
+                z_all_dec.append(z_img_context)
+            z_cat_dec = torch.cat(z_all_dec, dim=1)
+
+            loss_rec = 0
+            x_hat_img = nets["img_dec"](z_cat_dec)
+            loss_rec_img = (torch.sum(
+                loss_REC(x_hat_img, x_ll['img'])
+            )) / n
+            running_stats['rec_l_img'].append(loss_rec_img.item())
+            loss_rec += loss_rec_img
 
             # 3. Dynamics constraint with KL
             loss_kl = 0
@@ -455,53 +404,53 @@ def train(args):
             # Original length before calculating n-step predictions
             length = p_z["mu"].shape[0]
 
-            # New references for convenience
-            p_z_nstep = p_z
-            q_z_nstep = {k:v[1:] for k, v in q_z.items()}
-            u_nstep = u_ll[1:]
-            
             # N-step transition distributions
-            for ii in range(min(args.n_step_pred - 1, length - 1)):
-                p_z_nstep = {k:v[:-1] for k, v in p_z_nstep.items()}
-                h_t = h_t[:-1]
-                u_nstep = u_nstep[1:]
-                q_z_nstep = {k:v[1:] for k, v in q_z_nstep.items()}
+            if epoch > args.opt_n_step_pred_epochs:
+                # New references for convenience
+                p_z_nstep = p_z
+                q_z_nstep = {k:v[1:] for k, v in q_z.items()}
+                u_nstep = u_ll[1:]
 
-                l_nstep = p_z_nstep["z"].shape[0]
-                n_nstep = p_z_nstep["z"].shape[1]
+                for ii in range(min(args.n_step_pred - 1, length - 1)):
+                    p_z_nstep = {k:v[:-1] for k, v in p_z_nstep.items()}
+                    h_t = h_t[:-1]
+                    u_nstep = u_nstep[1:]
+                    q_z_nstep = {k:v[1:] for k, v in q_z_nstep.items()}
 
-                p_z_nstep = {k:v.reshape(-1, *v.shape[2:]) for k, v in p_z_nstep.items()}
-                u_nstep = u_nstep.reshape(-1, *u_nstep.shape[2:])
-                h_t = h_t.reshape(-1, *h_t.shape[2:])
+                    l_nstep = p_z_nstep["z"].shape[0]
+                    n_nstep = p_z_nstep["z"].shape[1]
 
-                z_nstep_t1, mu_z_nstep_t1, var_z_nstep_t1, (h_t1, _) = nets["dyn"](
-                    z_t=p_z_nstep["z"], 
-                    mu_t=p_z_nstep["mu"], 
-                    var_t=p_z_nstep["cov"], 
-                    u=u_nstep,
-                    h_0=h_t,
-                    return_all_hidden=True,
-                    single=True
-                )
+                    p_z_nstep = {k:v.reshape(-1, *v.shape[2:]) for k, v in p_z_nstep.items()}
+                    u_nstep = u_nstep.reshape(-1, *u_nstep.shape[2:])
+                    h_t = h_t.reshape(-1, *h_t.shape[2:])
 
-                p_z_nstep.update({
-                    "z": z_nstep_t1, 
-                    "mu": mu_z_nstep_t1, 
-                    "cov": var_z_nstep_t1
-                })
+                    z_nstep_t1, mu_z_nstep_t1, var_z_nstep_t1, (h_t1, _) = nets["dyn"](
+                        z_t=p_z_nstep["z"], 
+                        mu_t=p_z_nstep["mu"], 
+                        var_t=p_z_nstep["cov"], 
+                        u=u_nstep,
+                        h_0=h_t,
+                        return_all_hidden=True,
+                        single=True
+                    )
 
-                h_t = h_t1
+                    p_z_nstep.update({
+                        "z": z_nstep_t1, 
+                        "mu": mu_z_nstep_t1, 
+                        "cov": var_z_nstep_t1
+                    })
+                    h_t = h_t1
 
-                p_z_nstep = {k:v.reshape(l_nstep, n_nstep, *v.shape[1:]) for k, v in p_z_nstep.items()}
-                u_nstep = u_nstep.reshape(l_nstep, n_nstep, *u_nstep.shape[1:])
-                h_t = h_t.reshape(l_nstep, n_nstep, *h_t.shape[1:])
+                    p_z_nstep = {k:v.reshape(l_nstep, n_nstep, *v.shape[1:]) for k, v in p_z_nstep.items()}
+                    u_nstep = u_nstep.reshape(l_nstep, n_nstep, *u_nstep.shape[1:])
+                    h_t = h_t.reshape(l_nstep, n_nstep, *h_t.shape[1:])
 
-                loss_kl += torch_kl(
-                    mu0=q_z_nstep["mu"],
-                    cov0=q_z_nstep["cov"],
-                    mu1=p_z_nstep["mu"],
-                    cov1=p_z_nstep["cov"]
-                ) / n
+                    loss_kl += torch_kl(
+                        mu0=q_z_nstep["mu"],
+                        cov0=q_z_nstep["cov"],
+                        mu1=p_z_nstep["mu"],
+                        cov1=p_z_nstep["cov"]
+                    ) / n
 
             running_stats['kl_l'].append(
                 loss_kl.item()
@@ -555,14 +504,12 @@ def train(args):
             
             if not args.debug:
                 # Tensorboard
-                for m in rec_modalities:
-                    writer.add_scalar(f"loss/{m}/train", summary_train[f'avg_rec_l_{m}'], epoch)
+                writer.add_scalar(f"loss/img/train", summary_train['avg_rec_l_img'], epoch)
                 for loss in ['total', 'kl']:
                     writer.add_scalar(f"loss/{loss}/train", summary_train[f'avg_{loss}_l'], epoch)
 
                 if args.val_split > 0:
-                    for m in rec_modalities:
-                        writer.add_scalar(f"loss/{m}/val", summary_val[f'avg_rec_l_{m}'], epoch)
+                    writer.add_scalar(f"loss/img/val", summary_val['avg_rec_l_img'], epoch)
                     for loss in ['total', 'kl']:
                         writer.add_scalar(f"loss/{loss}/val", summary_val[f'avg_{loss}_l'], epoch)
 

@@ -13,8 +13,7 @@ from networks import (FullyConvEncoderVAE,
                         CNNEncoder1D)
 from models import (LinearMixSSM, 
                     LinearSSM, 
-                    NonLinearSSM,
-                    TCN)
+                    NonLinearSSM)
 import gym
 from collections import deque
 from gym import spaces
@@ -284,13 +283,6 @@ def load_vh_models(path, args, mode='eval', device='cuda:0'):
 
 
     if args.use_haptic_enc:
-        # haptic_enc = TCN(
-        #     input_size=6,
-        #     num_channels=list(args.tcn_channels) + 
-        #         [args.dim_z_haptic]
-        # ).to(device=device)
-        # models["haptic_enc"] = haptic_enc
-        # z_dim_in += args.dim_z_haptic
         haptic_enc = CNNEncoder1D(
             input=6,
             latent_size=args.dim_z_haptic,
@@ -303,13 +295,6 @@ def load_vh_models(path, args, mode='eval', device='cuda:0'):
         z_dim_in += args.dim_z_haptic
 
     if args.use_arm_enc:
-        # arm_enc = TCN(
-        #     input_size=6,
-        #     num_channels=list(args.tcn_channels) + 
-        #         [args.dim_z_arm]
-        # ).to(device=device)
-        # models["arm_enc"] = arm_enc
-        # z_dim_in += args.dim_z_arm
         arm_enc = CNNEncoder1D(
             input=6,
             latent_size=args.dim_z_arm,
@@ -322,13 +307,6 @@ def load_vh_models(path, args, mode='eval', device='cuda:0'):
         z_dim_in += args.dim_z_arm
     
     if args.use_joint_enc:
-        # joint_enc = TCN(
-        #     input_size=12,
-        #     num_channels=list(args.tcn_channels) + 
-        #         [args.dim_z_haptic + args.dim_z_arm] 
-        # ).to(device=device)
-        # models["joint_enc"] = joint_enc
-        # z_dim_in += args.dim_z_arm + args.dim_z_haptic
         joint_enc = CNNEncoder1D(
             input=12,
             latent_size=args.dim_z_arm + args.dim_z_haptic,

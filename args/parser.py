@@ -45,16 +45,9 @@ def parse_vh_training_args():
     # Network args
     parser.add_argument('--dim_u', type=int, default=2, help='Action dimension')
     parser.add_argument('--dim_z', type=int, default=16, help='Final latent state dimension')
-    parser.add_argument('--use_img_enc', type=str2bool, default=True, help='Encode image data')
-    parser.add_argument('--use_img_dec', type=str2bool, default=True, help='Decode image data')
     parser.add_argument('--dim_z_img', type=int, default=16, help='Latent state dimension of images')
-    parser.add_argument('--use_haptic_enc', type=str2bool, default=True, help='Encode haptic data')
-    parser.add_argument('--use_haptic_dec', type=str2bool, default=False, help='Decode haptic data')
-    parser.add_argument('--dim_z_haptic', type=int, default=8, help='Latent state dimension of haptic')
-    parser.add_argument('--use_arm_enc', type=str2bool, default=True, help='Encode arm data')
-    parser.add_argument('--use_arm_dec', type=str2bool, default=False, help='Decode arm data')
-    parser.add_argument('--use_joint_enc', type=str2bool, default=False, help='Encode haptic and arm data jointly')
-    parser.add_argument('--dim_z_arm', type=int, default=8, help='Latent state dimension of arm')
+    parser.add_argument('--dim_z_context', type=int, default=16, help='Latent state dimension of contextual data')
+    parser.add_argument('--context_modality', choices=['none', 'arm', 'ft', 'joint'], default='none', help='Context modality')     
     parser.add_argument('--dim_x', type=str2inttuple, default=(1, 64, 64), help='3-tuple image dimension (C, H, W)')
     parser.add_argument('--K', type=int, default=15, help='Number of mixture component for dynamic models')
     parser.add_argument('--fc_hidden_size', type=int, default=256, help='The number of hidden units for each linear layer')
@@ -64,43 +57,17 @@ def parse_vh_training_args():
     parser.add_argument('--dyn_net', choices=['linearmix', 'linearrank1', 'nonlinear'], default='linearmix', help='Network architecture for dynamics')     
     parser.add_argument('--non_linearity', choices=['relu', 'elu', 'softplus'], default='relu', help='Activation used for decoder neural network')
     parser.add_argument('--frame_stacks', type=int, default=1, help="Number of frames to stack")
-    parser.add_argument('--tcn_channels', type=str2inttuple, default=(128, 64, 32), help='3-tuple image dimension (C, H, W)')
     parser.add_argument('--n_step_pred', type=int, default=1, help="Number of steps to predict during training")
-    
+    parser.add_argument('--use_context_img', type=str2bool, default=False, help='Use ')
+
     # Training Settings
     parser.add_argument('--lr', type=float, default= 3e-4, help='Learning rate')
     parser.add_argument('--opt_vae_epochs', type=int, default=0, help='Number of epochs to train VAE only')
     parser.add_argument('--opt_vae_base_epochs', type=int, default=1024, help='Number of epochs to train VAE and base mixture matrices (must be >= opt_vae_epochs)')
+    parser.add_argument('--opt_n_step_pred_epochs', type=int, default=2048, help='Number of epochs before training with n step reconstruction')
     parser.add_argument('--lam_rec', type=float, default=0.95, help='Weight of image reconstruction loss')
     parser.add_argument('--lam_kl', type=float, default=0.80, help='Weight of kl loss')
     parser.add_argument('--use_binary_ce', type=str2bool, default=False, help='Use Binary Cross Entropy loss insted of default Mean Squared Error loss')
 
     args = parse_common_training_args(parser=parser)
-    return args
-
-def parse_ppo_args():
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument('--action_std', type=float, default=0.5, help='Std of action distribution')
-    parser.add_argument('--eps_clip', type=float, default=0.2, help='PPO clip parameter')
-    parser.add_argument('--gamma', type=float, default=0.99, help='Discount factor')
-    parser.add_argument('--epochs', type=int, default=80, help='Amount of update policy epochs')
-    parser.add_argument('--logging_interval', type=int, default=10, help='Print avg reward every interval')
-    parser.add_argument('--update_timesteps', type=int, default=3750, help='Update policy every timestep amount')
-    parser.add_argument('--opt_timesteps', type=int, default=3750, help='Size of minibatch update')
-    parser.add_argument('--max_timesteps', type=int, default=1500, help='Maximum timesteps per episode')
-    parser.add_argument('--max_episodes', type=int, default=10000, help='Maximum episodes for training')
-    parser.add_argument('--solved_reward', type=int, default=300, help='Reward threshold for solved environment')
-    parser.add_argument('--architecture', choices=['cnn', 'mlp'], default='mlp',  help='Network architecture used')
-    parser.add_argument('--lr', type=float, default=0.0003, help='Weight of kl loss')
-    parser.add_argument('--device', type=str, default='cpu', help='Device to use for PyTorch')
-    parser.add_argument('--env_name', type=str, default='ThingReacher2D-v0', help='Name of environment from gym')
-
-    parser.add_argument('--render', type=str2bool, default=False, help='Render environment')
-    parser.add_argument('--is_render', type=str2bool, default=None, help='Rendering specific to pybullet environment')
-    parser.add_argument('--dim_u', type=int, default=2, help='Action dimension')
-    parser.add_argument('--frame_stack', type=int, default=1, help='Number of frames to stack')
-    parser.add_argument('--dim_x', type=str2inttuple, default=(64, 64, 1), help='3-tuple image dimension (H, W, C)')
-    args = parser.parse_args()
-
     return args
