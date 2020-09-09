@@ -252,10 +252,12 @@ def load_models(path, args, mode='eval', device='cuda:0'):
     
     return enc, dec, dyn
 
-def load_vh_models(path, args, mode='eval', device='cuda:0'):
+def load_vh_models(args, path=None, mode='eval', device='cuda:0'):
     """Load the trained visual haptic models based on args."""
-    print("Loading models in path: ", path)
-
+    if path is not None:
+        print("Loading models in path: ", path)
+    
+    # Non-linearities for networks
     if args.non_linearity=="relu":
         nl = nn.ReLU()
     elif args.non_linearity=="elu":
@@ -264,59 +266,82 @@ def load_vh_models(path, args, mode='eval', device='cuda:0'):
         nl = nn.Softplus()
     else:
         raise NotImplementedError()
-    
-    models = {}
+
+    nets = {}
     z_dim_in = 0
 
-    if args.use_img_enc:
-        img_enc = FullyConvEncoderVAE(
+    # Networks
+    img_enc = FullyConvEncoderVAE(
+        input=args.dim_x[0] * (args.frame_stacks + 1),
+        latent_size=args.dim_z_img,
+        bn=args.use_batch_norm,
+        drop=args.use_dropout,
+        nl=nl,
+        img_dim=args.dim_x[1],
+        stochastic=False
+    ).to(device=device)
+    nets["img_enc"] = img_enc
+    z_dim_in += args.dim_z_img
+
+    if args.context_modality != "none":
+        if args.context_modality == "joint": 
+            data_dim = 12
+        elif args.context_modality == "arm" or "ft": 
+            data_dim=6
+
+        context_enc = CNNEncoder1D(
+            input=data_dim,
+            latent_size=args.dim_z_context,
+            bn=args.use_batch_norm,
+            drop=args.use_dropout,
+            nl=nl,
+            stochastic=False
+        ).to(device=device)
+        nets["context_enc"] = context_enc
+        z_dim_in += args.dim_z_context
+
+    if args.use_context_img:
+        context_img_enc = FullyConvEncoderVAE(
             input=args.dim_x[0] * (args.frame_stacks + 1),
-            latent_size=args.dim_z_img,
+            latent_size=args.dim_z_context,
             bn=args.use_batch_norm,
             drop=args.use_dropout,
             nl=nl,
             img_dim=args.dim_x[1],
             stochastic=False
         ).to(device=device)
-        models["img_enc"] = img_enc
-        z_dim_in += args.dim_z_img
+        nets["context_img_enc"] = context_img_enc
+        z_dim_in += args.dim_z_context
 
+        if args.reconstruct_context_img:
+            context_img_dec = FullyConvDecoderVAE(
+                input=args.dim_x[0] * (args.frame_stacks + 1),
+                latent_size=args.dim_z_context,
+                bn=args.use_batch_norm,
+                drop=args.use_dropout,
+                nl=nl,
+                img_dim=args.dim_x[1],
+                output_nl=None if args.use_binary_ce else nn.Sigmoid()
+            ).to(device=device)
+            nets["context_img_dec"] = context_img_dec
 
-    if args.use_haptic_enc:
-        haptic_enc = CNNEncoder1D(
-            input=6,
-            latent_size=args.dim_z_haptic,
-            bn=args.use_batch_norm,
-            drop=args.use_dropout,
-            nl=nl,
-            stochastic=False
-        ).to(device=device)
-        models["haptic_enc"] = haptic_enc
-        z_dim_in += args.dim_z_haptic
+    dim_z_rec = args.dim_z
 
-    if args.use_arm_enc:
-        arm_enc = CNNEncoder1D(
-            input=6,
-            latent_size=args.dim_z_arm,
-            bn=args.use_batch_norm,
-            drop=args.use_dropout,
-            nl=nl,
-            stochastic=False
-        ).to(device=device)
-        models["arm_enc"] = arm_enc
-        z_dim_in += args.dim_z_arm
-    
-    if args.use_joint_enc:
-        joint_enc = CNNEncoder1D(
-            input=12,
-            latent_size=args.dim_z_arm + args.dim_z_haptic,
-            bn=args.use_batch_norm,
-            drop=args.use_dropout,
-            nl=nl,
-            stochastic=False
-        ).to(device=device)
-        models["joint_enc"] = joint_enc
-        z_dim_in += args.dim_z_arm + args.dim_z_haptic
+    if args.context_modality != "none":
+        dim_z_rec += args.dim_z_context
+    if args.use_context_img:
+        dim_z_rec += args.dim_z_context
+
+    img_dec = FullyConvDecoderVAE(
+        input=args.dim_x[0] * (args.frame_stacks + 1),
+        latent_size=dim_z_rec,
+        bn=args.use_batch_norm,
+        drop=args.use_dropout,
+        nl=nl,
+        img_dim=args.dim_x[1],
+        output_nl=None if args.use_binary_ce else nn.Sigmoid()
+    ).to(device=device)
+    nets["img_dec"] = img_dec
 
     mix = FCNEncoderVAE(
         dim_in=z_dim_in,
@@ -327,20 +352,7 @@ def load_vh_models(path, args, mode='eval', device='cuda:0'):
         hidden_size=args.fc_hidden_size,
         stochastic=True
     ).to(device=device)
-    models["mix"] = mix
-
-    output_nl = None if args.use_binary_ce else nn.Sigmoid()
-
-    img_dec = FullyConvDecoderVAE(
-        input=args.dim_x[0] * (args.frame_stacks + 1),
-        latent_size=args.dim_z_img,
-        bn=args.use_batch_norm,
-        drop=args.use_dropout,
-        nl=nl,
-        img_dim=args.dim_x[1],
-        output_nl=output_nl
-    ).to(device=device)   
-    models["img_dec"] = img_dec
+    nets["mix"] = mix
 
     # Dynamics network
     if args.dyn_net == "linearmix":
@@ -370,21 +382,21 @@ def load_vh_models(path, args, mode='eval', device='cuda:0'):
         ).to(device=device)
     else:
         raise NotImplementedError()
-    models["dyn"] = dyn
-
-
-    for k, model in models.items():
-        try:
-            model.load_state_dict(
-                torch.load(path + f"/{k}.pth", map_location=device)
-            )
-            if mode == 'eval':
-                model.eval()
-            elif mode == 'train':
-                model.train()
-            else:
-                raise NotImplementedError()
-        except Exception as e: 
-            print(e)             
+    nets["dyn"] = dyn
     
-    return models
+    if path is not None:
+        for k, model in nets.items():
+            try:
+                model.load_state_dict(
+                    torch.load(path + f"/{k}.pth", map_location=device)
+                )
+                if mode == 'eval':
+                    model.eval()
+                elif mode == 'train':
+                    model.train()
+                else:
+                    raise NotImplementedError()
+            except Exception as e: 
+                print(e)             
+    
+    return nets

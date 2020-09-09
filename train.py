@@ -1,7 +1,10 @@
-from utils import (set_seed_torch, 
-                    common_init_weights, 
-                    Normalize,
-                    frame_stack)
+from utils import (
+    set_seed_torch, 
+    common_init_weights, 
+    Normalize,
+    frame_stack,
+    load_vh_models
+)
 import numpy as np
 import random
 from args.parser import parse_vh_training_args
@@ -18,15 +21,19 @@ import torchvision as tv
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
 
-from networks import (FullyConvEncoderVAE,
-                        FullyConvDecoderVAE,
-                        FCNEncoderVAE,
-                        FCNDecoderVAE,
-                        CNNEncoder1D,
-                        CNNDecoder1D)
-from models import (LinearMixSSM, 
-                    LinearSSM, 
-                    NonLinearSSM)
+from networks import (
+    FullyConvEncoderVAE,
+    FullyConvDecoderVAE,
+    FCNEncoderVAE,
+    FCNDecoderVAE,
+    CNNEncoder1D,
+    CNNDecoder1D
+)
+from models import (
+    LinearMixSSM, 
+    LinearSSM, 
+    NonLinearSSM
+)
 from datasets import VisualHaptic
 from losses import torch_kl
 
@@ -56,136 +63,16 @@ def train(args):
             json.dump(args.__dict__, f, indent=2)
         writer = SummaryWriter(logdir=save_dir)
 
-    # Non-linearities for networks
-    if args.non_linearity=="relu":
-        nl = nn.ReLU()
-    elif args.non_linearity=="elu":
-        nl = nn.ELU()
-    elif args.non_linearity=="softplus":
-        nl = nn.Softplus()
-    else:
-        raise NotImplementedError()
+    nets = load_vh_models(args, device=device)
 
-    nets = {}
-    z_dim_in = 0
-    rec_modalities = []
-
-    # Networks
-    img_enc = FullyConvEncoderVAE(
-        input=args.dim_x[0] * (args.frame_stacks + 1),
-        latent_size=args.dim_z_img,
-        bn=args.use_batch_norm,
-        drop=args.use_dropout,
-        nl=nl,
-        img_dim=args.dim_x[1],
-        stochastic=False
-    ).to(device=device)
-    nets["img_enc"] = img_enc
-    z_dim_in += args.dim_z_img
-
-    dim_z_rec = args.dim_z
-
-    if args.context_modality != "none":
-        dim_z_rec += args.dim_z_context
-    if args.use_context_img:
-        dim_z_rec += args.dim_z_context
-
-    img_dec = FullyConvDecoderVAE(
-        input=args.dim_x[0] * (args.frame_stacks + 1),
-        latent_size=dim_z_rec,
-        bn=args.use_batch_norm,
-        drop=args.use_dropout,
-        nl=nl,
-        img_dim=args.dim_x[1],
-        output_nl=None if args.use_binary_ce else nn.Sigmoid()
-    ).to(device=device)
-    nets["img_dec"] = img_dec
-
-    if args.context_modality != "none":
-        if args.context_modality == "joint": 
-            data_dim = 12
-        elif args.context_modality == "arm" or "ft": 
-            data_dim=6
-
-        context_enc = CNNEncoder1D(
-            input=data_dim,
-            latent_size=args.dim_z_context,
-            bn=args.use_batch_norm,
-            drop=args.use_dropout,
-            nl=nl,
-            stochastic=False
-        ).to(device=device)
-        nets["context_enc"] = context_enc
-        z_dim_in += args.dim_z_context
-
-    if args.use_context_img:
-        context_img_enc = FullyConvEncoderVAE(
-            input=args.dim_x[0] * (args.frame_stacks + 1),
-            latent_size=args.dim_z_context,
-            bn=args.use_batch_norm,
-            drop=args.use_dropout,
-            nl=nl,
-            img_dim=args.dim_x[1],
-            stochastic=False
-        ).to(device=device)
-        nets["context_img_enc"] = context_img_enc
-        z_dim_in += args.dim_z_context
-
-        if args.reconstruct_context_img:
-            context_img_dec = FullyConvDecoderVAE(
-                input=args.dim_x[0] * (args.frame_stacks + 1),
-                latent_size=args.dim_z_context,
-                bn=args.use_batch_norm,
-                drop=args.use_dropout,
-                nl=nl,
-                img_dim=args.dim_x[1],
-                output_nl=None if args.use_binary_ce else nn.Sigmoid()
-            ).to(device=device)
-            nets["context_img_dec"] = context_img_dec
-
-    mix = FCNEncoderVAE(
-        dim_in=z_dim_in,
-        dim_out=args.dim_z,
-        bn=args.use_batch_norm,
-        drop=args.use_dropout,
-        nl=nl,
-        hidden_size=args.fc_hidden_size,
-        stochastic=True
-    ).to(device=device)
-    nets["mix"] = mix
-
-    # Dynamics network
     if args.dyn_net == "linearmix":
-        dyn = LinearMixSSM(
-            dim_z=args.dim_z,
-            dim_u=args.dim_u,
-            hidden_size=args.rnn_hidden_size,
-            bidirectional=args.use_bidirectional,
-            net_type=args.rnn_net,
-            K=args.K
-        ).to(device=device)
-        base_params = [dyn.A, dyn.B]
+        base_params = [nets["dyn"].A, nets["dyn"].B]
     elif args.dyn_net == "linearrank1":
-        dyn = LinearSSM(
-            dim_z=args.dim_z,
-            dim_u=args.dim_u,
-            hidden_size=args.rnn_hidden_size,
-            bidirectional=args.use_bidirectional,
-            net_type=args.rnn_net
-        ).to(device=device)
         base_params = []
     elif args.dyn_net == "nonlinear":
-        dyn = NonLinearSSM(
-            dim_z=args.dim_z,
-            dim_u=args.dim_u,
-            hidden_size=args.rnn_hidden_size,
-            bidirectional=args.use_bidirectional,
-            net_type=args.rnn_net
-        ).to(device=device)
         base_params = []
     else:
         raise NotImplementedError()
-    nets["dyn"] = dyn
 
     enc_params = [list(v.parameters()) for k, v in nets.items() if "enc" in k]
     enc_params = [v for sl in enc_params for v in sl] # remove nested list
@@ -233,9 +120,9 @@ def train(args):
 
     # Dataset
     dataset = VisualHaptic(
-                  args.dataset,
-                  img_shape=args.dim_x
-              )
+        args.dataset,
+        img_shape=args.dim_x
+    )
 
     idx = list(range(len(dataset)))
     split = int(np.floor(args.val_split * len(dataset)))
