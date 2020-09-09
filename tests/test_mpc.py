@@ -4,10 +4,8 @@ os.sys.path.insert(0, "..")
 from mpc import CVXLinear, Grad, CEM
 from mpc_wrappers import LinearStateSpaceWrapper, LinearMixWrapper
 from models import LinearMixSSM
-import numpy as np
 import torch
-import scipy.sparse as sparse
-
+import numpy as np
 
 def random_MPC_test():
     dyn = LinearMixSSM(

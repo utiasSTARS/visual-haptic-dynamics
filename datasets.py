@@ -50,7 +50,8 @@ class VisualHaptic(data.Dataset):
         sample = {'img': self.data["img"][idx], # (T, 1, res, res) 
                   'ft': self.data["ft"][idx],
                   'arm': self.data["arm"][idx],
-                  'action': self.data["action"][idx]}
+                  'action': self.data["action"][idx],
+                  'gt_plate_pos': self.data["gt_plate_pos"][idx]}
 
         return sample
 

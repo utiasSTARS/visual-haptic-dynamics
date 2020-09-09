@@ -11,3 +11,4 @@ __pycache__/
 saved_models/
 experiments/data/
 experiments/results/
+experiments/goal_imgs/

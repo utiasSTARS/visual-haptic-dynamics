@@ -92,6 +92,7 @@ class LinearMixWrapper():
             z_hat[ll] = z_t1_hat
             mu_hat[ll] = mu_z_t1_hat
             var_hat[ll] = var_z_t1_hat
+
             A[ll] = A_t1
             B[ll] = B_t1
             z_0_sample, mu_0, var_0, h_0 = z_t1_hat, mu_z_t1_hat, var_z_t1_hat, h_t1    

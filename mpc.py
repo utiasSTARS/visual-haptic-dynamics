@@ -120,8 +120,6 @@ class CVXLinear(MPC):
                     u=u_0
                 )
 
-                #TODO: Update linear matrices here if needed based on z_hat
-
                 for h in range(self.H):
                     self.A[h].value = info["A"][h, 0].cpu().numpy()
                     self.B[h].value = info["B"][h, 0].cpu().numpy()
@@ -131,7 +129,7 @@ class CVXLinear(MPC):
 
                 ret = self.prob.solve(solver=cp.ECOS)
                 
-                # Update operational point u_0
+                # Update operational point z_0 and u_0
                 u_0 = self.u.value
                 u_0 = np.expand_dims(u_0, axis=1)
                 u_0 = torch.tensor(u_0).float()
