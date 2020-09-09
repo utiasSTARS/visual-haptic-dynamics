@@ -47,7 +47,6 @@ def parse_vh_training_args():
     parser.add_argument('--dim_z', type=int, default=16, help='Final latent state dimension')
     parser.add_argument('--dim_z_img', type=int, default=16, help='Latent state dimension of images')
     parser.add_argument('--dim_z_context', type=int, default=16, help='Latent state dimension of contextual data')
-    parser.add_argument('--context_modality', choices=['none', 'arm', 'ft', 'joint'], default='none', help='Context modality')     
     parser.add_argument('--dim_x', type=str2inttuple, default=(1, 64, 64), help='3-tuple image dimension (C, H, W)')
     parser.add_argument('--K', type=int, default=15, help='Number of mixture component for dynamic models')
     parser.add_argument('--fc_hidden_size', type=int, default=256, help='The number of hidden units for each linear layer')
@@ -58,7 +57,9 @@ def parse_vh_training_args():
     parser.add_argument('--non_linearity', choices=['relu', 'elu', 'softplus'], default='relu', help='Activation used for decoder neural network')
     parser.add_argument('--frame_stacks', type=int, default=1, help="Number of frames to stack")
     parser.add_argument('--n_step_pred', type=int, default=1, help="Number of steps to predict during training")
-    parser.add_argument('--use_context_img', type=str2bool, default=False, help='Use ')
+    parser.add_argument('--context_modality', choices=['none', 'arm', 'ft', 'joint'], default='none', help='Context modality')
+    parser.add_argument('--use_context_img', type=str2bool, default=False, help='Use initial image as context')
+    parser.add_argument('--reconstruct_context_img', type=str2bool, default=False, help='Reconstruct the context image')
 
     # Training Settings
     parser.add_argument('--lr', type=float, default= 3e-4, help='Learning rate')

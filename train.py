@@ -121,7 +121,7 @@ def train(args):
     if args.use_context_img:
         context_img_enc = FullyConvEncoderVAE(
             input=args.dim_x[0] * (args.frame_stacks + 1),
-            latent_size=args.dim_z_img,
+            latent_size=args.dim_z_context,
             bn=args.use_batch_norm,
             drop=args.use_dropout,
             nl=nl,
@@ -131,16 +131,17 @@ def train(args):
         nets["context_img_enc"] = context_img_enc
         z_dim_in += args.dim_z_context
 
-        # context_img_dec = FullyConvDecoderVAE(
-        #     input=args.dim_x[0] * (args.frame_stacks + 1),
-        #     latent_size=dim_z_rec,
-        #     bn=args.use_batch_norm,
-        #     drop=args.use_dropout,
-        #     nl=nl,
-        #     img_dim=args.dim_x[1],
-        #     output_nl=None if args.use_binary_ce else nn.Sigmoid()
-        # ).to(device=device)
-        # nets["img_dec"] = img_dec
+        if args.reconstruct_context_img:
+            context_img_dec = FullyConvDecoderVAE(
+                input=args.dim_x[0] * (args.frame_stacks + 1),
+                latent_size=args.dim_z_context,
+                bn=args.use_batch_norm,
+                drop=args.use_dropout,
+                nl=nl,
+                img_dim=args.dim_x[1],
+                output_nl=None if args.use_binary_ce else nn.Sigmoid()
+            ).to(device=device)
+            nets["context_img_dec"] = context_img_dec
 
     mix = FCNEncoderVAE(
         dim_in=z_dim_in,
@@ -283,7 +284,10 @@ def train(args):
             loader = val_loader
         
         # Keep track of losses
-        running_stats = {"total_l": [], "kl_l": [], "rec_l_img": []}
+        running_stats = {"total_l": [], "kl_l": [], "img_rec_l": []}
+
+        if args.use_context_img and args.reconstruct_context_img:
+            running_stats["context_img_rec_l"] = []
 
         for idx, data in enumerate(loader):
             if idx == args.n_example:
@@ -315,20 +319,24 @@ def train(args):
                 x_ll[k] = x[k][:, ll:]
             u_ll = u[:, ll:]
             n, l = x_ll['img'].shape[0], x_ll['img'].shape[1]
-
-            x_ll['context_img'] = x_ll["img"][:, 0].unsqueeze(1).repeat(1, l, 1, 1, 1)
+            
+            if args.use_context_img:
+                context_img = x_ll["img"][:, 0]
+            
             x_ll = {k:v.reshape(-1, *v.shape[2:]) for k, v in x_ll.items()}
 
-            # 1. Encoding            
+            # 1. Encoding              
             z_all_enc = []
-            z_all_enc.append(nets["img_enc"](x_ll['img']))
-            
+            z_img = nets["img_enc"](x_ll['img'])
+            z_all_enc.append(z_img)
+
             if args.context_modality != "none":
                 z_context = nets["context_enc"](x_ll["context"])
                 z_all_enc.append(z_context)
             if args.use_context_img:
-                z_img_context = nets["context_img_enc"](x_ll['context_img'])
-                z_all_enc.append(z_img_context)
+                z_img_context = nets["context_img_enc"](context_img)
+                z_img_context_rep = z_img_context.unsqueeze(1).repeat(1, l, 1).reshape(-1, z_img_context.shape[-1])
+                z_all_enc.append(z_img_context_rep)
 
             # Concatenate modalities and mix
             z_cat_enc = torch.cat(z_all_enc, dim=1)
@@ -338,23 +346,30 @@ def train(args):
             # Group sample, mean, covariance
             q_z = {"z": z, "mu": mu_z, "cov": var_z}
             
-            # 2. Reconstruction
+            # 2.a Reconstruction for context image
+            if args.use_context_img and args.reconstruct_context_img:
+                context_img_hat = nets["context_img_dec"](z_img_context)
+                loss_rec_context_img = (torch.sum(
+                        loss_REC(context_img_hat, context_img)
+                    )) / n
+                running_stats['context_img_rec_l'].append(loss_rec_context_img.item())
+
+            # 2.b Reconstruction
             z_all_dec = []
             z_all_dec.append(q_z["z"])
 
             if args.context_modality != "none":
                 z_all_dec.append(z_context)
             if args.use_context_img:
-                z_all_dec.append(z_img_context)
+                z_all_dec.append(z_img_context_rep)
+                
+            # Concatenate modalities and decode
             z_cat_dec = torch.cat(z_all_dec, dim=1)
-
-            loss_rec = 0
             x_hat_img = nets["img_dec"](z_cat_dec)
             loss_rec_img = (torch.sum(
                 loss_REC(x_hat_img, x_ll['img'])
             )) / n
-            running_stats['rec_l_img'].append(loss_rec_img.item())
-            loss_rec += loss_rec_img
+            running_stats['img_rec_l'].append(loss_rec_img.item())
 
             # 3. Dynamics constraint with KL
             loss_kl = 0
@@ -456,14 +471,17 @@ def train(args):
                 loss_kl.item()
             )
 
-            # Jointly optimize everything
-            total_loss = args.lam_rec * loss_rec + \
-                args.lam_kl * loss_kl
-                
             running_stats['total_l'].append(
-                loss_rec.item() +
+                loss_rec_img.item() +
                 loss_kl.item()
             )
+
+            # Jointly optimize everything
+            total_loss = args.lam_rec * loss_rec_img + \
+                args.lam_kl * loss_kl 
+
+            if args.use_context_img and args.reconstruct_context_img:
+                total_loss += args.lam_rec * loss_rec_context_img
 
             if opt:
                 opt.zero_grad()
@@ -498,20 +516,18 @@ def train(args):
             epoch_time = time.time() - tic
 
             print((f"Epoch {epoch}/{args.n_epoch}: " 
-                f"Avg train loss: {summary_train['avg_total_l']}, " 
+                f"Avg train loss: {summary_train['avg_total_l']}, "
                 f"Avg val loss: {summary_val['avg_total_l'] if args.val_split > 0 else 'N/A'}, "
                 f"Time per epoch: {epoch_time}"))
             
             if not args.debug:
-                # Tensorboard
-                writer.add_scalar(f"loss/img/train", summary_train['avg_rec_l_img'], epoch)
-                for loss in ['total', 'kl']:
-                    writer.add_scalar(f"loss/{loss}/train", summary_train[f'avg_{loss}_l'], epoch)
+                # Tensorboard 
+                for k, v in summary_train.items():
+                    writer.add_scalar(f"loss/{k}/train", v, epoch)
 
                 if args.val_split > 0:
-                    writer.add_scalar(f"loss/img/val", summary_val['avg_rec_l_img'], epoch)
-                    for loss in ['total', 'kl']:
-                        writer.add_scalar(f"loss/{loss}/val", summary_val[f'avg_{loss}_l'], epoch)
+                    for k, v in summary_val.items():
+                        writer.add_scalar(f"loss/{k}/train", v, epoch)
 
                 # Save model at intermittent checkpoints 
                 if epoch % args.n_checkpoint_epoch == 0:
@@ -525,10 +541,9 @@ def train(args):
                     )
     finally:
         if not args.debug:
-            if not np.isnan(summary_train['avg_total_l']):
-                # Save models
-                for k, v in nets.items():
-                    torch.save(v.state_dict(), save_dir + f"/{k}.pth")
+            # Save models
+            for k, v in nets.items():
+                torch.save(v.state_dict(), save_dir + f"/{k}.pth")
             writer.close()
 
 def main():
