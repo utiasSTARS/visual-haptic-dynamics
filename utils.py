@@ -327,8 +327,9 @@ def load_vh_models(args, path=None, mode='eval', device='cuda:0'):
 
     dim_z_rec = args.dim_z
 
-    if args.context_modality != "none":
-        dim_z_rec += args.dim_z_context
+    #XXX: To include modality context
+    # if args.context_modality != "none":
+    #     dim_z_rec += args.dim_z_context
     if args.use_context_img:
         dim_z_rec += args.dim_z_context
 

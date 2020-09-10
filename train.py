@@ -209,7 +209,7 @@ def train(args):
             
             if args.use_context_img:
                 context_img = x_ll["img"][:, 0]
-            
+
             x_ll = {k:v.reshape(-1, *v.shape[2:]) for k, v in x_ll.items()}
 
             # 1. Encoding              
@@ -245,8 +245,9 @@ def train(args):
             z_all_dec = []
             z_all_dec.append(q_z["z"])
 
-            if args.context_modality != "none":
-                z_all_dec.append(z_context)
+            #XXX: To include modality context
+            # if args.context_modality != "none":
+            #     z_all_dec.append(z_context)
             if args.use_context_img:
                 z_all_dec.append(z_img_context_rep)
                 
