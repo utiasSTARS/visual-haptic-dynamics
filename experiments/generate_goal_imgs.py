@@ -42,5 +42,5 @@ if __name__ == "__main__":
         goal = generate_goal_raw_data(dataset, ii)
         goals.append(goal)
 
-    with open('./goal_imgs/goal.pkl', 'wb') as handle:
-        pickle.dump(goals, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    with open('./goal_imgs/goals.pkl', 'wb') as handle:
+        pickle.dump(goals, handle)
