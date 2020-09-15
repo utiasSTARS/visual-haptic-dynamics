@@ -59,8 +59,8 @@ def parse_vh_training_args():
     parser.add_argument('--n_step_pred', type=int, default=1, help="Number of steps to predict during training")
     parser.add_argument('--context_modality', choices=['none', 'arm', 'ft', 'joint'], default='none', help='Context modality')
     parser.add_argument('--use_context_img', type=str2bool, default=False, help='Use initial image as context')
-    parser.add_argument('--reconstruct_context_img', type=str2bool, default=False, help='Reconstruct the context image')
-
+    parser.add_argument('--learn_uncertainty', type=str2bool, default=False, help='Use initial image as context')
+    
     # Training Settings
     parser.add_argument('--lr', type=float, default= 3e-4, help='Learning rate')
     parser.add_argument('--opt_vae_epochs', type=int, default=0, help='Number of epochs to train VAE only')

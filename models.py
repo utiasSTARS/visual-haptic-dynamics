@@ -21,7 +21,7 @@ class LinearMixSSM(nn.Module):
     def __init__(
         self, dim_z, dim_u, hidden_size=128, 
         K=1, layers=1, bidirectional=False, 
-        net_type="lstm"
+        net_type="lstm", learn_uncertainty=False,
     ):
         super(LinearMixSSM, self).__init__()
         self.K = K
@@ -52,7 +52,11 @@ class LinearMixSSM(nn.Module):
             self.linear = nn.Linear(in_features=hidden_size, out_features=K)
 
         self.softmax = nn.Softmax(dim=-1)
-    
+        
+        self.learn_uncertainty = learn_uncertainty
+        if self.learn_uncertainty: 
+            self.fc_logvar = nn.Linear(hidden_size, dim_z)
+
     def forward(
         self, z_t, mu_t, var_t, u, 
         h_0=None, single=False, 
@@ -120,8 +124,17 @@ class LinearMixSSM(nn.Module):
 
         # Transition distribution
         mu_t1 = z_t1
-        Q = torch.eye(self.dim_z, requires_grad=False, device=z_t.device) 
-        var_t1 = 0.01 * Q.repeat(l, n, 1, 1)
+
+        if self.learn_uncertainty:
+            if self.bidirectional:
+                logvar_t1 = self.fc_logvar(h_t.reshape(-1, 2*self.hidden_size)) # (seq_len * batch_size, dim_z)
+            else:
+                logvar_t1 = self.fc_logvar(h_t.reshape(-1, self.hidden_size)) # (seq_len * batch_size, dim_z)
+            var_t1 = torch.diag_embed(torch.exp(logvar_t1)) # (seq_len * batch_size, dim_z, dim_z)
+            var_t1 = var_t1.reshape(l, n, *var_t1.shape[1:])
+        else:
+            Q = torch.eye(self.dim_z, requires_grad=False, device=z_t.device) 
+            var_t1 = 0.01 * Q.repeat(l, n, 1, 1)
 
         A_t = A_t.reshape(l, n, *A_t.shape[1:])
         B_t = B_t.reshape(l, n, *B_t.shape[1:])

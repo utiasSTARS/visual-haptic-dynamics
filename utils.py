@@ -313,23 +313,8 @@ def load_vh_models(args, path=None, mode='eval', device='cuda:0'):
         nets["context_img_enc"] = context_img_enc
         z_dim_in += args.dim_z_context
 
-        if args.reconstruct_context_img:
-            context_img_dec = FullyConvDecoderVAE(
-                input=args.dim_x[0] * (args.frame_stacks + 1),
-                latent_size=args.dim_z_context,
-                bn=args.use_batch_norm,
-                drop=args.use_dropout,
-                nl=nl,
-                img_dim=args.dim_x[1],
-                output_nl=None if args.use_binary_ce else nn.Sigmoid()
-            ).to(device=device)
-            nets["context_img_dec"] = context_img_dec
-
     dim_z_rec = args.dim_z
 
-    #XXX: To include modality context
-    # if args.context_modality != "none":
-    #     dim_z_rec += args.dim_z_context
     if args.use_context_img:
         dim_z_rec += args.dim_z_context
 
@@ -362,6 +347,7 @@ def load_vh_models(args, path=None, mode='eval', device='cuda:0'):
             dim_u=args.dim_u,
             hidden_size=args.rnn_hidden_size,
             bidirectional=args.use_bidirectional,
+            learn_uncertainty=args.learn_uncertainty,
             net_type=args.rnn_net,
             K=args.K
         ).to(device=device)

@@ -125,6 +125,8 @@ def train(args):
     )
 
     idx = list(range(len(dataset)))
+    random.shuffle(idx)
+
     split = int(np.floor(args.val_split * len(dataset)))
     train_sampler = SubsetRandomSampler(idx[split:])
     valid_sampler = SubsetRandomSampler(idx[:split])
@@ -172,9 +174,6 @@ def train(args):
         
         # Keep track of losses
         running_stats = {"total_l": [], "kl_l": [], "img_rec_l": []}
-
-        if args.use_context_img and args.reconstruct_context_img:
-            running_stats["context_img_rec_l"] = []
 
         for idx, data in enumerate(loader):
             if idx == args.n_example:
@@ -232,22 +231,11 @@ def train(args):
 
             # Group sample, mean, covariance
             q_z = {"z": z, "mu": mu_z, "cov": var_z}
-            
-            # 2.a Reconstruction for context image
-            if args.use_context_img and args.reconstruct_context_img:
-                context_img_hat = nets["context_img_dec"](z_img_context)
-                loss_rec_context_img = (torch.sum(
-                        loss_REC(context_img_hat, context_img)
-                    )) / n
-                running_stats['context_img_rec_l'].append(loss_rec_context_img.item())
 
-            # 2.b Reconstruction
+            # 2. Reconstruction
             z_all_dec = []
             z_all_dec.append(q_z["z"])
 
-            #XXX: To include modality context
-            # if args.context_modality != "none":
-            #     z_all_dec.append(z_context)
             if args.use_context_img:
                 z_all_dec.append(z_img_context_rep)
                 
@@ -367,9 +355,6 @@ def train(args):
             # Jointly optimize everything
             total_loss = args.lam_rec * loss_rec_img + \
                 args.lam_kl * loss_kl 
-
-            if args.use_context_img and args.reconstruct_context_img:
-                total_loss += args.lam_rec * loss_rec_context_img
 
             if opt:
                 opt.zero_grad()

@@ -1,7 +1,7 @@
 device="cuda:0"
 
-dataset="/home/olimoyo/visual-haptic-dynamics/experiments/data/datasets/visual_haptic_2D_len16_withGT_3D9E4376CF4746EEA20DCD520218038D.pkl"
-# dataset="/home/olimoyo/visual-haptic-dynamics/experiments/data/datasets/visual_haptic_2D_9985E1798153438E880A8AD60B9146FE.pkl"
+# dataset="/home/olimoyo/visual-haptic-dynamics/experiments/data/datasets/visual_haptic_2D_len16_withGT_3D9E4376CF4746EEA20DCD520218038D.pkl"
+dataset="/home/olimoyo/visual-haptic-dynamics/experiments/data/datasets/visual_haptic_2D_len16_osc_withGT_8C12919B740845539C0E75B5CBAF7965.pkl"
 storage_base_path="/home/olimoyo/visual-haptic-dynamics/saved_models/monolith/"
 
 n_batches=(32)
@@ -19,7 +19,7 @@ opt_n_step_pred_epochs=(4096)
 debug=('True')
 nl=('relu')
 frame_stack=(1)
-val_split=(0)
+val_split=(0.1)
 lam_rec=(0.95)
 lam_kl=(0.80)
 n_checkpoint_epoch=(1)
@@ -28,7 +28,7 @@ task="push64vh"
 comment="${task}_gru_lm_v-contextimg-decode_1step_test"
 context_modality="joint"
 use_context_img=('True')
-reconstruct_context_img=('True')
+learn_uncertainty=('True')
 
 for n in {1..1}; do
     for dyn_net in ${dyn_nets[@]}; do
@@ -44,7 +44,7 @@ for n in {1..1}; do
                                             python ../train.py \
                                                 --context_modality $context_modality \
                                                 --use_context_img $use_context_img \
-                                                --reconstruct_context_img $reconstruct_context_img \
+                                                --learn_uncertainty $learn_uncertainty \
                                                 --K $K \
                                                 --n_step_pred $n_step_pred \
                                                 --dim_u 2 \
