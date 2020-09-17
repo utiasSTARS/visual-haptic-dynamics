@@ -222,22 +222,22 @@ class CNNEncoder1D(nn.Module):
         self.layers = nn.ModuleList()
         # 1D CNN (batch, channels, length)
 
-        self.layers.append(torch.nn.Conv1d(input, 32, kernel_size, stride=1, padding=1))
+        self.layers.append(torch.nn.Conv1d(input, 32, kernel_size, stride=1, padding=1, bias=False))
         if bn: self.layers.append(nn.BatchNorm1d(32, track_running_stats=True))
         if drop: self.layers.append(nn.Dropout(p=0.5))
         self.layers.append(nl)
 
-        self.layers.append(torch.nn.Conv1d(32, 64, kernel_size, stride=1, padding=1))
+        self.layers.append(torch.nn.Conv1d(32, 64, kernel_size, stride=1, padding=1, bias=False))
         if bn: self.layers.append(nn.BatchNorm1d(64, track_running_stats=True))
         if drop: self.layers.append(nn.Dropout(p=0.5))
         self.layers.append(nl)
 
-        self.layers.append(torch.nn.Conv1d(64, 128, kernel_size, stride=1, padding=1))
+        self.layers.append(torch.nn.Conv1d(64, 128, kernel_size, stride=1, padding=1, bias=False))
         if bn: self.layers.append(nn.BatchNorm1d(128, track_running_stats=True))
         if drop: self.layers.append(nn.Dropout(p=0.5))
         self.layers.append(nl)
 
-        self.layers.append(torch.nn.Conv1d(128, 256, kernel_size, stride=1, padding=1))
+        self.layers.append(torch.nn.Conv1d(128, 256, kernel_size, stride=1, padding=1, bias=False))
         if bn: self.layers.append(nn.BatchNorm1d(256, track_running_stats=True))
         if drop: self.layers.append(nn.Dropout(p=0.5))
         self.layers.append(nl)

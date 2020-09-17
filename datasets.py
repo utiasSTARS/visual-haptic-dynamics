@@ -34,6 +34,8 @@ class VisualHaptic(data.Dataset):
         elif img_shape[0] == 3:
             self.data["img"] = np.transpose(self.data["img"], (0, 1, 4, 2, 3)) / 255.0
 
+        self.data["ft"] /= 100.0
+        
     def __len__(self):
         return self.data["img"].shape[0]
 

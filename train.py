@@ -187,7 +187,6 @@ def train(args):
 
             u = data['action'].float().to(device=device)
             u = u[:, args.frame_stacks:]
-
             if args.context_modality != "none":
                 if args.context_modality == "joint": 
                     x["context"] = torch.cat((data['ft'], data['arm']), dim=-1) # (n, l, f, 12)
@@ -244,7 +243,8 @@ def train(args):
             x_hat_img = nets["img_dec"](z_cat_dec)
             loss_rec_img = (torch.sum(
                 loss_REC(x_hat_img, x_ll['img'])
-            )) / n
+            )) / (n * l)
+
             running_stats['img_rec_l'].append(loss_rec_img.item())
 
             # 3. Dynamics constraint with KL
@@ -284,13 +284,13 @@ def train(args):
                 return_all_hidden=True
             )
             p_z = {"z": z_t1_hat, "mu": mu_z_t1_hat, "cov": var_z_t1_hat}
-
+            
             loss_kl += torch_kl(
                 mu0=q_z["mu"][1:],
                 cov0=q_z["cov"][1:],
                 mu1=p_z["mu"],
                 cov1=p_z["cov"]
-            ) / n
+            ) / (n * (l - 1))
 
             # Original length before calculating n-step predictions
             length = p_z["mu"].shape[0]
