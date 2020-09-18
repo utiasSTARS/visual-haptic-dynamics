@@ -59,7 +59,6 @@ def parse_vh_training_args():
     parser.add_argument('--n_step_pred', type=int, default=1, help="Number of steps to predict during training")
     parser.add_argument('--context_modality', choices=['none', 'arm', 'ft', 'joint'], default='none', help='Context modality')
     parser.add_argument('--context', choices=['initial_latent_state', 'goal_latent_state', 'initial_image', 'goal_image', 'all_past_states', 'none'], default='none', help='Extra information for recognition network')
-    parser.add_argument('--use_context_img', type=str2bool, default=False, help='Use initial image as context')
 
     # Training Settings
     parser.add_argument('--lr', type=float, default= 3e-4, help='Learning rate')

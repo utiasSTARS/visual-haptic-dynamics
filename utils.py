@@ -300,7 +300,7 @@ def load_vh_models(args, path=None, mode='eval', device='cuda:0'):
         nets["context_enc"] = context_enc
         z_dim_in += args.dim_z_context
 
-    if args.context != none:
+    if args.context=="initial_latent_state" or args.context=="goal_latent_state":
         context_img_enc = FullyConvEncoderVAE(
             input=args.dim_x[0] * (args.frame_stacks + 1),
             latent_size=args.dim_z_context,
@@ -315,7 +315,7 @@ def load_vh_models(args, path=None, mode='eval', device='cuda:0'):
 
     dim_z_rec = args.dim_z
 
-    if args.use_context_img:
+    if args.context=="initial_latent_state" or args.context=="goal_latent_state":
         dim_z_rec += args.dim_z_context
 
     img_dec = FullyConvDecoderVAE(

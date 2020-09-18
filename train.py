@@ -205,7 +205,7 @@ def train(args):
             u_ll = u[:, ll:]
             n, l = x_ll['img'].shape[0], x_ll['img'].shape[1]
             
-            if args.use_context_img:
+            if args.context == "initial_latent_state":
                 context_img = x_ll["img"][:, 0]
 
             x_ll = {k:v.reshape(-1, *v.shape[2:]) for k, v in x_ll.items()}
@@ -218,7 +218,7 @@ def train(args):
             if args.context_modality != "none":
                 z_context = nets["context_enc"](x_ll["context"])
                 z_all_enc.append(z_context)
-            if args.use_context_img:
+            if args.context == "initial_latent_state":
                 z_img_context = nets["context_img_enc"](context_img)
                 z_img_context_rep = z_img_context.unsqueeze(1).repeat(1, l, 1).reshape(-1, z_img_context.shape[-1])
                 z_all_enc.append(z_img_context_rep)
@@ -235,7 +235,7 @@ def train(args):
             z_all_dec = []
             z_all_dec.append(q_z["z"])
 
-            if args.use_context_img:
+            if args.context == "initial_latent_state":
                 z_all_dec.append(z_img_context_rep)
                 
             # Concatenate modalities and decode
