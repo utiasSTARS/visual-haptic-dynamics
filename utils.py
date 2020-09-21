@@ -10,7 +10,8 @@ from networks import (FullyConvEncoderVAE,
                         FullyConvDecoderVAE,
                         FCNEncoderVAE,
                         FCNDecoderVAE,
-                        CNNEncoder1D)
+                        CNNEncoder1D,
+                        RNNEncoder)
 from models import (LinearMixSSM, 
                     LinearSSM, 
                     NonLinearSSM)
@@ -316,10 +317,17 @@ def load_vh_models(args, path=None, mode='eval', device='cuda:0'):
         ).to(device=device)
         nets["context_img_enc"] = context_img_enc
         z_dim_in += args.dim_z_context
+    elif args.context in ["all_past_states"]:
+        context_img_rnn = RNNEncoder(
+            dim_in=args.dim_z_context,
+            dim_out=args.dim_z_context,
+        ).to(device=device)
+        nets["context_img_rnn_enc"] = context_img_rnn
+        z_dim_in += args.dim_z_context
 
     dim_z_rec = args.dim_z
 
-    if args.context in ["initial_latent_state", "goal_latent_state"]:
+    if args.context in ["initial_latent_state", "goal_latent_state", "all_past_states"]:
         dim_z_rec += args.dim_z_context
 
     img_dec = FullyConvDecoderVAE(

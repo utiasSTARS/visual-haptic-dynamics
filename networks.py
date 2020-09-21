@@ -319,3 +319,37 @@ class CNNDecoder1D(nn.Module):
             x = self.layers[i](x)
 
         return x
+
+
+class RNNEncoder(nn.Module):
+    def __init__(
+        self, 
+        dim_in, 
+        dim_out, 
+        hidden_size=256,
+        net_type="lstm"
+    ):
+        super(RNNEncoder, self).__init__()
+        if net_type == "gru":
+            self.rnn = nn.GRU(
+                input_size=dim_in, 
+                hidden_size=hidden_size, 
+                num_layers=1, 
+                bidirectional=False
+            )
+        elif net_type =="lstm":
+            self.rnn = nn.LSTM(
+                input_size=dim_in, 
+                hidden_size=hidden_size, 
+                num_layers=1, 
+                bidirectional=False
+            )
+
+        self.fc = torch.nn.Linear(hidden_size, dim_out)
+
+    def forward(self, x):
+        l, n = x.shape[0], x.shape[1]
+        h_t, h_n = self.rnn(x)
+        out = self.fc(h_t.reshape(-1, *h_t.shape[2:]))
+        out = out.reshape(l, n, *out.shape[1:])
+        return out

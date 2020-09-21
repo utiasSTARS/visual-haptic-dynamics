@@ -27,7 +27,7 @@ from networks import (
     FCNEncoderVAE,
     FCNDecoderVAE,
     CNNEncoder1D,
-    CNNDecoder1D
+    RNNEncoder
 )
 from models import (
     LinearMixSSM, 
@@ -205,7 +205,7 @@ def train(args):
             u_ll = u[:, ll:]
             n, l = x_ll['img'].shape[0], x_ll['img'].shape[1]
             x_ll['target_img'] = x_ll['img']
-            
+
             if args.context in ["initial_latent_state", "initial_image_delta", "initial_image"]:
                 context_img = x_ll["img"][:, 0]
             elif args.context in ["goal_latent_state", "goal_image_delta", "goal_image"]:
@@ -237,9 +237,14 @@ def train(args):
             if args.context in ["initial_latent_state", "goal_latent_state"]:
                 z_img_context = nets["context_img_enc"](context_img)
                 # Repeat context for the whole trajectory
-                z_img_context_rep = z_img_context.unsqueeze(1).repeat(1, l, 1)
-                z_img_context_rep = z_img_context_rep.reshape(-1, z_img_context_rep.shape[-1])
-                z_all_enc.append(z_img_context_rep)
+                z_img_context = z_img_context.unsqueeze(1).repeat(1, l, 1)
+                z_img_context = z_img_context.reshape(-1, z_img_context.shape[-1])
+                z_all_enc.append(z_img_context)
+            elif args.context in ["all_past_states"]:
+                z_img_context = nets["context_img_rnn_enc"](z_img.reshape(n, l, *z_img.shape[1:]).transpose(1,0))
+                z_img_context = z_img_context.transpose(1, 0)
+                z_img_context = z_img_context.reshape(-1, *z_img_context.shape[2:])
+                z_all_enc.append(z_img_context)
 
             # Concatenate modalities and mix
             z_cat_enc = torch.cat(z_all_enc, dim=1)
@@ -253,9 +258,9 @@ def train(args):
             z_all_dec = []
             z_all_dec.append(q_z["z"])
 
-            if args.context in ["initial_latent_state", "goal_latent_state"]:
-                z_all_dec.append(z_img_context_rep)
-                
+            if args.context in ["initial_latent_state", "goal_latent_state", "all_past_states"]:
+                z_all_dec.append(z_img_context)
+
             # Concatenate modalities and decode
             z_cat_dec = torch.cat(z_all_dec, dim=1)
             x_hat_img = nets["img_dec"](z_cat_dec)
