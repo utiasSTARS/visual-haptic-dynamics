@@ -204,13 +204,28 @@ def train(args):
                 x_ll[k] = x[k][:, ll:]
             u_ll = u[:, ll:]
             n, l = x_ll['img'].shape[0], x_ll['img'].shape[1]
+            x_ll['target_img'] = x_ll['img']
             
-            if args.context == "initial_latent_state":
+            if args.context in ["initial_latent_state", "initial_image_delta", "initial_image"]:
                 context_img = x_ll["img"][:, 0]
+            elif args.context in ["goal_latent_state", "goal_image_delta", "goal_image"]:
+                #XXX: Assume last image as goal
+                context_img = x_ll["img"][:, -1]
 
             x_ll = {k:v.reshape(-1, *v.shape[2:]) for k, v in x_ll.items()}
 
-            # 1. Encoding              
+            # 1. Encoding
+            if args.context in ["initial_image_delta", "goal_image_delta"]:
+                context_img_rep = context_img.unsqueeze(1).repeat(1, l, 1, 1, 1)
+                context_img_rep = context_img_rep.reshape(-1, *context_img_rep.shape[2:])
+                # Use image delta
+                x_ll['img'] = x_ll['img'] - context_img_rep
+            elif args.context in ["initial_image", "goal_image"]:
+                context_img_rep = context_img.unsqueeze(1).repeat(1, l, 1, 1, 1)
+                context_img_rep = context_img_rep.reshape(-1, *context_img_rep.shape[2:])
+                # Concatenate images
+                x_ll['img'] = torch.cat((x_ll['img'], context_img_rep), dim=1)
+
             z_all_enc = []
             z_img = nets["img_enc"](x_ll['img'])
             z_all_enc.append(z_img)
@@ -218,9 +233,12 @@ def train(args):
             if args.context_modality != "none":
                 z_context = nets["context_enc"](x_ll["context"])
                 z_all_enc.append(z_context)
-            if args.context == "initial_latent_state":
+
+            if args.context in ["initial_latent_state", "goal_latent_state"]:
                 z_img_context = nets["context_img_enc"](context_img)
-                z_img_context_rep = z_img_context.unsqueeze(1).repeat(1, l, 1).reshape(-1, z_img_context.shape[-1])
+                # Repeat context for the whole trajectory
+                z_img_context_rep = z_img_context.unsqueeze(1).repeat(1, l, 1)
+                z_img_context_rep = z_img_context_rep.reshape(-1, z_img_context_rep.shape[-1])
                 z_all_enc.append(z_img_context_rep)
 
             # Concatenate modalities and mix
@@ -235,14 +253,14 @@ def train(args):
             z_all_dec = []
             z_all_dec.append(q_z["z"])
 
-            if args.context == "initial_latent_state":
+            if args.context in ["initial_latent_state", "goal_latent_state"]:
                 z_all_dec.append(z_img_context_rep)
                 
             # Concatenate modalities and decode
             z_cat_dec = torch.cat(z_all_dec, dim=1)
             x_hat_img = nets["img_dec"](z_cat_dec)
             loss_rec_img = (torch.sum(
-                loss_REC(x_hat_img, x_ll['img'])
+                loss_REC(x_hat_img, x_ll['target_img'])
             )) / (n)
 
             running_stats['img_rec_l'].append(loss_rec_img.item())

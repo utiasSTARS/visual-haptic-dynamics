@@ -269,10 +269,14 @@ def load_vh_models(args, path=None, mode='eval', device='cuda:0'):
 
     nets = {}
     z_dim_in = 0
+    stack = 1
+
+    if args.context in ["initial_image", "goal_image"]:
+        stack = 2
 
     # Networks
     img_enc = FullyConvEncoderVAE(
-        input=args.dim_x[0] * (args.frame_stacks + 1),
+        input=args.dim_x[0] * (args.frame_stacks + 1) * stack,
         latent_size=args.dim_z_img,
         bn=args.use_batch_norm,
         drop=args.use_dropout,
@@ -300,7 +304,7 @@ def load_vh_models(args, path=None, mode='eval', device='cuda:0'):
         nets["context_enc"] = context_enc
         z_dim_in += args.dim_z_context
 
-    if args.context=="initial_latent_state" or args.context=="goal_latent_state":
+    if args.context in ["initial_latent_state", "goal_latent_state"]:
         context_img_enc = FullyConvEncoderVAE(
             input=args.dim_x[0] * (args.frame_stacks + 1),
             latent_size=args.dim_z_context,
@@ -315,7 +319,7 @@ def load_vh_models(args, path=None, mode='eval', device='cuda:0'):
 
     dim_z_rec = args.dim_z
 
-    if args.context=="initial_latent_state" or args.context=="goal_latent_state":
+    if args.context in ["initial_latent_state", "goal_latent_state"]:
         dim_z_rec += args.dim_z_context
 
     img_dec = FullyConvDecoderVAE(
