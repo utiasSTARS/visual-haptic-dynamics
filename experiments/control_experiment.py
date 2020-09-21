@@ -66,5 +66,6 @@ def main():
 
     # sol = solve_with_all_mpc_variants(z_0, z_g, f, device="cpu")
 
+    #TODO: pick one solver and send 
 if __name__ == "__main__":
     main()
