@@ -147,7 +147,7 @@ class LinearMixSSM(nn.Module):
             B_t = B_t[0]
             h_t = h_t[0]
             h_n = h_n[0]
-        
+
         if return_all_hidden:
             h = (h_t, h_n)
         else:

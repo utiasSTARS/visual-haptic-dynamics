@@ -243,7 +243,7 @@ def train(args):
             x_hat_img = nets["img_dec"](z_cat_dec)
             loss_rec_img = (torch.sum(
                 loss_REC(x_hat_img, x_ll['img'])
-            )) / (n * l)
+            )) / (n)
 
             running_stats['img_rec_l'].append(loss_rec_img.item())
 
@@ -290,7 +290,7 @@ def train(args):
                 cov0=q_z["cov"][1:],
                 mu1=p_z["mu"],
                 cov1=p_z["cov"]
-            ) / (n * (l - 1))
+            ) / (n)
 
             # Original length before calculating n-step predictions
             length = p_z["mu"].shape[0]
