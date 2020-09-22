@@ -7,7 +7,8 @@ import numpy as np
 import pickle as pkl
 from utils import rgb2gray
 import os, io
-from scipy.misc import imresize, imread
+
+from skimage.io import imread
 from PIL import Image
 
 def pkl_loader(path):
@@ -41,9 +42,9 @@ class BAIRPush(object):
             np.random.seed(seed)
           
     def __len__(self):
-        return 10000
+        return len(self.dirs)
 
-    def get_seq(self):
+    def get_seq(self, idx):
         if self.ordered:
             d = self.dirs[self.d]
             if self.d == len(self.dirs) - 1:
@@ -51,7 +52,7 @@ class BAIRPush(object):
             else:
                 self.d+=1
         else:
-            d = self.dirs[np.random.randint(len(self.dirs))]
+            d = self.dirs[idx]
         image_seq = []
         for i in range(self.seq_len):
             fname = '%s/%d.png' % (d, i)
@@ -61,8 +62,7 @@ class BAIRPush(object):
         return image_seq
 
     def __getitem__(self, index):
-        self.set_seed(index)
-        return self.get_seq()
+        return self.get_seq(index)
 
 class VisualHaptic(data.Dataset):
     def __init__(self, dir, loader=pkl_loader, img_shape=(1,64,64)):
