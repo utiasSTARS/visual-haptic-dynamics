@@ -197,7 +197,10 @@ def train(args):
                 x["context"] = x["context"][:, args.frame_stacks:]
 
             # Randomly and uniformly sample
-            ll = np.random.randint(ep_len-1)
+            # ll = np.random.randint(ep_len-1)
+
+            # Train from index 0 all the time
+            ll = 0
             x_ll = {}
 
             for k in x:
@@ -205,7 +208,6 @@ def train(args):
             u_ll = u[:, ll:]
             n, l = x_ll['img'].shape[0], x_ll['img'].shape[1]
             x_ll['target_img'] = x_ll['img']
-
             if args.context in ["initial_latent_state", "initial_image_delta", "initial_image"]:
                 context_img = x_ll["img"][:, 0]
             elif args.context in ["goal_latent_state", "goal_image_delta", "goal_image"]:

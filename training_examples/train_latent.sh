@@ -27,7 +27,7 @@ n_step_pred=1
 task="push64vh"
 comment="${task}_gru_test"
 context_modality="joint"
-context="goal_latent_state"
+context="all_past_states"
 
 for n in {1..1}; do
     for dyn_net in ${dyn_nets[@]}; do
