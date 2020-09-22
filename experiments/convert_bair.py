@@ -10,8 +10,7 @@ import tensorflow as tf
 from tensorflow.python.platform import flags
 from tensorflow.python.platform import gfile
 
-from scipy.misc import imresize
-from scipy.misc import imsave
+from skimage.io import imsave
 
 import argparse
 parser = argparse.ArgumentParser()
@@ -27,7 +26,7 @@ def get_seq(dname):
 
     for f in filenames:
         k=0
-        for serialized_example in tf.python_io.tf_record_iterator(f):
+        for serialized_example in tf.compat.v1.python_io.tf_record_iterator(f):
             example = tf.train.Example()
             example.ParseFromString(serialized_example)
             image_seq = []
