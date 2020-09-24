@@ -28,6 +28,7 @@ task="push64vh"
 comment="${task}_gru_test"
 context_modality="joint"
 context="initial_latent_state"
+use_context_frame_stack=('False')
 
 for n in {1..1}; do
     for dyn_net in ${dyn_nets[@]}; do
@@ -42,6 +43,7 @@ for n in {1..1}; do
                                         for n_epoch in ${n_epochs[@]}; do
                                             python ../train.py \
                                                 --context_modality $context_modality \
+                                                --use_context_frame_stack $use_context_frame_stack \
                                                 --context $context \
                                                 --K $K \
                                                 --n_step_pred $n_step_pred \

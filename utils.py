@@ -294,8 +294,14 @@ def load_vh_models(args, path=None, mode='eval', device='cuda:0'):
         elif args.context_modality == "arm" or "ft": 
             data_dim=6
 
+        if args.use_context_frame_stack:
+            data_len = 64
+        else:
+            data_len = 32
+
         context_enc = CNNEncoder1D(
             input=data_dim,
+            datalength=data_len,
             latent_size=args.dim_z_context,
             bn=args.use_batch_norm,
             drop=args.use_dropout,

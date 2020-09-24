@@ -193,8 +193,11 @@ def train(args):
                 elif args.context_modality == "ft" or "arm": 
                     x["context"] = data[args.context_modality]
                 x["context"] = x["context"].float().to(device=device) # (n, l, f, 6)
+                if args.use_context_frame_stack:
+                    x['context'] = frame_stack(x['context'], frames=args.frame_stacks)
                 x["context"] = x["context"].transpose(-1, -2)
-                x["context"] = x["context"][:, args.frame_stacks:]
+                if not args.use_context_frame_stack:
+                    x["context"] = x["context"][:, args.frame_stacks:]
 
             # Randomly and uniformly sample
             # ll = np.random.randint(ep_len-1)
