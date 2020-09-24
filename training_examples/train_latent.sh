@@ -5,7 +5,7 @@ dataset="/home/olimoyo/visual-haptic-dynamics/experiments/data/datasets/visual_h
 storage_base_path="/home/olimoyo/visual-haptic-dynamics/saved_models/monolith/"
 
 n_batches=(32)
-learning_rates=(3e-3)
+learning_rates=(3e-4)
 batch_norms=('True')
 bi_directionals=('False')
 weight_inits=('custom')
@@ -23,11 +23,11 @@ val_split=(0)
 lam_rec=(0.95)
 lam_kl=(0.80)
 n_checkpoint_epoch=(64)
-n_step_pred=1
+n_step_pred=2
 task="push64vh"
 comment="${task}_gru_test"
 context_modality="joint"
-context="all_past_states"
+context="initial_latent_state"
 
 for n in {1..1}; do
     for dyn_net in ${dyn_nets[@]}; do
