@@ -19,7 +19,7 @@ def pkl_loader(path):
 
 class BAIRPush(object):
     """BAIR robot push datasets. Modified from: https://github.com/edenton/svg"""
-    def __init__(self, dir, train=True, seq_len=20):
+    def __init__(self, dir, train=True, seq_len=20, offset_control=True):
         self.root_dir = dir 
         if train:
             self.data_dir = os.path.join(self.root_dir, "train")
@@ -33,6 +33,7 @@ class BAIRPush(object):
                 self.dirs.append('%s/%s/%s' % (self.data_dir, d1, d2))
         self.seq_len = seq_len
         self.d = 0
+        self.offset_control = offset_control
           
     def __len__(self):
         return len(self.dirs)
@@ -54,6 +55,13 @@ class BAIRPush(object):
         image_seq = np.concatenate(image_seq, axis=0)
         action_seq = pkl_loader(f'{d}/actions.pkl')[:self.seq_len]
         ee_pos_seq = pkl_loader(f'{d}/ee_pos.pkl')[:self.seq_len]
+
+        # If control indexing is different offset data with dummy variable to match
+        if self.offset_control:
+            padding = np.zeros((1, action_seq.shape[-1]))
+            action_seq = np.concatenate(
+                (padding, action_seq[:-1]), 
+            )
 
         sample = {
             'img':image_seq, # (T, 1, res, res) 
