@@ -158,7 +158,7 @@ class ImgCached(data.Dataset):
             self.cached_data = np.transpose(cached_data_raw, (0, 1, 4, 2, 3)) / 255.0
         else:
             self.cached_data = np.expand_dims(rgb2gray(cached_data_raw)[..., 0], axis=2)
-            
+        
         if transform is not None:
             for ii in range(batch_size):
                 for tt in range(traj_len):

@@ -1,5 +1,6 @@
 import os, sys
 os.sys.path.insert(0, "..")
+import matplotlib.pyplot as plt
 
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
@@ -9,7 +10,7 @@ from datasets import ImgCached, VisualHaptic, BAIRPush
 
 def test_bair():
     print("Testing BAIR")
-    dataset = BAIRPush(dir="/Users/oliver/visual-haptic-dynamics/experiments/data/datasets/processed_data")
+    dataset = BAIRPush(dir="/home/olimoyo/visual-haptic-dynamics/experiments/data/datasets/processed_data")
     ds_size = len(dataset)
     idx = list(range(ds_size))
     sampler = SubsetRandomSampler(idx)
@@ -38,14 +39,14 @@ def test_cached():
     sampler = SubsetRandomSampler(idx)
     train_loader = DataLoader(
         dataset,
-        batch_size=32,
+        batch_size=16,
         num_workers=0,
         sampler=sampler
     )
 
     for idx, data in enumerate(train_loader):
         print(idx)
-        print("img", data["img"].shape)
+        print("img", data["img"].shape, "min: ", torch.min(data["img"]), "max: ", torch.max(data["img"]))
         print("action", data["action"].shape)
         print("gt", data["gt"].shape)
         break
@@ -53,8 +54,8 @@ def test_cached():
 def test_vh():
     print("Testing visual haptic")
     dataset = VisualHaptic(
-            dir="/Users/oliver/visual-haptic-dynamics/experiments/data/datasets/visual_haptic_2D_len16_withGT_3D9E4376CF4746EEA20DCD520218038D.pkl",
-            rgb=True
+            dir="/home/olimoyo/visual-haptic-dynamics/experiments/data/datasets/visual_haptic_2D_len16_withGT_3D9E4376CF4746EEA20DCD520218038D.pkl",
+            rgb=False
         )
     ds_size = len(dataset)
     idx = list(range(ds_size))
@@ -68,13 +69,13 @@ def test_vh():
 
     for idx, data in enumerate(train_loader):
         print(idx)
-        print("img", data["img"].shape)
+        print("img", data["img"].shape, "min: ", torch.min(data["img"]), "max: ", torch.max(data["img"]))
         print("ft", data["ft"].shape)
         print("arm", data["arm"].shape)
         print("action", data["action"].shape)
         break
 
 if __name__=="__main__":
-    test_cached()
-    test_vh()
-    # test_bair()
+    # test_cached()
+    # test_vh()
+    test_bair()
