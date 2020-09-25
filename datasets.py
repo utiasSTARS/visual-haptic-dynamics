@@ -22,10 +22,10 @@ class BAIRPush(object):
     def __init__(self, dir, train=True, seq_len=20):
         self.root_dir = dir 
         if train:
-            self.data_dir = '%s/processed_data/train' % self.root_dir
+            self.data_dir = os.path.join(self.root_dir, "train")
             self.ordered = False
         else:
-            self.data_dir = '%s/processed_data/test' % self.root_dir
+            self.data_dir = os.path.join(self.root_dir, "test")
             self.ordered = True 
         self.dirs = []
         for d1 in os.listdir(self.data_dir):
@@ -52,9 +52,8 @@ class BAIRPush(object):
             im = imread(fname).reshape(1, 64, 64, 3)
             image_seq.append(im/255.)
         image_seq = np.concatenate(image_seq, axis=0)
-        action_seq = pkl_loader(f'{d}/actions.pkl')
-        ee_pos_seq = pkl_loader(f'{d}/ee_pos.pkl')
-        print(action_seq.shape, ee_pos_seq.shape)
+        action_seq = pkl_loader(f'{d}/actions.pkl')[:self.seq_len]
+        ee_pos_seq = pkl_loader(f'{d}/ee_pos.pkl')[:self.seq_len]
 
         sample = {
             'img':image_seq, # (T, 1, res, res) 

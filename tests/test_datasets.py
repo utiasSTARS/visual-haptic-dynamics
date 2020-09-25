@@ -9,7 +9,7 @@ from datasets import ImgCached, VisualHaptic, BAIRPush
 
 def test_bair():
     print("Testing BAIR")
-    dataset = BAIRPush(dir="/media/m2-drive/datasets/pendulum-srl-sim/pendulum64_total_2048_traj_16_repeat_2_with_angle_train.pkl")
+    dataset = BAIRPush(dir="/Users/oliver/visual-haptic-dynamics/experiments/data/datasets/processed_data")
     ds_size = len(dataset)
     idx = list(range(ds_size))
     sampler = SubsetRandomSampler(idx)
@@ -50,7 +50,7 @@ def test_cached():
 def test_vh():
     print("Testing visual haptic")
     dataset = VisualHaptic(
-            dir="/home/olimoyo/visual-haptic-dynamics/experiments/data/datasets/visual_haptic_2D_len16_withGT_3D9E4376CF4746EEA20DCD520218038D.pkl",
+            dir="/Users/oliver/visual-haptic-dynamics/experiments/data/datasets/visual_haptic_2D_len16_withGT_3D9E4376CF4746EEA20DCD520218038D.pkl",
             rgb=True
         )
     ds_size = len(dataset)
@@ -73,5 +73,5 @@ def test_vh():
 
 if __name__=="__main__":
     # test_cached()
-    # test_vh()
+    test_vh()
     test_bair()
