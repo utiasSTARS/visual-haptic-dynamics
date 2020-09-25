@@ -89,23 +89,18 @@ class VisualHaptic(data.Dataset):
         print("Formating dataset")
         batch_size = self.data["img"].shape[0]
         traj_len = self.data["img"].shape[1]
-        if rgb: 
-            c=3
-        else: 
-            c=1
-        img_shape=(c,64,64) 
 
-        if img_shape[0] == 1:
-            self.data["img"] = np.expand_dims(rgb2gray(self.data["img"])[..., 0], axis=2)
-        elif img_shape[0] == 3:
+        if rgb:
             self.data["img"] = np.transpose(self.data["img"], (0, 1, 4, 2, 3)) / 255.0
+        else:
+            self.data["img"] = np.expand_dims(rgb2gray(self.data["img"])[..., 0], axis=2)
 
         self.data["ft"] /= 100.0
         
         if transform is not None:
             for ii in range(batch_size):
                 for tt in range(traj_len):
-                    self.cached_data[ii, tt, :, :, :] = transform(cached_data_raw[ii, tt, :, :, :])
+                    self.data["img"][ii, tt, :, :, :] = transform(self.data["img"][ii, tt, :, :, :])
 
     def __len__(self):
         return self.data["img"].shape[0]
@@ -139,7 +134,7 @@ class ImgCached(data.Dataset):
        (image, action) or (image, action, gtstate). 
        Raw cached images assumed to be of shape (n, l, w, h, c=3).
     """
-    def __init__(self, dir, loader=pkl_loader, transform=None):
+    def __init__(self, dir, loader=pkl_loader, transform=None, rgb=False):
         """
         Args:
             dir (string): Directory of the cache.
@@ -147,7 +142,6 @@ class ImgCached(data.Dataset):
         """
         self.dir = dir
         self.transform = transform
-        img_shape=(1,64,64)
 
         print("Loading cache for dataset")
         data = loader(dir) 
@@ -158,15 +152,18 @@ class ImgCached(data.Dataset):
         batch_size = cached_data_raw.shape[0]
         traj_len = cached_data_raw.shape[1]
 
-        cached_data_raw = cached_data_raw.reshape(batch_size, traj_len, img_shape[1], img_shape[2], 3)
+        cached_data_raw = cached_data_raw.reshape(batch_size, traj_len, 64, 64, 3)
 
-        self.cached_data = torch.zeros(batch_size, traj_len, img_shape[0], img_shape[1], img_shape[2])
-
+        if rgb:
+            self.cached_data = np.transpose(cached_data_raw, (0, 1, 4, 2, 3)) / 255.0
+        else:
+            self.cached_data = np.expand_dims(rgb2gray(cached_data_raw)[..., 0], axis=2)
+            
         if transform is not None:
             for ii in range(batch_size):
                 for tt in range(traj_len):
-                    self.cached_data[ii, tt, :, :, :] = transform(cached_data_raw[ii, tt, :, :, :])
-            
+                    self.cached_data[ii, tt, :, :, :] = transform(self.cached_data[ii, tt, :, :, :])
+
     def __len__(self):
         return self.cached_data.shape[0]
 

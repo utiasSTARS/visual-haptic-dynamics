@@ -29,7 +29,10 @@ def test_bair():
 
 def test_cached():
     print("Testing Cached (pendulum/reacher)")
-    dataset = ImgCached(dir="/media/m2-drive/datasets/pendulum-srl-sim/pendulum64_total_2048_traj_16_repeat_2_with_angle_train.pkl")
+    dataset = ImgCached(
+        dir="/media/m2-drive/datasets/pendulum-srl-sim/pendulum64_total_2048_traj_16_repeat_2_with_angle_train.pkl",
+        rgb=True
+    )
     ds_size = len(dataset)
     idx = list(range(ds_size))
     sampler = SubsetRandomSampler(idx)
@@ -72,6 +75,6 @@ def test_vh():
         break
 
 if __name__=="__main__":
-    # test_cached()
-    # test_vh()
-    test_bair()
+    test_cached()
+    test_vh()
+    # test_bair()
