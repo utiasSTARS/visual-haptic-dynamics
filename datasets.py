@@ -18,9 +18,9 @@ def pkl_loader(path):
     return data
 
 class BAIRPush(object):
-    """BAIR robot push datasets. Taken from: https://github.com/edenton/svg"""
-    def __init__(self, data_root, train=True, seq_len=20, image_size=64):
-        self.root_dir = data_root 
+    """BAIR robot push datasets. Modified from: https://github.com/edenton/svg"""
+    def __init__(self, dir, train=True, seq_len=20):
+        self.root_dir = dir 
         if train:
             self.data_dir = '%s/processed_data/train' % self.root_dir
             self.ordered = False
@@ -32,14 +32,7 @@ class BAIRPush(object):
             for d2 in os.listdir('%s/%s' % (self.data_dir, d1)):
                 self.dirs.append('%s/%s/%s' % (self.data_dir, d1, d2))
         self.seq_len = seq_len
-        self.image_size = image_size 
-        self.seed_is_set = False # multi threaded loading
         self.d = 0
-
-    def set_seed(self, seed):
-        if not self.seed_is_set:
-            self.seed_is_set = True
-            np.random.seed(seed)
           
     def __len__(self):
         return len(self.dirs)
@@ -55,17 +48,27 @@ class BAIRPush(object):
             d = self.dirs[idx]
         image_seq = []
         for i in range(self.seq_len):
-            fname = '%s/%d.png' % (d, i)
+            fname = f'{d}/{i}.png'
             im = imread(fname).reshape(1, 64, 64, 3)
             image_seq.append(im/255.)
         image_seq = np.concatenate(image_seq, axis=0)
-        return image_seq
+        action_seq = pkl_loader(f'{d}/actions.pkl')
+        ee_pos_seq = pkl_loader(f'{d}/ee_pos.pkl')
+        print(action_seq.shape, ee_pos_seq.shape)
+
+        sample = {
+            'img':image_seq, # (T, 1, res, res) 
+            'action': action_seq,
+            'gt': ee_pos_seq
+        }
+
+        return sample
 
     def __getitem__(self, index):
         return self.get_seq(index)
 
 class VisualHaptic(data.Dataset):
-    def __init__(self, dir, loader=pkl_loader, img_shape=(1,64,64)):
+    def __init__(self, dir, loader=pkl_loader, transform=None, rgb=False):
         """
         Args:
             dir (string): Directory of the cache.
@@ -79,6 +82,11 @@ class VisualHaptic(data.Dataset):
         print("Formating dataset")
         batch_size = self.data["img"].shape[0]
         traj_len = self.data["img"].shape[1]
+        if rgb: 
+            c=3
+        else: 
+            c=1
+        img_shape=(c,64,64) 
 
         if img_shape[0] == 1:
             self.data["img"] = np.expand_dims(rgb2gray(self.data["img"])[..., 0], axis=2)
@@ -87,6 +95,11 @@ class VisualHaptic(data.Dataset):
 
         self.data["ft"] /= 100.0
         
+        if transform is not None:
+            for ii in range(batch_size):
+                for tt in range(traj_len):
+                    self.cached_data[ii, tt, :, :, :] = transform(cached_data_raw[ii, tt, :, :, :])
+
     def __len__(self):
         return self.data["img"].shape[0]
 
@@ -104,7 +117,7 @@ class VisualHaptic(data.Dataset):
                   'ft': self.data["ft"][idx],
                   'arm': self.data["arm"][idx],
                   'action': self.data["action"][idx],
-                  'gt_plate_pos': self.data["gt_plate_pos"][idx]}
+                  'gt': self.data["gt_plate_pos"][idx]}
 
         return sample
 
@@ -119,7 +132,7 @@ class ImgCached(data.Dataset):
        (image, action) or (image, action, gtstate). 
        Raw cached images assumed to be of shape (n, l, w, h, c=3).
     """
-    def __init__(self, dir, loader=pkl_loader, transform=None, img_shape=(1,64,64)):
+    def __init__(self, dir, loader=pkl_loader, transform=None):
         """
         Args:
             dir (string): Directory of the cache.
@@ -127,6 +140,7 @@ class ImgCached(data.Dataset):
         """
         self.dir = dir
         self.transform = transform
+        img_shape=(1,64,64)
 
         print("Loading cache for dataset")
         data = loader(dir) 
@@ -141,9 +155,10 @@ class ImgCached(data.Dataset):
 
         self.cached_data = torch.zeros(batch_size, traj_len, img_shape[0], img_shape[1], img_shape[2])
 
-        for ii in range(batch_size):
-            for tt in range(traj_len):
-                self.cached_data[ii, tt, :, :, :] = transform(cached_data_raw[ii, tt, :, :, :])
+        if transform is not None:
+            for ii in range(batch_size):
+                for tt in range(traj_len):
+                    self.cached_data[ii, tt, :, :, :] = transform(cached_data_raw[ii, tt, :, :, :])
             
     def __len__(self):
         return self.cached_data.shape[0]
@@ -159,9 +174,11 @@ class ImgCached(data.Dataset):
         assert(idx < self.__len__()), "Index must be lower than dataset size " + str(self.__len__())
         img = self.cached_data[idx] # (T, 1, res, res) 
         a = self.cached_data_actions[idx] # (T, 1)
+        gt = self.cached_data_state[idx]
 
         sample = {'img':img, # (T, 1, res, res) 
-                  'action': a}
+                  'action': a,
+                  'gt': gt}
 
         return sample
 

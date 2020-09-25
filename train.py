@@ -119,9 +119,14 @@ def train(args):
         loss_REC = nn.MSELoss(reduction='none').to(device=device)
 
     # Dataset
+    if args.dim_x[0] == 3: 
+        rgb = True
+    elif args.dim_x[0] == 1:
+        rgb = False
+
     dataset = VisualHaptic(
         args.dataset,
-        img_shape=args.dim_x
+        rgb=rgb
     )
 
     idx = list(range(len(dataset)))
