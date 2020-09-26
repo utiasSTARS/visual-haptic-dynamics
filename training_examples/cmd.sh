@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --ntasks=1 # Note that ntasks=1 runs multiple jobs in an array
-#SBATCH --array=1-2%2
+#SBATCH --array=1-14%14
 #SBATCH --gres=gpu:1
 #SBATCH -p p100
 #SBATCH --mem=32G
