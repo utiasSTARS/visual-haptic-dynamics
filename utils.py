@@ -336,6 +336,13 @@ def load_vh_models(args, path=None, mode='eval', device='cuda:0'):
     if args.context in ["initial_latent_state", "goal_latent_state", "all_past_states"]:
         dim_z_rec += args.dim_z_context
 
+    if args.use_binary_ce:
+        output_nl = None
+    elif args.context in ["initial_image", "goal_image"]:
+        output_nl = nn.Tanh()
+    else:
+        output_nl = nn.Sigmoid()
+
     img_dec = FullyConvDecoderVAE(
         input=args.dim_x[0] * (args.frame_stacks + 1),
         latent_size=dim_z_rec,
@@ -343,7 +350,7 @@ def load_vh_models(args, path=None, mode='eval', device='cuda:0'):
         drop=args.use_dropout,
         nl=nl,
         img_dim=args.dim_x[1],
-        output_nl=None if args.use_binary_ce else nn.Sigmoid()
+        output_nl=output_nl
     ).to(device=device)
     nets["img_dec"] = img_dec
 
