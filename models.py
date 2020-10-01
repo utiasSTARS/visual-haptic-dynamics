@@ -92,8 +92,6 @@ class LinearMixSSM(nn.Module):
         if h_0 is None:
             h_t, h_n = self.rnn(inp)
         else:
-            if single:
-                h_0 = h_0.unsqueeze(0)
             h_t, h_n = self.rnn(inp, h_0)
 
         if self.bidirectional:
@@ -362,8 +360,6 @@ class NonLinearSSM(nn.Module):
         if h_0 is None:
             h_t, h_n = self.rnn(inp)
         else:
-            if single:
-                h_0 = h_0.unsqueeze(0)
             h_t, h_n = self.rnn(inp, h_0)
 
         if self.bidirectional:

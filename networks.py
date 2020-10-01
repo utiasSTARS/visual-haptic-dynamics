@@ -347,9 +347,13 @@ class RNNEncoder(nn.Module):
 
         self.fc = torch.nn.Linear(hidden_size, dim_out)
 
-    def forward(self, x):
+    def forward(self, x, h=None):
         l, n = x.shape[0], x.shape[1]
-        h_t, h_n = self.rnn(x)
+        if h is None:
+            h_t, h_n = self.rnn(x)
+        else:
+            h_t, h_n = self.rnn(x, h)
+            
         out = self.fc(h_t.reshape(-1, *h_t.shape[2:]))
         out = out.reshape(l, n, *out.shape[1:])
-        return out
+        return out, h_n

@@ -250,11 +250,13 @@ def train(args):
                 z_img_context = z_img_context.reshape(-1, z_img_context.shape[-1])
                 z_all_enc.append(z_img_context)
             elif args.context in ["all_past_states"]:
-                z_img_context = nets["context_img_rnn_enc"](z_img.reshape(n, l, *z_img.shape[1:]).transpose(1,0))
+                z_img_context, _ = nets["context_img_rnn_enc"](z_img.reshape(n, l, *z_img.shape[1:])[:, :-1].transpose(1,0))
+                pad = torch.zeros((1, *z_img_context.shape[1:])).float().to(device=device)
+                z_img_context = torch.cat((pad, z_img_context), dim=0)
                 z_img_context = z_img_context.transpose(1, 0)
                 z_img_context = z_img_context.reshape(-1, *z_img_context.shape[2:])
                 z_all_enc.append(z_img_context)
-                
+
             # Concatenate modalities and mix
             z_cat_enc = torch.cat(z_all_enc, dim=1)
             z, mu_z, logvar_z = nets["mix"](z_cat_enc)

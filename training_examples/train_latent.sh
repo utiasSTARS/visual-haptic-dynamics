@@ -27,7 +27,7 @@ n_step_pred=2
 task="push64vh"
 comment="${task}_gru_test"
 context_modality="joint"
-context="initial_image"
+context="all_past_states"
 use_context_frame_stack=('False')
 
 for n in {1..1}; do
