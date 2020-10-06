@@ -143,8 +143,6 @@ class LinearMixSSM(nn.Module):
             var_t1 = var_t1[0]
             A_t = A_t[0]
             B_t = B_t[0]
-            h_t = h_t[0]
-            h_n = h_n[0]
 
         if return_all_hidden:
             h = (h_t, h_n)
@@ -384,8 +382,6 @@ class NonLinearSSM(nn.Module):
             z_t1 = z_t1[0]
             mu_t1 = mu_t1[0]
             var_t1 = var_t1[0]
-            h_t = h_t[0]
-            h_n = h_n[0]
             
         if return_all_hidden:
             h = (h_t, h_n)
