@@ -13,7 +13,7 @@ def generate_goal_raw_data(dataset, idx, context="joint", device="cpu"):
     img = torch.from_numpy(data["img"]).unsqueeze(0)
     haptic = torch.from_numpy(data["ft"]).unsqueeze(0)
     arm = torch.from_numpy(data["arm"]).unsqueeze(0)
-    gt_plate_pos = torch.from_numpy(data["gt_plate_pos"])
+    gt_plate_pos = torch.from_numpy(data["gt"])
 
     if context == "joint": 
         context_data = torch.cat((haptic, arm), dim=-1) # (n, l, f, 12)
@@ -42,5 +42,5 @@ if __name__ == "__main__":
         goal = generate_goal_raw_data(dataset, ii)
         goals.append(goal)
 
-    with open('./goal_imgs/goals.pkl', 'wb') as handle:
-        pickle.dump(goals, handle)
+    # with open('./goal_imgs/goals.pkl', 'wb') as handle:
+    #     pickle.dump(goals, handle)

@@ -72,3 +72,15 @@ def parse_vh_training_args():
 
     args = parse_common_training_args(parser=parser)
     return args
+
+def parse_control_experiment_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--model_path', type=str, required=True,  help='Path to directory of model')
+    parser.add_argument('--H', type=int, default=6,  help='Horizon length for MPC controller')
+    parser.add_argument('--Q', type=int, default=1.0,  help='Q matrix for MPC cost')
+    parser.add_argument('--R', type=int, default=1.0,  help='R matrix for MPC cost')
+    parser.add_argument('--device', type=str, default='cpu', help='Device to use for PyTorch')
+
+    args = parser.parse_args()
+    return args
+
