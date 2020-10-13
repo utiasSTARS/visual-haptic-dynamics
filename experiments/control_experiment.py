@@ -58,17 +58,36 @@ def load_goal(idx):
 def format_obs(obs, device="cpu"):
     """Format obs from env for network."""
     # Convert to tensor
-    img = torch.tensor(rgb2gray(obs["img"]), device=device)
+    img = torch.tensor(rgb2gray(obs["img"]), device=device).float()
     context_data = torch.cat((
         torch.tensor(obs["ft"], device=device), 
         torch.tensor(obs["arm"], device=device)
-    ), dim=-1)
+    ), dim=-1).float()
 
     # Reformat in right shape
     img = img.permute(2, 0, 1).unsqueeze(0)
     context_data = context_data.transpose(1, 0).unsqueeze(0)
 
     return img, context_data
+
+def encode(nets, model_args, img, ctx, ctx_img):
+    z_all_enc = []
+    z_img = nets["img_enc"](img)
+    z_all_enc.append(z_img)  
+
+    if model_args.context_modality != "none":
+        z_context = nets["context_enc"](ctx)
+        z_all_enc.append(z_context)   
+
+    if model_args.context in ["initial_latent_state", "goal_latent_state"]:
+        z_img_context = nets["context_img_enc"](ctx_img)
+        z_all_enc.append(z_img_context)        
+
+    z_cat_enc = torch.cat(z_all_enc, dim=-1)
+    z, mu_z, logvar_z = nets["mix"](z_cat_enc)
+    var_z = torch.diag_embed(torch.exp(logvar_z))
+    
+    return z, mu_z, var_z
 
 def solve_with_all_mpc_variants(z_0, z_g, f, device):
     cvxmpc = CVXLinear(
@@ -119,6 +138,9 @@ def control_experiment(args):
     nets = load_vh_models(path=args.model_path, args=model_args, mode='eval', device=args.device)
     env = load_env(args=model_args)
     
+    # Wrap dynamics for MPC code format
+    f = LinearMixWrapper(nets["dyn"])
+
     # Keep track of history of state using deque
     img_hist = deque([], (1 + model_args.frame_stacks))
 
@@ -139,31 +161,41 @@ def control_experiment(args):
     # Load goal
     img_g, context_data_g, gt_plate_pos_g = load_goal(444)
 
-    print(img_i.shape, img_g.shape)
-    print(context_data_i.shape, context_data_g.shape)
-    
-    # for ii in range(10000):
+    # Context image based on model type
+    if model_args.context in ["initial_latent_state", "initial_image"]:
+        ctx_img = img_i
+    elif model_args.context in ["goal_latent_state", "goal_image"]:
+        ctx_img = img_g
+    else:
+        ctx_img = None
 
-        #TODO: Embed initial image 
-        #img torch.Size([1600, 1, 2, 64, 64])
-        #ctx img torch.Size([1600, 2, 64, 64])
+    # Embed goal image
+    with torch.no_grad():
+        z_g, mu_z_g, var_z_g = encode(nets, model_args, img_g, context_data_g, ctx_img)
 
+    for ii in range(10000):
 
-        #TODO: Solve MPC
-        # z_0 = {
-        #     "z":torch.rand((1, 16)), 
-        #     "mu":torch.rand((1, 16)), 
-        #     "cov":torch.eye(16).unsqueeze(0)
-        # }
-        # z_g = torch.rand((16))
-
-        # sol = solve_with_all_mpc_variants(z_0, z_g, f, device="cpu")
-
+        # Embed initial image 
+        with torch.no_grad():
+            z_i, mu_z_i, var_z_i = encode(nets, model_args, img_i, context_data_i, ctx_img)
+        
+        # Solve MPC problem
+        q_i = {
+            "z":z_i, 
+            "mu":mu_z_i, 
+            "cov":var_z_i
+        }
+        sol = solve_with_all_mpc_variants(q_i, z_g[0], f, device="cpu")
+        print(sol)
         #TODO: pick one solver and send 
+        obs_tpn, _, _, _ = env.step(np.array([0,0]))
 
-        # env.step(np.array([0,0]))
-        # print(ii)
-
+        # Updated state
+        img_tpn, context_data_tpn = format_obs(obs_tpn, device=args.device)
+        img_hist.appendleft(img_tpn)
+        img_i = torch.cat(tuple(img_hist), dim=1)
+        context_data_i = context_data_tpn
+        break
 
 def main():
     args = parse_control_experiment_args()
