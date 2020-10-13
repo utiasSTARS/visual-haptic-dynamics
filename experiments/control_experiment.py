@@ -89,7 +89,7 @@ def encode(nets, model_args, img, ctx, ctx_img):
     
     return z, mu_z, var_z
 
-def solve_mpc(z_0, z_g, f, device, opt, horizon):
+def solve_mpc(z_0, z_g, u_0, f, device, opt, horizon):
     if opt == "cvxopt":
         cvxmpc = CVXLinear(
             planning_horizon=horizon,
@@ -99,7 +99,8 @@ def solve_mpc(z_0, z_g, f, device, opt, horizon):
         cvxmpc.to(device=device)
         u = cvxmpc.solve(
             z_0=z_0,
-            z_g=z_g
+            z_g=z_g,
+            u_0=u_0
         )
     elif opt == "grad":
         gradmpc = Grad(
@@ -110,7 +111,8 @@ def solve_mpc(z_0, z_g, f, device, opt, horizon):
         gradmpc.to(device=device)
         u = gradmpc.solve(
             z_0=z_0,
-            z_g=z_g
+            z_g=z_g,
+            u_0=u_0
         )
     elif opt == "cem":
         cem_mpc = CEM(
@@ -143,8 +145,8 @@ def control_experiment(args):
     img_t, context_data_t = format_obs(obs_t, device=args.device)
     img_hist.appendleft(img_t)
 
-    # Step randomly to produce a history
-    obs_tp1, _, _, _ = env.step(env.action_space.sample())
+    # Step to produce a history
+    obs_tp1, _, _, _ = env.step(np.array([0.5, 0]))
     img_tp1, context_data_tp1 = format_obs(obs_tp1, device=args.device)
     img_hist.appendleft(img_tp1)
     
@@ -167,11 +169,23 @@ def control_experiment(args):
     with torch.no_grad():
         z_g, mu_z_g, var_z_g = encode(nets, model_args, img_g, context_data_g, ctx_img)
 
+    # Initial guess
+    u_0 = torch.zeros(
+        (args.H, 1, 2), 
+        device=args.device
+    )
+
     for ii in range(10000):
 
         # Embed initial image 
         with torch.no_grad():
-            z_i, mu_z_i, var_z_i = encode(nets, model_args, img_i, context_data_i, ctx_img)
+            z_i, mu_z_i, var_z_i = encode(
+                nets, 
+                model_args, 
+                img_i, 
+                context_data_i, 
+                ctx_img
+            )
         
         # Solve MPC problem
         q_i = {
@@ -179,17 +193,31 @@ def control_experiment(args):
             "mu":mu_z_i, 
             "cov":var_z_i
         }
-        sol = solve_mpc(q_i, z_g[0], f, device="cpu", opt=args.opt, horizon=args.H)
-        print(sol)
-        #TODO: pick one solver and send 
-        obs_tpn, _, _, _ = env.step(np.array([0,0]))
+        sol = solve_mpc(
+            q_i, 
+            z_g[0], 
+            u_0, 
+            f, 
+            device=args.device, 
+            opt=args.opt, 
+            horizon=args.H
+        )
+        u = sol[0,0].detach().cpu().numpy()
+
+        # Send control input
+        obs_tpn, _, _, _ = env.step(u)
 
         # Updated state
         img_tpn, context_data_tpn = format_obs(obs_tpn, device=args.device)
         img_hist.appendleft(img_tpn)
         img_i = torch.cat(tuple(img_hist), dim=1)
         context_data_i = context_data_tpn
-        break
+
+        # Update initial guess
+        u_0[:-1] = sol[1:]
+
+        if ii==10:
+            break
 
 def main():
     args = parse_control_experiment_args()
