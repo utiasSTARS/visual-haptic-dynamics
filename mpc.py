@@ -132,7 +132,7 @@ class CVXLinear(MPC):
                 # Update operational point z_0 and u_0
                 u_0 = self.u.value
                 u_0 = np.expand_dims(u_0, axis=1)
-                u_0 = torch.tensor(u_0).float()
+                u_0 = torch.tensor(u_0, device=self.device).float()
             print("CVX final cost: ", ret)
             return u_0
 
@@ -223,7 +223,7 @@ class CEM(MPC):
                     u_std[ii] = u[ii, top_k_idx[ii]].std(dim=0)
 
             print("CEM MPC final cost: ", torch.min(cost.sum(0)))
-            return self.tanh(u_mu[:, 0])                  
+            return self.tanh(u_mu[:, 0]).unsqueeze(1)                  
             
 class Grad(MPC):
     """

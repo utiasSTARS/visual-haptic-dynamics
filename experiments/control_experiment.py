@@ -89,47 +89,41 @@ def encode(nets, model_args, img, ctx, ctx_img):
     
     return z, mu_z, var_z
 
-def solve_with_all_mpc_variants(z_0, z_g, f, device):
-    cvxmpc = CVXLinear(
-        planning_horizon=8,
-        opt_iters=10,
-        model=f,
-    )
-    cvxmpc.to(device=device)
-    u_cvx = cvxmpc.solve(
-        z_0=z_0,
-        z_g=z_g
-    )
-
-    gradmpc = Grad(
-        planning_horizon=8,
-        opt_iters=100,
-        model=f,
-    )
-    gradmpc.to(device=device)
-    u_grad = gradmpc.solve(
-        z_0=z_0,
-        z_g=z_g
-    )
-
-    cem_mpc = CEM(
-        planning_horizon=8,
-        opt_iters=100,
-        model=f,
-    )
-    cem_mpc.to(device=device)
-    u_cem_mu = cem_mpc.solve(
-        z_0=z_0,
-        z_g=z_g
-    )
-    
-    sol = {
-        "cvx": u_cvx,
-        "grad": u_grad,
-        "cem": u_cem_mu
-    }
-
-    return sol
+def solve_mpc(z_0, z_g, f, device, opt, horizon):
+    if opt == "cvxopt":
+        cvxmpc = CVXLinear(
+            planning_horizon=horizon,
+            opt_iters=10,
+            model=f,
+        )
+        cvxmpc.to(device=device)
+        u = cvxmpc.solve(
+            z_0=z_0,
+            z_g=z_g
+        )
+    elif opt == "grad":
+        gradmpc = Grad(
+            planning_horizon=horizon,
+            opt_iters=100,
+            model=f,
+        )
+        gradmpc.to(device=device)
+        u = gradmpc.solve(
+            z_0=z_0,
+            z_g=z_g
+        )
+    elif opt == "cem":
+        cem_mpc = CEM(
+            planning_horizon=horizon,
+            opt_iters=100,
+            model=f,
+        )
+        cem_mpc.to(device=device)
+        u = cem_mpc.solve(
+            z_0=z_0,
+            z_g=z_g
+        )
+    return u
 
 def control_experiment(args):
     
@@ -185,7 +179,7 @@ def control_experiment(args):
             "mu":mu_z_i, 
             "cov":var_z_i
         }
-        sol = solve_with_all_mpc_variants(q_i, z_g[0], f, device="cpu")
+        sol = solve_mpc(q_i, z_g[0], f, device="cpu", opt=args.opt, horizon=args.H)
         print(sol)
         #TODO: pick one solver and send 
         obs_tpn, _, _, _ = env.step(np.array([0,0]))
