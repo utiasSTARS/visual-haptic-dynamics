@@ -194,7 +194,7 @@ class CEM(MPC):
             )
             u_mu = u_mu.unsqueeze(1).repeat(1, self.samples, 1)
 
-            u_std = 0.25 * torch.ones(
+            u_std = 0.50 * torch.ones(
                 self.H, 
                 self.nu, 
                 device=self.device
@@ -209,7 +209,6 @@ class CEM(MPC):
                     z_0=z_0, 
                     u=self.tanh(u)
                 )          
-
                 cost = ((z_g - z_hat)**2).sum(-1)
 
                 # Find top k lowest costs
@@ -218,6 +217,7 @@ class CEM(MPC):
                     dim=1, 
                     largest=False
                 )
+
 
                 # Update mean and std
                 for ii in range(self.H):
