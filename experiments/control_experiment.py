@@ -60,7 +60,7 @@ def format_obs(obs, device="cpu"):
     # Convert to tensor
     img = torch.tensor(rgb2gray(obs["img"]), device=device).float()
     context_data = torch.cat((
-        torch.tensor(obs["ft"], device=device), 
+        torch.tensor(obs["ft"], device=device) / 100.0, 
         torch.tensor(obs["arm"], device=device)
     ), dim=-1).float()
 
@@ -93,7 +93,7 @@ def solve_mpc(z_0, z_g, u_0, f, device, opt, horizon):
     if opt == "cvxopt":
         cvxmpc = CVXLinear(
             planning_horizon=horizon,
-            opt_iters=10,
+            opt_iters=16,
             model=f,
         )
         cvxmpc.to(device=device)
@@ -105,7 +105,7 @@ def solve_mpc(z_0, z_g, u_0, f, device, opt, horizon):
     elif opt == "grad":
         gradmpc = Grad(
             planning_horizon=horizon,
-            opt_iters=100,
+            opt_iters=256,
             model=f,
         )
         gradmpc.to(device=device)
@@ -117,7 +117,7 @@ def solve_mpc(z_0, z_g, u_0, f, device, opt, horizon):
     elif opt == "cem":
         cem_mpc = CEM(
             planning_horizon=horizon,
-            opt_iters=100,
+            opt_iters=128,
             model=f,
         )
         cem_mpc.to(device=device)
@@ -131,31 +131,40 @@ def control_experiment(args):
     
     # Load models and env
     model_args = model_arg_loader(args.model_path)
-    nets = load_vh_models(path=args.model_path, args=model_args, mode='eval', device=args.device)
+    nets = load_vh_models(
+        path=args.model_path, 
+        args=model_args, 
+        mode='eval', 
+        device=args.device
+    )
     env = load_env(args=model_args)
-    
+    env.reset()
+
     # Wrap dynamics for MPC code format
-    f = LinearMixWrapper(nets["dyn"])
+    f = LinearMixWrapper(
+        nets["dyn"],
+        nstep_store_hidden=1,
+        device=args.device
+    )
+
+    # Load goal
+    img_g, context_data_g, gt_plate_pos_g = load_goal(404)
+    plt.imshow(img_g[0,0], cmap="gray")
+    plt.title("Image Goal")
+    plt.show(block=False)
 
     # Keep track of history of state using deque
     img_hist = deque([], (1 + model_args.frame_stacks))
 
-    # Format initial image for network in method
-    obs_t = env.reset()
-    img_t, context_data_t = format_obs(obs_t, device=args.device)
-    img_hist.appendleft(img_t)
-
     # Step to produce a history
-    obs_tp1, _, _, _ = env.step(np.array([0.5, 0]))
-    img_tp1, context_data_tp1 = format_obs(obs_tp1, device=args.device)
-    img_hist.appendleft(img_tp1)
+    for jj in range(10):
+        obs_tp1, _, _, _ = env.step(np.array([0.35, 0]))
+        img_tp1, context_data_tp1 = format_obs(obs_tp1, device=args.device)
+        img_hist.appendleft(img_tp1)
     
     # Initial state
     img_i = torch.cat(tuple(img_hist), dim=1)
     context_data_i = context_data_tp1
-
-    # Load goal
-    img_g, context_data_g, gt_plate_pos_g = load_goal(444)
 
     # Context image based on model type
     if model_args.context in ["initial_latent_state", "initial_image"]:
@@ -167,13 +176,19 @@ def control_experiment(args):
 
     # Embed goal image
     with torch.no_grad():
-        z_g, mu_z_g, var_z_g = encode(nets, model_args, img_g, context_data_g, ctx_img)
+        z_g, mu_z_g, var_z_g = encode(
+            nets, 
+            model_args, 
+            img_g, 
+            context_data_g, 
+            ctx_img
+        )
 
     # Initial guess
     u_0 = torch.zeros(
         (args.H, 1, 2), 
         device=args.device
-    )
+    ) + 0.01
 
     for ii in range(10000):
 
@@ -186,7 +201,8 @@ def control_experiment(args):
                 context_data_i, 
                 ctx_img
             )
-        
+        print("Initial distance to latent goal: ", torch.sum((mu_z_g - mu_z_i)**2))
+
         # Solve MPC problem
         q_i = {
             "z":z_i, 
@@ -203,9 +219,13 @@ def control_experiment(args):
             horizon=args.H
         )
         u = sol[0,0].detach().cpu().numpy()
+        print("controls :", u)
 
-        # Send control input
+        # Send control input one time step (n=1)
         obs_tpn, _, _, _ = env.step(u)
+
+        # Initialize hidden state with previous step
+        f.set_nstep_hidden_state()
 
         # Updated state
         img_tpn, context_data_tpn = format_obs(obs_tpn, device=args.device)
@@ -216,7 +236,7 @@ def control_experiment(args):
         # Update initial guess
         u_0[:-1] = sol[1:]
 
-        if ii==10:
+        if ii==100:
             break
 
 def main():

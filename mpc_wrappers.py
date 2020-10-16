@@ -26,7 +26,6 @@ class LinearStateSpaceWrapper():
         dim_z, dim_u = z_0.shape[-1], u.shape[-1]
 
         z_hat = torch.zeros((pred_len, batch_size, dim_z)).float().to(device=self.device)
-        h_0 = None
 
         for ll in range(pred_len):
             z_t1_hat = (torch.bmm(self.A[ll].repeat(batch_size, 1, 1), z_0.unsqueeze(-1)) + \
@@ -41,14 +40,22 @@ class LinearStateSpaceWrapper():
         return z_hat, info
 
 class LinearMixWrapper():
-    def __init__(self, dyn_model, device="cpu"):
+    def __init__(self, dyn_model, nstep_store_hidden=-1, device="cpu"):
         self.dyn_model = dyn_model
         self.device = device
-    
+        self.nstep_store_hidden = nstep_store_hidden
+        self.h = None
+
     def to(self, device):
         self.device = device
         self.dyn_model.to(device=device)
     
+    def reset_hidden_state(self):
+        self.h = None
+
+    def set_nstep_hidden_state(self):
+        self.h = self.h_nstep
+
     def rollout(self, z_0, u):
         """
         Args:
@@ -75,7 +82,7 @@ class LinearMixWrapper():
         var_hat = torch.zeros((pred_len, batch_size, dim_z, dim_z)).float().to(device=self.device)
         A = torch.zeros((pred_len, batch_size, dim_z, dim_z)).float().to(device=self.device)
         B = torch.zeros((pred_len, batch_size, dim_z, dim_u)).float().to(device=self.device)
-        h_0 = None
+        h_0 = self.h
 
         for ll in range(pred_len):
             z_t1_hat, mu_z_t1_hat, var_z_t1_hat, h_t1, A_t1, B_t1 = \
@@ -88,6 +95,9 @@ class LinearMixWrapper():
                     single=True,
                     return_matrices=True
                 )
+
+            if (ll + 1) == self.nstep_store_hidden:
+                self.h_nstep = h_t1.detach()
 
             z_hat[ll] = z_t1_hat
             mu_hat[ll] = mu_z_t1_hat
@@ -102,5 +112,5 @@ class LinearMixWrapper():
             "B": B
         }
 
-        #XXX: Track based on sample for now
-        return z_hat, info
+        #XXX: Track based on mean for now
+        return mu_hat, info

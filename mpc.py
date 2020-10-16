@@ -85,7 +85,8 @@ class CVXLinear(MPC):
                 cp.quad_form(self.z[k + 1] - self.z_g, self.Q) + \
                 cp.quad_form(self.u[k], self.R)
             constraints += [self.z[k + 1] == self.A[k] @ self.z[k] + self.B[k] @ self.u[k]]
-            constraints += [self.umin <= self.u[k], self.u[k] <= self.umax]
+            constraints += [0 <= self.u[k][0], self.u[k][0] <= self.umax]
+            constraints += [self.umin <= self.u[k][1], self.u[k][1] <= self.umax]
         self.prob = cp.Problem(cp.Minimize(cost), constraints)
 
     def solve(self, z_0, z_g, u_0=None):
@@ -104,7 +105,7 @@ class CVXLinear(MPC):
         """
         with torch.no_grad():
             if type(z_0) is dict:
-                z_0_sample = z_0["z"]
+                z_0_sample = z_0["mu"]
             else:
                 z_0_sample = z_0
 
@@ -129,7 +130,7 @@ class CVXLinear(MPC):
 
                 ret = self.prob.solve(solver=cp.ECOS)
                 
-                # Update operational point z_0 and u_0
+                # Update operational point u_0
                 u_0 = self.u.value
                 u_0 = np.expand_dims(u_0, axis=1)
                 u_0 = torch.tensor(u_0, device=self.device).float()
@@ -193,7 +194,7 @@ class CEM(MPC):
             )
             u_mu = u_mu.unsqueeze(1).repeat(1, self.samples, 1)
 
-            u_std = torch.ones(
+            u_std = 0.25 * torch.ones(
                 self.H, 
                 self.nu, 
                 device=self.device
@@ -203,6 +204,7 @@ class CEM(MPC):
             for _ in range(self.opt_iters):
                 eps = torch.randn_like(u_std)
                 u = u_mu + eps * u_std
+
                 z_hat, info = self.model.rollout(
                     z_0=z_0, 
                     u=self.tanh(u)
@@ -271,7 +273,7 @@ class Grad(MPC):
             )
 
         #TODO: Perturb guess randomly or perturb and run multiple solves and take best result?
-        opt = optim.SGD([u_0], lr=0.001, momentum=0.9)
+        opt = optim.SGD([u_0], lr=1.0, momentum=0.9)
         
         for ii in range(self.opt_iters):
             z_hat, info = self.model.rollout(

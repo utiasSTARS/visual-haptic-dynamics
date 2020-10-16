@@ -19,7 +19,8 @@ def random_MPC_test():
     for param in dyn.parameters():
         param.requires_grad = False
     dyn_wrapped = LinearMixWrapper(
-        dyn_model=dyn
+        dyn_model=dyn,
+        nstep_store_hidden=1
     )
     dyn_wrapped.to(device="cpu")
 
@@ -31,7 +32,7 @@ def random_MPC_test():
 
     cvx_mpc = CVXLinear(
         planning_horizon=8,
-        opt_iters=1,
+        opt_iters=10,
         model=dyn_wrapped,
     )
     cvx_mpc.to(device="cpu")
@@ -39,6 +40,7 @@ def random_MPC_test():
         z_0=z_0,
         z_g=z_g
     )
+    dyn_wrapped.reset_hidden_state()
 
     grad_mpc = Grad(
         planning_horizon=8,
@@ -50,6 +52,7 @@ def random_MPC_test():
         z_0=z_0,
         z_g=z_g
     )
+    dyn_wrapped.reset_hidden_state()
 
     cem_mpc = CEM(
         planning_horizon=8,
@@ -134,5 +137,4 @@ def cvxpy_simple_MPC_example_test():
 
 if __name__ == "__main__":
     random_MPC_test()
-    print("=" * 89)
-    cvxpy_simple_MPC_example_test()
+    # cvxpy_simple_MPC_example_test()
