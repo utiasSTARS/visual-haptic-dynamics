@@ -14,6 +14,7 @@ from tensorboardX import SummaryWriter
 import json
 import os, sys, time
 import re
+import pickle as pkl
 
 import torch
 import torch.nn as nn
@@ -129,12 +130,12 @@ def train(args):
         rgb=rgb
     )
 
-    idx = list(range(len(dataset)))
-    random.shuffle(idx)
-
+    dataset_idx = list(range(len(dataset)))
+    random.shuffle(dataset_idx)
     split = int(np.floor(args.val_split * len(dataset)))
-    train_sampler = SubsetRandomSampler(idx[split:])
-    valid_sampler = SubsetRandomSampler(idx[:split])
+
+    train_sampler = SubsetRandomSampler(dataset_idx[split:])
+    valid_sampler = SubsetRandomSampler(dataset_idx[:split])
 
     train_loader = DataLoader(
         dataset,
@@ -183,7 +184,7 @@ def train(args):
         for idx, data in enumerate(loader):
             if idx == args.n_example:
                 break
-            
+
             # Load and shape trajectory data
             x = {}
             x['img'] = data['img'].float().to(device=device) # (n, l, c, h, w)
@@ -453,6 +454,9 @@ def train(args):
             # Save models
             for k, v in nets.items():
                 torch.save(v.state_dict(), save_dir + f"/{k}.pth")
+            if args.val_split > 0:
+                with open(save_dir + "/val_idx.pkl", "wb") as f:
+                    pkl.dump(dataset_idx[split:], f)
             writer.close()
 
 def main():
