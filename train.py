@@ -38,145 +38,21 @@ from models import (
 from datasets import VisualHaptic
 from losses import torch_kl
 
-def train(args):
-    print(args)
-
-    set_seed_torch(args.random_seed)
-    def _init_fn(worker_id):
-        np.random.seed(int(args.random_seed))
-
-    assert 0 <= args.opt_vae_epochs <= args.opt_vae_base_epochs <= args.n_epoch
-    device = torch.device(args.device)
-    torch.backends.cudnn.deterministic = args.cudnn_deterministic
-    torch.backends.cudnn.benchmark = args.cudnn_benchmark
-
-    # Keeping track of results and hyperparameters
-    save_dir = os.path.join(args.storage_base_path, args.comment)
-    checkpoint_dir = os.path.join(save_dir, "checkpoints/")
-
-    if not args.debug:
-        os.makedirs(save_dir, exist_ok=True)
-        os.makedirs(checkpoint_dir, exist_ok=True)
-        args.__dict__ = OrderedDict(
-            sorted(args.__dict__.items(), key=lambda t: t[0])
-        )
-        with open(save_dir + '/hyperparameters.txt', 'w') as f:
-            json.dump(args.__dict__, f, indent=2)
-        writer = SummaryWriter(logdir=save_dir)
-
-    nets = load_vh_models(args, device=device)
-
-    if args.dyn_net == "linearmix":
-        base_params = [nets["dyn"].A, nets["dyn"].B]
-    elif args.dyn_net == "linearrank1":
-        base_params = []
-    elif args.dyn_net == "nonlinear":
-        base_params = []
-    else:
-        raise NotImplementedError()
-
-    enc_params = [list(v.parameters()) for k, v in nets.items() if "enc" in k]
-    enc_params = [v for sl in enc_params for v in sl] # remove nested list
-
-    dec_params = [list(v.parameters()) for k, v in nets.items() if "dec" in k]
-    dec_params = [v for sl in dec_params for v in sl] # remove nested list
-
-    if args.opt == "adam":
-        opt_type = torch.optim.Adam
-    elif args.opt == "sgd":
-        opt_type = torch.optim.SGD
-    else:
-        raise NotImplementedError()
-
-    opt_vae = opt_type(
-        enc_params + 
-        dec_params +
-        list(nets["mix"].parameters()),
-        lr=args.lr
-    )
-    opt_vae_base = opt_type(
-        enc_params +
-        dec_params +
-        list(nets["mix"].parameters()) +
-        base_params, 
-        lr=args.lr
-    )
-    opt_all = opt_type(
-        enc_params +
-        dec_params +
-        list(nets["mix"].parameters()) +
-        list(nets["dyn"].parameters()), 
-        lr=args.lr
-    )
-     
-    if args.weight_init == 'custom':
-        for k, v in nets.items():
-            v.apply(common_init_weights)
-    
+def setup_opt_iter(args):
     # Loss functions
     if args.use_binary_ce:
-        loss_REC = nn.BCEWithLogitsLoss(reduction='none').to(device=device)
+        loss_REC = nn.BCEWithLogitsLoss(reduction='none')
     else:
-        loss_REC = nn.MSELoss(reduction='none').to(device=device)
+        loss_REC = nn.MSELoss(reduction='none')
 
-    # Dataset
-    if args.dim_x[0] == 3: 
-        rgb = True
-    elif args.dim_x[0] == 1:
-        rgb = False
-
-    dataset = VisualHaptic(
-        args.dataset,
-        rgb=rgb
-    )
-
-    dataset_idx = list(range(len(dataset)))
-    random.shuffle(dataset_idx)
-    split = int(np.floor(args.val_split * len(dataset)))
-
-    train_sampler = SubsetRandomSampler(dataset_idx[split:])
-    valid_sampler = SubsetRandomSampler(dataset_idx[:split])
-
-    train_loader = DataLoader(
-        dataset,
-        batch_size=args.n_batch,
-        num_workers=args.n_worker,
-        sampler=train_sampler,
-        worker_init_fn=_init_fn
-    )
-    val_loader = DataLoader(
-        dataset,
-        batch_size=args.n_batch,
-        num_workers=args.n_worker,
-        sampler=valid_sampler,
-        worker_init_fn=_init_fn
-    )
-
-    #XXX: If a checkpoint exists, assumed preempted and resume training
-    checkpoint_epochs = 0
-    if os.path.exists(checkpoint_dir + "checkpoint.pth"):
-        checkpoint = torch.load(checkpoint_dir + "checkpoint.pth")
-        for k, v in nets.items():
-            v.load_state_dict(checkpoint[k])
-        opt_vae.load_state_dict(checkpoint['opt_vae'])
-        opt_vae_base.load_state_dict(checkpoint['opt_vae_base'])
-        opt_all.load_state_dict(checkpoint['opt_all'])
-        checkpoint_epochs = checkpoint['epoch']
-        print(f"Resuming training from checkpoint at epoch {checkpoint_epochs}")
-        assert (checkpoint_epochs < args.n_epoch), \
-            f"""The amount of epochs {args.n_epoch} should be greater 
-            than the already trained checkpoint epochs {checkpoint_epochs}"""
-
-    def opt_iter(epoch, opt=None):
+    def opt_iter(epoch, loader, nets, device, opt=None):
         """Single training epoch."""
         if opt:
             for k, v in nets.items():
                 v.train()
-            loader = train_loader
         else:
             for k, v in nets.items():
                 v.eval()
-            loader = val_loader
         
         # Keep track of losses
         running_stats = {"total_l": [], "kl_l": [], "img_rec_l": []}
@@ -205,7 +81,7 @@ def train(args):
                 if not args.use_context_frame_stack:
                     x["context"] = x["context"][:, args.frame_stacks:]
 
-            # Randomly and uniformly sample
+            # Randomly and uniformly sample?
             # ll = np.random.randint(ep_len-1)
 
             # Train from index 0 all the time
@@ -405,10 +281,134 @@ def train(args):
         summary_stats = {f'avg_{k}':sum(v)/len(v) for k, v in running_stats.items()}
 
         return summary_stats
+    return opt_iter
 
+def train(args):
+    print(args)
+
+    assert 0 <= args.opt_vae_epochs <= args.opt_vae_base_epochs <= args.n_epoch
+
+    set_seed_torch(args.random_seed)
+    def _init_fn(worker_id):
+        np.random.seed(int(args.random_seed))
+
+    device = torch.device(args.device)
+    torch.backends.cudnn.deterministic = args.cudnn_deterministic
+    torch.backends.cudnn.benchmark = args.cudnn_benchmark
+
+    # Keeping track of results and hyperparameters
+    save_dir = os.path.join(args.storage_base_path, args.comment)
+    checkpoint_dir = os.path.join(save_dir, "checkpoints/")
+
+    if not args.debug:
+        os.makedirs(save_dir, exist_ok=True)
+        os.makedirs(checkpoint_dir, exist_ok=True)
+        args.__dict__ = OrderedDict(
+            sorted(args.__dict__.items(), key=lambda t: t[0])
+        )
+        with open(save_dir + '/hyperparameters.txt', 'w') as f:
+            json.dump(args.__dict__, f, indent=2)
+        writer = SummaryWriter(logdir=save_dir)
+
+    # Setup network models
+    nets = load_vh_models(args, device=device)
+
+    if args.weight_init == 'custom':
+        for k, v in nets.items():
+            v.apply(common_init_weights)
+
+    # Setup optimizers
+    if args.opt == "adam":
+        opt_type = torch.optim.Adam
+    elif args.opt == "sgd":
+        opt_type = torch.optim.SGD
+    else:
+        raise NotImplementedError()
+    
+    if args.dyn_net == "linearmix":
+        base_params = [nets["dyn"].A, nets["dyn"].B]
+    elif args.dyn_net == "linearrank1":
+        base_params = []
+    elif args.dyn_net == "nonlinear":
+        base_params = []
+    else:
+        raise NotImplementedError()
+
+    enc_params = [list(v.parameters()) for k, v in nets.items() if "enc" in k]
+    enc_params = [v for sl in enc_params for v in sl] # remove nested list
+
+    dec_params = [list(v.parameters()) for k, v in nets.items() if "dec" in k]
+    dec_params = [v for sl in dec_params for v in sl] # remove nested list
+
+    opt_vae = opt_type(
+        enc_params + 
+        dec_params +
+        list(nets["mix"].parameters()),
+        lr=args.lr
+    )
+    opt_vae_base = opt_type(
+        enc_params +
+        dec_params +
+        list(nets["mix"].parameters()) +
+        base_params, 
+        lr=args.lr
+    )
+    opt_all = opt_type(
+        enc_params +
+        dec_params +
+        list(nets["mix"].parameters()) +
+        list(nets["dyn"].parameters()), 
+        lr=args.lr
+    )
+
+    # Setup dataset
+    dataset = VisualHaptic(
+        args.dataset,
+        rgb=args.dim_x[0] == 3
+    )
+
+    dataset_idx = list(range(len(dataset)))
+    random.shuffle(dataset_idx)
+    split = int(np.floor(args.val_split * len(dataset)))
+
+    train_sampler = SubsetRandomSampler(dataset_idx[split:])
+    valid_sampler = SubsetRandomSampler(dataset_idx[:split])
+
+    train_loader = DataLoader(
+        dataset,
+        batch_size=args.n_batch,
+        num_workers=args.n_worker,
+        sampler=train_sampler,
+        worker_init_fn=_init_fn
+    )
+    val_loader = DataLoader(
+        dataset,
+        batch_size=args.n_batch,
+        num_workers=args.n_worker,
+        sampler=valid_sampler,
+        worker_init_fn=_init_fn
+    )
+
+    #XXX: If a checkpoint exists, assumed preempted and resume training
+    checkpoint_epochs = 0
+    if os.path.exists(checkpoint_dir + "checkpoint.pth"):
+        checkpoint = torch.load(checkpoint_dir + "checkpoint.pth")
+        for k, v in nets.items():
+            v.load_state_dict(checkpoint[k])
+        opt_vae.load_state_dict(checkpoint['opt_vae'])
+        opt_vae_base.load_state_dict(checkpoint['opt_vae_base'])
+        opt_all.load_state_dict(checkpoint['opt_all'])
+        checkpoint_epochs = checkpoint['epoch']
+        print(f"Resuming training from checkpoint at epoch {checkpoint_epochs}")
+        assert (checkpoint_epochs < args.n_epoch), \
+            f"""The amount of epochs {args.n_epoch} should be greater 
+            than the already trained checkpoint epochs {checkpoint_epochs}"""
+    
+    opt_iter = setup_opt_iter(args)
+    
     # Training loop
-    opt = opt_vae
     try:
+        opt = opt_vae
         for epoch in range(1 + checkpoint_epochs, args.n_epoch + 1):
             tic = time.time()
             if epoch >= args.opt_vae_base_epochs:
@@ -417,12 +417,24 @@ def train(args):
                 opt = opt_vae_base
             
             # Train for one epoch        
-            summary_train = opt_iter(epoch=epoch, opt=opt)
+            summary_train = opt_iter(
+                epoch=epoch, 
+                loader=train_loader, 
+                nets=nets, 
+                device=device,
+                opt=opt
+            )
 
             # Calculate validtion loss
             if args.val_split > 0:
                 with torch.no_grad():
-                    summary_val = opt_iter(epoch=epoch)
+                    summary_val = opt_iter(
+                        epoch=epoch, 
+                        loader=val_loader,
+                        nets=nets,
+                        device=device
+                    )
+
             epoch_time = time.time() - tic
 
             print((f"Epoch {epoch}/{args.n_epoch}: " 

@@ -85,8 +85,8 @@ class VisualHaptic(data.Dataset):
 
         print("Loading cache for dataset")
         self.data = loader(dir) 
-
         print("Formating dataset")
+        
         batch_size = self.data["img"].shape[0]
         traj_len = self.data["img"].shape[1]
 
