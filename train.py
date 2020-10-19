@@ -350,7 +350,7 @@ def train(args):
 
                     p_z_nstep = {k:v.reshape(-1, *v.shape[2:]) for k, v in p_z_nstep.items()}
                     u_nstep = u_nstep.reshape(-1, *u_nstep.shape[2:])
-                    h_t = h_t.reshape(-1, *h_t.shape[2:])
+                    h_t = h_t.reshape(-1, *h_t.shape[2:]).unsqueeze(0)
 
                     z_nstep_t1, mu_z_nstep_t1, var_z_nstep_t1, (h_t1, _) = nets["dyn"](
                         z_t=p_z_nstep["z"], 
@@ -367,7 +367,7 @@ def train(args):
                         "mu": mu_z_nstep_t1, 
                         "cov": var_z_nstep_t1
                     })
-                    h_t = h_t1
+                    h_t = h_t1[0]
 
                     p_z_nstep = {k:v.reshape(l_nstep, n_nstep, *v.shape[1:]) for k, v in p_z_nstep.items()}
                     u_nstep = u_nstep.reshape(l_nstep, n_nstep, *u_nstep.shape[1:])
