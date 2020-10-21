@@ -86,7 +86,7 @@ class VisualHaptic(data.Dataset):
         print("Loading cache for dataset")
         self.data = loader(dir) 
         print("Formating dataset")
-        
+
         batch_size = self.data["img"].shape[0]
         traj_len = self.data["img"].shape[1]
 
@@ -128,6 +128,12 @@ class VisualHaptic(data.Dataset):
         fmt_str += '    Number of datapoints: {}\n'.format(self.__len__())
         fmt_str += '    Dir Location: {}\n'.format(self.dir)
         return fmt_str
+
+    def append(self, data):
+        """Add new trajectories to the dataset."""
+        for key in data.keys():
+            assert key in self.data, "Adding data not in the original dataset."
+            self.data[k] = np.concatenate((self.data[k], data[k]))
 
 class ImgCached(data.Dataset):
     """Image Dataset from a single cached tuple file of np.arrays
