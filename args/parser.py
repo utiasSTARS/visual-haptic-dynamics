@@ -79,6 +79,9 @@ def parse_control_experiment_args():
     parser.add_argument('--H', type=int, default=6,  help='Horizon length for MPC controller')
     parser.add_argument('--opt', choices=['grad', 'cem', 'cvxopt'], default='cvxopt', help='Optimization used for MPC')
     parser.add_argument('--device', type=str, default='cpu', help='Device to use for PyTorch')
+    parser.add_argument('--n_episodes', type=int, default=1024, help='Amount of episodes to collect')
+    parser.add_argument('--n_train_episodes', type=int, default=128, help='Train model every n episodes')
+    parser.add_argument('--n_epochs', type=int, default=128, help='Train model for n epochs')
 
     args = parser.parse_args()
     return args
