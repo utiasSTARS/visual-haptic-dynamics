@@ -7,6 +7,7 @@ from mpc import CVXLinear, Grad, CEM
 from mpc_wrappers import LinearMixWrapper
 from models import LinearMixSSM
 from utils import load_vh_models, rgb2gray
+from train import setup_opt_iter
 
 import torch
 import numpy as np
@@ -128,17 +129,16 @@ def solve_mpc(z_0, z_g, u_0, f, device, opt, horizon):
     return u
 
 def control_experiment(args):
-    
     # Load models and env
     model_args = model_arg_loader(args.model_path)
+
+    # Load initial weights trained with offline dataset
     nets = load_vh_models(
         path=args.model_path, 
         args=model_args, 
         mode='eval', 
         device=args.device
     )
-    env = load_env(args=model_args)
-    env.reset()
 
     # Wrap dynamics for MPC code format
     f = LinearMixWrapper(
@@ -147,97 +147,130 @@ def control_experiment(args):
         device=args.device
     )
 
-    # Load goal
-    img_g, context_data_g, gt_plate_pos_g = load_goal(404)
-    plt.imshow(img_g[0,0], cmap="gray")
-    plt.title("Image Goal")
-    plt.show(block=False)
+    env = load_env(args=model_args)
 
-    # Keep track of history of state using deque
-    img_hist = deque([], (1 + model_args.frame_stacks))
+    new_episodes = 1
+    epoch = model_args.n_epoch
+    opt_iter = setup_opt_iter(model_args)
 
-    # Step to produce a history
-    for jj in range(10):
-        obs_tp1, _, _, _ = env.step(np.array([0.35, 0]))
-        img_tp1, context_data_tp1 = format_obs(obs_tp1, device=args.device)
-        img_hist.appendleft(img_tp1)
-    
-    # Initial state
-    img_i = torch.cat(tuple(img_hist), dim=1)
-    context_data_i = context_data_tp1
+    for _ in range(args.n_episodes):
+        
+        if total_episodes % args.n_train_episodes == 0:
+            for k, v in nets.items():
+                v.train()
 
-    # Context image based on model type
-    if model_args.context in ["initial_latent_state", "initial_image"]:
-        ctx_img = img_i
-    elif model_args.context in ["goal_latent_state", "goal_image"]:
-        ctx_img = img_g
-    else:
-        ctx_img = None
+            for _ in args.n_epochs:
+                summary_train = opt_iter(
+                    epoch=epoch, 
+                    loader=train_loader, 
+                    nets=nets, 
+                    device=device,
+                    opt=opt
+                )
+                epoch += 1
 
-    # Embed goal image
-    with torch.no_grad():
-        z_g, mu_z_g, var_z_g = encode(
-            nets, 
-            model_args, 
-            img_g, 
-            context_data_g, 
-            ctx_img
-        )
+            for k, v in nets.items():
+                v.eval()
+            new_episodes = 1
 
-    # Initial guess
-    u_0 = torch.zeros(
-        (args.H, 1, 2), 
-        device=args.device
-    ) + 0.01
+        env.reset()
+        
+        # Load goal
+        img_g, context_data_g, gt_plate_pos_g = load_goal(404)
+        plt.imshow(img_g[0,0], cmap="gray")
+        plt.title("Image Goal")
+        plt.show(block=False)
 
-    for ii in range(10000):
+        # Keep track of history of state using deque
+        img_hist = deque([], (1 + model_args.frame_stacks))
 
-        # Embed initial image 
+        # Step to produce a history
+        for jj in range(10):
+            obs_tp1, _, _, _ = env.step(np.array([0.35, 0]))
+            img_tp1, context_data_tp1 = format_obs(obs_tp1, device=args.device)
+            img_hist.appendleft(img_tp1)
+        
+        # Initial state
+        img_i = torch.cat(tuple(img_hist), dim=1)
+        context_data_i = context_data_tp1
+
+        # Context image based on model type
+        if model_args.context in ["initial_latent_state", "initial_image"]:
+            ctx_img = img_i
+        elif model_args.context in ["goal_latent_state", "goal_image"]:
+            ctx_img = img_g
+        else:
+            ctx_img = None
+
+        # Embed goal image
         with torch.no_grad():
-            z_i, mu_z_i, var_z_i = encode(
+            z_g, mu_z_g, var_z_g = encode(
                 nets, 
                 model_args, 
-                img_i, 
-                context_data_i, 
+                img_g, 
+                context_data_g, 
                 ctx_img
             )
-        print("Initial distance to latent goal: ", torch.sum((mu_z_g - mu_z_i)**2))
 
-        # Solve MPC problem
-        q_i = {
-            "z":z_i, 
-            "mu":mu_z_i, 
-            "cov":var_z_i
-        }
-        sol = solve_mpc(
-            q_i, 
-            z_g[0], 
-            u_0, 
-            f, 
-            device=args.device, 
-            opt=args.opt, 
-            horizon=args.H
-        )
-        u = sol[0,0].detach().cpu().numpy()
-        print("controls :", u)
+        # Initial guess
+        u_0 = torch.zeros(
+            (args.H, 1, 2), 
+            device=args.device
+        ) + 0.01
+        
+        for ii in range(16):
+            # Embed initial image 
+            with torch.no_grad():
+                z_i, mu_z_i, var_z_i = encode(
+                    nets, 
+                    model_args, 
+                    img_i, 
+                    context_data_i, 
+                    ctx_img
+                )
+            print("Initial distance to latent goal: ", torch.sum((mu_z_g - mu_z_i)**2))
 
-        # Send control input one time step (n=1)
-        obs_tpn, _, _, _ = env.step(u)
+            # Solve MPC problem
+            q_i = {
+                "z":z_i, 
+                "mu":mu_z_i, 
+                "cov":var_z_i
+            }
+            sol = solve_mpc(
+                q_i, 
+                z_g[0], 
+                u_0, 
+                f, 
+                device=args.device, 
+                opt=args.opt, 
+                horizon=args.H
+            )
+            u = sol[0,0].detach().cpu().numpy()
+            print("controls :", u)
 
-        # Initialize hidden state with previous step
-        f.set_nstep_hidden_state()
+            # Send control input one time step (n=1)
+            obs_tpn, reward, done, info = env.step(u)
 
-        # Updated state
-        img_tpn, context_data_tpn = format_obs(obs_tpn, device=args.device)
-        img_hist.appendleft(img_tpn)
-        img_i = torch.cat(tuple(img_hist), dim=1)
-        context_data_i = context_data_tpn
+            print(
+                obs_tpn["img"].shape, 
+                obs_tpn["ft"].shape, 
+                obs_tpn["arm"].shape, 
+                u.shape,
+                info["achieved_goal"].shape
+            )
 
-        # Update initial guess
-        u_0[:-1] = sol[1:]
+            # Initialize hidden state with previous step
+            f.set_nstep_hidden_state()
 
-        if ii==100:
-            break
+            # Updated state
+            img_tpn, context_data_tpn = format_obs(obs_tpn, device=args.device)
+            img_hist.appendleft(img_tpn)
+            img_i = torch.cat(tuple(img_hist), dim=1)
+            context_data_i = context_data_tpn
+
+            # Update initial guess
+            u_0[:-1] = sol[1:]
+        new_episodes += 1
 
 def main():
     args = parse_control_experiment_args()
