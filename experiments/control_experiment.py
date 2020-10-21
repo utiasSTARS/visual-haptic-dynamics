@@ -24,6 +24,9 @@ parentdir = os.path.dirname(os.path.dirname(currentdir))
 os.sys.path.insert(0, parentdir + "/pixel-environments/gym_thing/gym_thing/")
 from visual_pusher_env import ThingVisualPusher
 import pybullet as p
+from datasets import VisualHaptic
+from torch.utils.data import DataLoader
+from torch.utils.data.sampler import SubsetRandomSampler
 
 def model_arg_loader(path):
     """Load hyperparameters from trained model."""
@@ -52,9 +55,12 @@ def load_env(args):
 
     return env
 
-def load_goal(idx):
+def load_goal(idx=None):
     goals = pkl_loader("./goal_imgs/goals.pkl")
-    return goals[idx] 
+    if idx is not None:
+        return goals[idx] 
+    else:
+        return goals[np.random.randint(len(goals))]
 
 def format_obs(obs, device="cpu"):
     """Format obs from env for network."""
@@ -128,9 +134,26 @@ def solve_mpc(z_0, z_g, u_0, f, device, opt, horizon):
         )
     return u
 
+def generate_loader(dataset):
+    dataset_idx = list(range(len(dataset)))
+    sampler = SubsetRandomSampler(dataset_idx)
+    loader = DataLoader(
+        dataset,
+        batch_size=32,
+        num_workers=0,
+        sampler=sampler,
+    )
+    return loader
+
 def control_experiment(args):
     # Load models and env
     model_args = model_arg_loader(args.model_path)
+
+    # Load dataset
+    dataset = VisualHaptic(
+        args.dataset_path,
+        rgb=model_args.dim_x[0] == 3
+    )
 
     # Load initial weights trained with offline dataset
     nets = load_vh_models(
@@ -138,6 +161,22 @@ def control_experiment(args):
         args=model_args, 
         mode='eval', 
         device=args.device
+    )
+
+    # Load optimizer
+    if args.opt == "adam":
+        opt_type = torch.optim.Adam
+    elif args.opt == "sgd":
+        opt_type = torch.optim.SGD
+    else:
+        raise NotImplementedError()
+
+    params = [list(v.parameters()) for k, v in nets.items() if "enc" in k]
+    params = [v for sl in params for v in sl] # remove nested list
+
+    opt = opt_type(
+        params, 
+        lr=args.lr
     )
 
     # Wrap dynamics for MPC code format
@@ -154,17 +193,17 @@ def control_experiment(args):
     opt_iter = setup_opt_iter(model_args)
 
     for _ in range(args.n_episodes):
-        
-        if total_episodes % args.n_train_episodes == 0:
+        if new_episodes % args.n_train_episodes == 0:
             for k, v in nets.items():
                 v.train()
-
+            loader = generate_loader(dataset)
+            
             for _ in args.n_epochs:
-                summary_train = opt_iter(
+                summary = opt_iter(
                     epoch=epoch, 
-                    loader=train_loader, 
+                    loader=loader, 
                     nets=nets, 
-                    device=device,
+                    device=args.device,
                     opt=opt
                 )
                 epoch += 1
@@ -176,7 +215,7 @@ def control_experiment(args):
         env.reset()
         
         # Load goal
-        img_g, context_data_g, gt_plate_pos_g = load_goal(404)
+        img_g, context_data_g, gt_plate_pos_g = load_goal()
         plt.imshow(img_g[0,0], cmap="gray")
         plt.title("Image Goal")
         plt.show(block=False)
@@ -217,7 +256,15 @@ def control_experiment(args):
             (args.H, 1, 2), 
             device=args.device
         ) + 0.01
-        
+
+        episode_data = {
+            "img": np.zeros((1, 16, 64, 64, 3), dtype=np.uint8), 
+            "ft": np.zeros((1, 16, 32, 6)), 
+            "arm": np.zeros((1, 16, 32, 6)),
+            "action": np.zeros((1, 16, 2)), 
+            "gt_plate_pos": np.zeros((1, 16, 3)),
+        }
+
         for ii in range(16):
             # Embed initial image 
             with torch.no_grad():
@@ -242,7 +289,7 @@ def control_experiment(args):
                 u_0, 
                 f, 
                 device=args.device, 
-                opt=args.opt, 
+                opt=args.mpc_opt, 
                 horizon=args.H
             )
             u = sol[0,0].detach().cpu().numpy()
@@ -251,13 +298,12 @@ def control_experiment(args):
             # Send control input one time step (n=1)
             obs_tpn, reward, done, info = env.step(u)
 
-            print(
-                obs_tpn["img"].shape, 
-                obs_tpn["ft"].shape, 
-                obs_tpn["arm"].shape, 
-                u.shape,
-                info["achieved_goal"].shape
-            )
+            # Store transition in episode data
+            episode_data["img"][0, ii] = obs_tpn["img"]
+            episode_data["ft"][0, ii] = obs_tpn["ft"]
+            episode_data["arm"][0, ii] = obs_tpn["arm"]
+            episode_data["action"][0, ii] = u
+            episode_data["gt_plate_pos"][0, jj] = info["achieved_goal"] 
 
             # Initialize hidden state with previous step
             f.set_nstep_hidden_state()
@@ -270,6 +316,8 @@ def control_experiment(args):
 
             # Update initial guess
             u_0[:-1] = sol[1:]
+        
+        dataset.append(episode_data)
         new_episodes += 1
 
 def main():

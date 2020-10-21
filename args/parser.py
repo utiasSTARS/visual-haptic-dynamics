@@ -75,13 +75,16 @@ def parse_vh_training_args():
 
 def parse_control_experiment_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model_path', type=str, required=True,  help='Path to directory of model')
-    parser.add_argument('--H', type=int, default=6,  help='Horizon length for MPC controller')
-    parser.add_argument('--opt', choices=['grad', 'cem', 'cvxopt'], default='cvxopt', help='Optimization used for MPC')
+    parser.add_argument('--model_path', type=str, required=True, help='Path to directory of model')
+    parser.add_argument('--dataset_path', type=str, default="/Users/oliver/visual-haptic-dynamics/experiments/data/datasets/visual_haptic_2D_len16_osc_withGT_8C12919B740845539C0E75B5CBAF7965.pkl", help='Path to directory of offline dataset')
+    parser.add_argument('--H', type=int, default=6, help='Horizon length for MPC controller')
+    parser.add_argument('--mpc_opt', choices=['grad', 'cem', 'cvxopt'], default='cvxopt', help='Optimization used for MPC')
     parser.add_argument('--device', type=str, default='cpu', help='Device to use for PyTorch')
     parser.add_argument('--n_episodes', type=int, default=1024, help='Amount of episodes to collect')
     parser.add_argument('--n_train_episodes', type=int, default=128, help='Train model every n episodes')
     parser.add_argument('--n_epochs', type=int, default=128, help='Train model for n epochs')
+    parser.add_argument('--opt', choices=['adam', 'sgd'], default='adam', help='Optimizer used')
+    parser.add_argument('--lr', type=float, default= 3e-4, help='Learning rate')
 
     args = parser.parse_args()
     return args

@@ -82,25 +82,31 @@ class VisualHaptic(data.Dataset):
             loader (callable): Function to load a sample given its path.
         """
         self.dir = dir
+        self.rgb = rgb
+        self.transform = transform
 
         print("Loading cache for dataset")
         self.data = loader(dir) 
         print("Formating dataset")
-
-        batch_size = self.data["img"].shape[0]
-        traj_len = self.data["img"].shape[1]
-
-        if rgb:
-            self.data["img"] = np.transpose(self.data["img"], (0, 1, 4, 2, 3)) / 255.0
-        else:
-            self.data["img"] = np.expand_dims(rgb2gray(self.data["img"])[..., 0], axis=2)
-
-        self.data["ft"] /= 100.0
         
-        if transform is not None:
+        self.data = self.format_data(self.data)
+
+    def format_data(self, data):
+        batch_size = data["img"].shape[0]
+        traj_len = data["img"].shape[1]
+
+        if self.rgb:
+            data["img"] = np.transpose(data["img"], (0, 1, 4, 2, 3)) / 255.0
+        else:
+            data["img"] = np.expand_dims(rgb2gray(data["img"])[..., 0], axis=2)
+
+        data["ft"] /= 100.0
+        
+        if self.transform is not None:
             for ii in range(batch_size):
                 for tt in range(traj_len):
-                    self.data["img"][ii, tt, :, :, :] = transform(self.data["img"][ii, tt, :, :, :])
+                    data["img"][ii, tt, :, :, :] = self.transform(data["img"][ii, tt, :, :, :])
+        return data
 
     def __len__(self):
         return self.data["img"].shape[0]
@@ -131,9 +137,11 @@ class VisualHaptic(data.Dataset):
 
     def append(self, data):
         """Add new trajectories to the dataset."""
+        data = self.format_data(data)
         for key in data.keys():
             assert key in self.data, "Adding data not in the original dataset."
-            self.data[k] = np.concatenate((self.data[k], data[k]))
+            self.data[key] = np.concatenate((self.data[key], data[key]))
+            print(self.data[key].shape)
 
 class ImgCached(data.Dataset):
     """Image Dataset from a single cached tuple file of np.arrays
