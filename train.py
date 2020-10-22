@@ -10,7 +10,7 @@ import random
 from args.parser import parse_vh_training_args
 from collections import OrderedDict
 from datetime import datetime
-from tensorboardX import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
 import json
 import os, sys, time
 import re
@@ -308,7 +308,7 @@ def train(args):
         )
         with open(save_dir + '/hyperparameters.txt', 'w') as f:
             json.dump(args.__dict__, f, indent=2)
-        writer = SummaryWriter(logdir=save_dir)
+        writer = SummaryWriter(log_dir=save_dir)
 
     # Setup network models
     nets = load_vh_models(args, device=device)
