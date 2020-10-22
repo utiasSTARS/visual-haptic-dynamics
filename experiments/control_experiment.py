@@ -1,4 +1,4 @@
-import os, sys
+import os, sys, time
 os.sys.path.insert(0, "..")
 import inspect
 from collections import deque  
@@ -6,7 +6,7 @@ from collections import deque
 from mpc import CVXLinear, Grad, CEM
 from mpc_wrappers import LinearMixWrapper
 from models import LinearMixSSM
-from utils import load_vh_models, rgb2gray
+from utils import load_vh_models, rgb2gray, set_seed_torch
 from train import setup_opt_iter
 
 import torch
@@ -40,7 +40,7 @@ def pkl_loader(path):
         data = pkl.load(f)
     return data
 
-def load_env(args):
+def load_env(args, render=True):
     """Load environment with config from dataset which model was trained on."""
     dataset_name = args.dataset.split("/")[-1]
     idx = dataset_name.index(".pkl")
@@ -48,7 +48,7 @@ def load_env(args):
     env_config = pkl_loader("./data/datasets/" + dataset_config)
     
     # Rendering set as true for experiments
-    env_config["is_render"] = True
+    env_config["is_render"] = render
 
     #Load env with right config
     env = ThingVisualPusher.from_config(env_config)
@@ -60,7 +60,8 @@ def load_goal(idx=None):
     if idx is not None:
         return goals[idx] 
     else:
-        return goals[np.random.randint(len(goals))]
+        rnd_idx = np.random.randint(len(goals))
+        return goals[rnd_idx]
 
 def format_obs(obs, device="cpu"):
     """Format obs from env for network."""
@@ -134,7 +135,7 @@ def solve_mpc(z_0, z_g, u_0, f, device, opt, horizon):
         )
     return u
 
-def generate_loader(dataset):
+def generate_loader(dataset, worker_init_fn=None):
     dataset_idx = list(range(len(dataset)))
     sampler = SubsetRandomSampler(dataset_idx)
     loader = DataLoader(
@@ -142,11 +143,17 @@ def generate_loader(dataset):
         batch_size=32,
         num_workers=0,
         sampler=sampler,
+        worker_init_fn= worker_init_fn
     )
     return loader
 
 def control_experiment(args):
-    # Load models and env
+    # Random seed
+    set_seed_torch(args.random_seed)
+    def _init_fn(worker_id):
+        np.random.seed(int(args.random_seed))
+
+    # Load model's arguments
     model_args = model_arg_loader(args.model_path)
 
     # Load dataset
@@ -180,25 +187,34 @@ def control_experiment(args):
     )
 
     # Wrap dynamics for MPC code format
-    f = LinearMixWrapper(
+    wrapped_dyn = LinearMixWrapper(
         nets["dyn"],
         nstep_store_hidden=1,
         device=args.device
     )
 
-    env = load_env(args=model_args)
+    env = load_env(args=model_args, render=args.render)
 
-    new_episodes = 1
+    collected_episodes = 0
     epoch = model_args.n_epoch
+    rets = []    
     opt_iter = setup_opt_iter(model_args)
 
-    for _ in range(args.n_episodes):
-        if new_episodes % args.n_train_episodes == 0:
+    for ii in range(args.n_episodes):
+
+        # Training updates
+        if collected_episodes == args.n_train_episodes:
+            print("Updating models")
             for k, v in nets.items():
                 v.train()
-            loader = generate_loader(dataset)
+
+            loader = generate_loader(
+                dataset, 
+                worker_init_fn=_init_fn
+            )
             
-            for _ in args.n_epochs:
+            for _ in range(args.n_epochs):
+                tic = time.time()
                 summary = opt_iter(
                     epoch=epoch, 
                     loader=loader, 
@@ -207,18 +223,30 @@ def control_experiment(args):
                     opt=opt
                 )
                 epoch += 1
+                epoch_time = time.time() - tic
+                print((f"Epoch {epoch}/{model_args.n_epoch + args.n_epochs}: " 
+                    f"Avg train loss: {summary['avg_total_l']}, "
+                    f"Time per epoch: {epoch_time}"))
 
             for k, v in nets.items():
                 v.eval()
-            new_episodes = 1
+            collected_episodes = 0
 
+        # "Test" episode with no exploration noise
+        if ii % args.n_test_episodes == 0:
+            testing = True
+        else:
+            testing = False
+            
         env.reset()
         
         # Load goal
         img_g, context_data_g, gt_plate_pos_g = load_goal()
-        plt.imshow(img_g[0,0], cmap="gray")
-        plt.title("Image Goal")
-        plt.show(block=False)
+        if args.render:
+            plt.imshow(img_g[0,0], cmap="gray")
+            plt.title("Image Goal")
+            plt.draw()
+            plt.show(block=False)
 
         # Keep track of history of state using deque
         img_hist = deque([], (1 + model_args.frame_stacks))
@@ -275,7 +303,7 @@ def control_experiment(args):
                     context_data_i, 
                     ctx_img
                 )
-            print("Initial distance to latent goal: ", torch.sum((mu_z_g - mu_z_i)**2))
+            print("Distance to latent goal: ", torch.sum((mu_z_g - mu_z_i)**2))
 
             # Solve MPC problem
             q_i = {
@@ -283,17 +311,37 @@ def control_experiment(args):
                 "mu":mu_z_i, 
                 "cov":var_z_i
             }
-            sol = solve_mpc(
-                q_i, 
-                z_g[0], 
-                u_0, 
-                f, 
-                device=args.device, 
-                opt=args.mpc_opt, 
-                horizon=args.H
-            )
+
+            if args.mpc_opt != "grad":
+                is_grad_enabled = torch.no_grad()
+            else:
+                is_grad_enabled = torch.enable_grad()
+            
+            with is_grad_enabled:
+                sol = solve_mpc(
+                    q_i, 
+                    z_g[0], 
+                    u_0, 
+                    wrapped_dyn, 
+                    device=args.device, 
+                    opt=args.mpc_opt, 
+                    horizon=args.H
+                )
+
             u = sol[0,0].detach().cpu().numpy()
-            print("controls :", u)
+            
+            # Add exploration noise
+            if not testing:
+                eps = np.random.normal(
+                    loc=0.0, 
+                    scale=np.sqrt(args.exploration_noise_var), 
+                    size=2
+                )
+            else:
+                eps = 0.0
+            u += eps
+            u = np.clip(u, -1.0, 1.0)
+            print("controls: ", u, ", noise: ", eps)
 
             # Send control input one time step (n=1)
             obs_tpn, reward, done, info = env.step(u)
@@ -305,8 +353,8 @@ def control_experiment(args):
             episode_data["action"][0, ii] = u
             episode_data["gt_plate_pos"][0, jj] = info["achieved_goal"] 
 
-            # Initialize hidden state with previous step
-            f.set_nstep_hidden_state()
+            # Initialize hidden state of dynamics with previous step after stepping
+            wrapped_dyn.set_nstep_hidden_state()
 
             # Updated state
             img_tpn, context_data_tpn = format_obs(obs_tpn, device=args.device)
@@ -314,11 +362,16 @@ def control_experiment(args):
             img_i = torch.cat(tuple(img_hist), dim=1)
             context_data_i = context_data_tpn
 
-            # Update initial guess
+            # Update initial guess with previous solution
             u_0[:-1] = sol[1:]
         
+        # End of episode stuff
+        if testing:
+            rewards = ((episode_data["gt_plate_pos"][0] - gt_plate_pos_g.cpu().numpy())**2).sum(-1)
+            rets.append(np.sum(rewards))
         dataset.append(episode_data)
-        new_episodes += 1
+        wrapped_dyn.reset_hidden_state()
+        collected_episodes += 1
 
 def main():
     args = parse_control_experiment_args()

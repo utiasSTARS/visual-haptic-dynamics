@@ -141,7 +141,6 @@ class VisualHaptic(data.Dataset):
         for key in data.keys():
             assert key in self.data, "Adding data not in the original dataset."
             self.data[key] = np.concatenate((self.data[key], data[key]))
-            print(self.data[key].shape)
 
 class ImgCached(data.Dataset):
     """Image Dataset from a single cached tuple file of np.arrays
