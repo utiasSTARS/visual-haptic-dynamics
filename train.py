@@ -409,7 +409,7 @@ def train(args):
     # Training loop
     try:
         opt = opt_vae
-        for epoch in range(1 + checkpoint_epochs, args.n_epoch + 1):
+        for epoch in range(checkpoint_epochs + 1, args.n_epoch + 1):
             tic = time.time()
             if epoch >= args.opt_vae_base_epochs:
                 opt = opt_all
@@ -452,7 +452,7 @@ def train(args):
                         writer.add_scalar(f"loss/{k}/train", v, epoch)
 
                 # Save model at intermittent checkpoints 
-                if epoch % args.n_checkpoint_epoch == 0:
+                if epoch % args.n_checkpoint_epochs == 0:
                     torch.save(
                         {**{k: v.state_dict() for k, v in nets.items()},
                         'opt_all': opt_all.state_dict(),

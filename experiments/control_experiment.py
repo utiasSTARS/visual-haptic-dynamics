@@ -8,6 +8,7 @@ from mpc_wrappers import LinearMixWrapper
 from models import LinearMixSSM
 from utils import load_vh_models, rgb2gray, set_seed_torch
 from train import setup_opt_iter
+from collections import OrderedDict
 
 import torch
 import numpy as np
@@ -27,6 +28,7 @@ import pybullet as p
 from datasets import VisualHaptic
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
+from torch.utils.tensorboard import SummaryWriter
 
 def model_arg_loader(path):
     """Load hyperparameters from trained model."""
@@ -155,12 +157,20 @@ def control_experiment(args):
 
     # Load model's arguments
     model_args = model_arg_loader(args.model_path)
+    
+    # Tensorboard and general logging
+    result_dir = os.path.join("./results", model_args.comment)
+    checkpoint_dir = os.path.join(result_dir, "checkpoints/")
 
-    # Load dataset
-    dataset = VisualHaptic(
-        args.dataset_path,
-        rgb=model_args.dim_x[0] == 3
-    )
+    if not args.debug:
+        os.makedirs(result_dir, exist_ok=True)
+        os.makedirs(checkpoint_dir, exist_ok=True)
+        args.__dict__ = OrderedDict(
+            sorted(args.__dict__.items(), key=lambda t: t[0])
+        )
+        with open(result_dir + '/hyperparameters.txt', 'w') as f:
+            json.dump(args.__dict__, f, indent=2)
+        writer = SummaryWriter(log_dir=result_dir)
 
     # Load initial weights trained with offline dataset
     nets = load_vh_models(
@@ -168,6 +178,12 @@ def control_experiment(args):
         args=model_args, 
         mode='eval', 
         device=args.device
+    )
+    
+    # Load dataset
+    dataset = VisualHaptic(
+        args.dataset_path,
+        rgb=model_args.dim_x[0] == 3
     )
 
     # Load optimizer
@@ -196,12 +212,20 @@ def control_experiment(args):
     env = load_env(args=model_args, render=args.render)
 
     collected_episodes = 0
-    epoch = model_args.n_epoch
+    checkpoint_episodes = 0
     rets = []    
     opt_iter = setup_opt_iter(model_args)
 
-    for ii in range(args.n_episodes):
+    if os.path.exists(checkpoint_dir + "checkpoint.pth"):
+        checkpoint = torch.load(checkpoint_dir + "checkpoint.pth")
+        for k, v in nets.items():
+            v.load_state_dict(checkpoint[k])
+        opt.load_state_dict(checkpoint['opt'])
+        checkpoint_episodes = checkpoint['checkpoint_episodes']
+        dataset.append(checkpoint['appended_data'], format=False)
 
+    for episode in range(checkpoint_episodes + 1, args.n_episodes + 1):
+        print(f"Episode {episode}/{args.n_episodes}")
         # Training updates
         if collected_episodes == args.n_train_episodes:
             print("Updating models")
@@ -213,7 +237,7 @@ def control_experiment(args):
                 worker_init_fn=_init_fn
             )
             
-            for _ in range(args.n_epochs):
+            for epoch in range(1, args.n_epochs + 1):                
                 tic = time.time()
                 summary = opt_iter(
                     epoch=epoch, 
@@ -222,9 +246,8 @@ def control_experiment(args):
                     device=args.device,
                     opt=opt
                 )
-                epoch += 1
                 epoch_time = time.time() - tic
-                print((f"Epoch {epoch}/{model_args.n_epoch + args.n_epochs}: " 
+                print((f"Epoch {epoch}/{args.n_epochs}: " 
                     f"Avg train loss: {summary['avg_total_l']}, "
                     f"Time per epoch: {epoch_time}"))
 
@@ -233,13 +256,14 @@ def control_experiment(args):
             collected_episodes = 0
 
         # "Test" episode with no exploration noise
-        if ii % args.n_test_episodes == 0:
+        if episode % args.n_test_episodes == 0:
             testing = True
         else:
             testing = False
             
         env.reset()
-        
+        wrapped_dyn.reset_hidden_state()
+
         # Load goal
         img_g, context_data_g, gt_plate_pos_g = load_goal()
         if args.render:
@@ -366,12 +390,22 @@ def control_experiment(args):
             u_0[:-1] = sol[1:]
         
         # End of episode stuff
-        if testing:
-            rewards = ((episode_data["gt_plate_pos"][0] - gt_plate_pos_g.cpu().numpy())**2).sum(-1)
-            rets.append(np.sum(rewards))
         dataset.append(episode_data)
-        wrapped_dyn.reset_hidden_state()
         collected_episodes += 1
+
+        if testing:
+            rewards = -((episode_data["gt_plate_pos"][0] - gt_plate_pos_g.cpu().numpy())**2).sum(-1)
+            rets.append(np.sum(rewards))
+
+        # Checkpoint
+        if episode % args.n_checkpoint_episodes == 0:
+            torch.save(
+                {**{k: v.state_dict() for k, v in nets.items()},
+                'opt': opt.state_dict(),
+                'checkpoint_episodes': episode - 1,
+                'appended_data': dataset.get_appended_data()}, 
+                checkpoint_dir + "checkpoint.pth"
+            )
 
 def main():
     args = parse_control_experiment_args()
