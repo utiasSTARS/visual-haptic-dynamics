@@ -54,7 +54,7 @@ class CVXLinear(MPC):
         )
 
         self.Q = Q * sparse.eye(nz)
-        self.R = R * sparse.eye(nu)
+        self.R = 0.1 * R * sparse.eye(nu)
         self.nz = nz
         self.nu = nu
         self.umin = umin
@@ -85,7 +85,7 @@ class CVXLinear(MPC):
                 cp.quad_form(self.z[k + 1] - self.z_g, self.Q) + \
                 cp.quad_form(self.u[k], self.R)
             constraints += [self.z[k + 1] == self.A[k] @ self.z[k] + self.B[k] @ self.u[k]]
-            constraints += [0 <= self.u[k][0], self.u[k][0] <= self.umax]
+            constraints += [self.umin <= self.u[k][0], self.u[k][0] <= self.umax]
             constraints += [self.umin <= self.u[k][1], self.u[k][1] <= self.umax]
         self.prob = cp.Problem(cp.Minimize(cost), constraints)
 
@@ -115,6 +115,9 @@ class CVXLinear(MPC):
                     device=self.device
                 )
 
+            self.z_i.value = z_0_sample.squeeze(0).cpu().numpy()
+            self.z_g.value = z_g.cpu().numpy()
+
             for _ in range(self.opt_iters):
                 z_hat, info = self.model.rollout(
                     z_0=z_0, 
@@ -125,16 +128,20 @@ class CVXLinear(MPC):
                     self.A[h].value = info["A"][h, 0].cpu().numpy()
                     self.B[h].value = info["B"][h, 0].cpu().numpy()
  
-                self.z_i.value = z_0_sample.squeeze(0).cpu().numpy()
-                self.z_g.value = z_g.cpu().numpy()
-
-                ret = self.prob.solve(solver=cp.ECOS)
+                ret = self.prob.solve(warm_start=True)
                 
                 # Update operational point u_0
                 u_0 = self.u.value
                 u_0 = np.expand_dims(u_0, axis=1)
                 u_0 = torch.tensor(u_0, device=self.device).float()
-            print("CVX final cost: ", ret)
+            
+            #TODO: Remove this final roll out
+            z_hat, info = self.model.rollout(
+                z_0=z_0, 
+                u=u_0
+            )
+            # print("Horizon costs: ", torch.sum((z_hat[:,0] - z_g)**2, axis=-1))
+            # print("CVX final cost: ", ret)
             return u_0
 
 class CEM(MPC):
@@ -218,13 +225,12 @@ class CEM(MPC):
                     largest=False
                 )
 
-
                 # Update mean and std
                 for ii in range(self.H):
                     u_mu[ii] = u[ii, top_k_idx[ii]].mean(dim=0)
                     u_std[ii] = u[ii, top_k_idx[ii]].std(dim=0)
 
-            print("CEM MPC final cost: ", torch.min(cost.sum(0)))
+            # print("CEM MPC final cost: ", torch.min(cost.sum(0)))
             return self.tanh(u_mu[:, 0]).unsqueeze(1)                  
             
 class Grad(MPC):
@@ -287,5 +293,5 @@ class Grad(MPC):
             cost.backward()
             opt.step()
             
-        print("Grad MPC final cost: ", cost)
+        # print("Grad MPC final cost: ", cost)
         return self.tanh(u_0).detach()

@@ -213,7 +213,7 @@ def control_experiment(args):
 
     collected_episodes = 0
     checkpoint_episodes = 0
-    rets = []    
+    checkpoint_epochs = model_args.n_epoch
     opt_iter = setup_opt_iter(model_args)
 
     if os.path.exists(checkpoint_dir + "checkpoint.pth"):
@@ -222,22 +222,26 @@ def control_experiment(args):
             v.load_state_dict(checkpoint[k])
         opt.load_state_dict(checkpoint['opt'])
         checkpoint_episodes = checkpoint['checkpoint_episodes']
+        checkpoint_epochs = checkpoint['checkpoint_epochs']
+        collected_episodes = checkpoint['collected_episodes']
         dataset.append(checkpoint['appended_data'], format=False)
 
     for episode in range(checkpoint_episodes + 1, args.n_episodes + 1):
-        print(f"Episode {episode}/{args.n_episodes}")
+        print(f"\n Episode {episode}/{args.n_episodes}")
+
         # Training updates
         if collected_episodes == args.n_train_episodes:
             print("Updating models")
             for k, v in nets.items():
                 v.train()
 
+            # New loader with appended data
             loader = generate_loader(
                 dataset, 
                 worker_init_fn=_init_fn
             )
             
-            for epoch in range(1, args.n_epochs + 1):                
+            for epoch in range(checkpoint_epochs + 1, checkpoint_epochs + args.n_epochs + 1):                
                 tic = time.time()
                 summary = opt_iter(
                     epoch=epoch, 
@@ -247,13 +251,21 @@ def control_experiment(args):
                     opt=opt
                 )
                 epoch_time = time.time() - tic
-                print((f"Epoch {epoch}/{args.n_epochs}: " 
+                print((f"Epoch {epoch}/{checkpoint_epochs + args.n_epochs}: " 
                     f"Avg train loss: {summary['avg_total_l']}, "
                     f"Time per epoch: {epoch_time}"))
+                
+                for k, v in summary.items():
+                    writer.add_scalar(f"Model_loss/{k}/train", v, epoch)
+
+            checkpoint_epochs = epoch
 
             for k, v in nets.items():
                 v.eval()
             collected_episodes = 0
+        
+        # Logging time per episode collection
+        tic_ep = time.time()
 
         # "Test" episode with no exploration noise
         if episode % args.n_test_episodes == 0:
@@ -327,7 +339,6 @@ def control_experiment(args):
                     context_data_i, 
                     ctx_img
                 )
-            print("Distance to latent goal: ", torch.sum((mu_z_g - mu_z_i)**2))
 
             # Solve MPC problem
             q_i = {
@@ -335,6 +346,7 @@ def control_experiment(args):
                 "mu":mu_z_i, 
                 "cov":var_z_i
             }
+            # print("Distance to latent goal: ", torch.sum((mu_z_g - mu_z_i)**2))
 
             if args.mpc_opt != "grad":
                 is_grad_enabled = torch.no_grad()
@@ -344,7 +356,7 @@ def control_experiment(args):
             with is_grad_enabled:
                 sol = solve_mpc(
                     q_i, 
-                    z_g[0], 
+                    mu_z_g[0], 
                     u_0, 
                     wrapped_dyn, 
                     device=args.device, 
@@ -363,9 +375,11 @@ def control_experiment(args):
                 )
             else:
                 eps = 0.0
+
             u += eps
             u = np.clip(u, -1.0, 1.0)
-            print("controls: ", u, ", noise: ", eps)
+            if args.debug:
+                print("controls: ", u, ", added noise: ", eps, ", original controls: ", u - eps)
 
             # Send control input one time step (n=1)
             obs_tpn, reward, done, info = env.step(u)
@@ -395,14 +409,21 @@ def control_experiment(args):
 
         if testing:
             rewards = -((episode_data["gt_plate_pos"][0] - gt_plate_pos_g.cpu().numpy())**2).sum(-1)
-            rets.append(np.sum(rewards))
+            ret = np.sum(rewards)
+            if not args.debug:
+                writer.add_scalar("Return", ret, episode)
+        
+        episode_time = time.time() - tic_ep
+        print("Episode collection time: ", episode_time)
 
         # Checkpoint
-        if episode % args.n_checkpoint_episodes == 0:
+        if episode % args.n_checkpoint_episodes == 0 and not args.debug:
             torch.save(
                 {**{k: v.state_dict() for k, v in nets.items()},
                 'opt': opt.state_dict(),
-                'checkpoint_episodes': episode - 1,
+                'checkpoint_episodes': episode,
+                'checkpoint_epochs': checkpoint_epochs,
+                'collected_episodes': collected_episodes,
                 'appended_data': dataset.get_appended_data()}, 
                 checkpoint_dir + "checkpoint.pth"
             )
