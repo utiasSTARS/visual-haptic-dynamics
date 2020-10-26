@@ -57,13 +57,15 @@ def load_env(args, render=True):
 
     return env
 
-def load_goal(idx=None):
+def load_goal(idx=None, device="cpu"):
     goals = pkl_loader("./goal_imgs/goals.pkl")
     if idx is not None:
-        return goals[idx] 
+        goal = tuple(v.to(device=device) for v in goals[idx])
+        return goal
     else:
         rnd_idx = np.random.randint(len(goals))
-        return goals[rnd_idx]
+        goal = tuple(v.to(device=device) for v in goals[rnd_idx])
+        return goal
 
 def format_obs(obs, device="cpu"):
     """Format obs from env for network."""
@@ -208,7 +210,6 @@ def control_experiment(args):
         nstep_store_hidden=1,
         device=args.device
     )
-
     env = load_env(args=model_args, render=args.render)
 
     collected_episodes = 0
@@ -277,13 +278,13 @@ def control_experiment(args):
         wrapped_dyn.reset_hidden_state()
 
         # Load goal
-        img_g, context_data_g, gt_plate_pos_g = load_goal()
+        img_g, context_data_g, gt_plate_pos_g = load_goal(device=args.device)
         if args.render:
             plt.imshow(img_g[0,0], cmap="gray")
             plt.title("Image Goal")
             plt.draw()
             plt.show(block=False)
-
+        
         # Keep track of history of state using deque
         img_hist = deque([], (1 + model_args.frame_stacks))
 
@@ -294,8 +295,8 @@ def control_experiment(args):
             img_hist.appendleft(img_tp1)
         
         # Initial state
-        img_i = torch.cat(tuple(img_hist), dim=1)
-        context_data_i = context_data_tp1
+        img_i = torch.cat(tuple(img_hist), dim=1).to(device=args.device)
+        context_data_i = context_data_tp1.to(device=args.device)
 
         # Context image based on model type
         if model_args.context in ["initial_latent_state", "initial_image"]:
