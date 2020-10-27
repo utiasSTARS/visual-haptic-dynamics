@@ -91,6 +91,7 @@ def parse_control_experiment_args():
     parser.add_argument('--random_seed', type=int, default=333, help='Random seed')
     parser.add_argument('--exploration_noise_var', type=float, default=0.3, help='Exploration noise used')
     parser.add_argument('--debug', type=str2bool, default=False, help='Debug and do not save models or log anything')
+    parser.add_argument('--comment', type=str, default="None", help='Comment to describe save directory')
 
     args = parser.parse_args()
     return args
