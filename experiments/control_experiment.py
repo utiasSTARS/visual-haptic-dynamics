@@ -161,7 +161,7 @@ def control_experiment(args):
     model_args = model_arg_loader(args.model_path)
     
     # Tensorboard and general logging
-    result_dir = os.path.join("./results", model_args.comment)
+    result_dir = os.path.join("./results", args.comment)
     checkpoint_dir = os.path.join(result_dir, "checkpoints/")
 
     if not args.debug:
