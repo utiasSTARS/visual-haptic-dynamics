@@ -85,8 +85,7 @@ class CVXLinear(MPC):
                 cp.quad_form(self.z[k + 1] - self.z_g, self.Q) + \
                 cp.quad_form(self.u[k], self.R)
             constraints += [self.z[k + 1] == self.A[k] @ self.z[k] + self.B[k] @ self.u[k]]
-            constraints += [self.umin <= self.u[k][0], self.u[k][0] <= self.umax]
-            constraints += [self.umin <= self.u[k][1], self.u[k][1] <= self.umax]
+            constraints += [self.umin <= self.u[k], self.u[k] <= self.umax]
         self.prob = cp.Problem(cp.Minimize(cost), constraints)
 
     def solve(self, z_0, z_g, u_0=None):
@@ -127,8 +126,8 @@ class CVXLinear(MPC):
                 for h in range(self.H):
                     self.A[h].value = info["A"][h, 0].cpu().numpy()
                     self.B[h].value = info["B"][h, 0].cpu().numpy()
- 
-                ret = self.prob.solve(warm_start=True)
+
+                ret = self.prob.solve(solver='OSQP', warm_start=True)
                 
                 # Update operational point u_0
                 u_0 = self.u.value

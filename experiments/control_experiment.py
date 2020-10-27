@@ -353,7 +353,7 @@ def control_experiment(args):
                 is_grad_enabled = torch.no_grad()
             else:
                 is_grad_enabled = torch.enable_grad()
-            
+
             with is_grad_enabled:
                 sol = solve_mpc(
                     q_i, 
