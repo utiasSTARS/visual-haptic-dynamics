@@ -81,16 +81,15 @@ class VisualHaptic(data.Dataset):
             dir (string): Directory of the cache.
             loader (callable): Function to load a sample given its path.
         """
-        self.dir = dir
         self.rgb = rgb
         self.transform = transform
+        self.loader = loader
+        self.extra_dirs = []
 
         print("Loading cache for dataset")
+        self.dir = dir
         self.data = loader(dir) 
-        print("Formating dataset")
-
         self.original_data_size = self.data["img"].shape[0]
-
         self.data = self.format_data(self.data)
 
     def format_data(self, data):
@@ -137,8 +136,24 @@ class VisualHaptic(data.Dataset):
         fmt_str += '    Dir Location: {}\n'.format(self.dir)
         return fmt_str
 
+    def append_cache(self, dir, format=True):
+        """Add new cached datasets to the original."""
+        self.extra_dirs.append(dir)
+        data = self.loader(dir) 
+        if format:
+            data = self.format_data(data)
+
+        if not self.data["config"] == data["config"]:
+            print("Warning: adding data with different env configs")
+
+        for key in data.keys():
+            if key == "config":
+                continue
+            assert key in self.data, "Adding data not in the original dataset."
+            self.data[key] = np.concatenate((self.data[key], data[key]))
+
     def append(self, data, format=True):
-        """Add new trajectories to the dataset."""
+        """Add new trajectories to the dataset for "online" training."""
         if format:
             data = self.format_data(data)
 
@@ -147,6 +162,7 @@ class VisualHaptic(data.Dataset):
             self.data[key] = np.concatenate((self.data[key], data[key]))
 
     def get_appended_data(self):
+        """Return only data which was appended."""
         appended_data = {}
         for key in self.data.keys():
             if key == "config":
