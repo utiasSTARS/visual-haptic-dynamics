@@ -137,7 +137,7 @@ class VisualHaptic(data.Dataset):
         return fmt_str
 
     def append_cache(self, dir, format=True):
-        """Add new cached datasets to the original."""
+        """Add new cached "offline" datasets to the original."""
         self.extra_dirs.append(dir)
         data = self.loader(dir) 
         if format:
