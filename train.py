@@ -452,7 +452,7 @@ def train(args):
                         writer.add_scalar(f"loss/{k}/train", v, epoch)
 
                 # Save model at intermittent checkpoints 
-                if epoch % args.n_checkpoint_epochs == 0:
+                if epoch % args.n_checkpoint_epoch == 0:
                     torch.save(
                         {**{k: v.state_dict() for k, v in nets.items()},
                         'opt_all': opt_all.state_dict(),
