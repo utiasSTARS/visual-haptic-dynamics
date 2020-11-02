@@ -379,18 +379,19 @@ def control_experiment(args):
 
             u += eps
             u = np.clip(u, -1.0, 1.0)
-            if args.debug:
-                print("controls: ", u, ", added noise: ", eps, ", original controls: ", u - eps)
+            # if args.debug:
+                # print("controls: ", u, ", added noise: ", eps, ", original controls: ", u - eps)
+            u = np.array([0.75, 0.0])
 
             # Send control input one time step (n=1)
             obs_tpn, reward, done, info = env.step(u)
-
+            
             # Store transition in episode data
             episode_data["img"][0, ii] = obs_tpn["img"]
             episode_data["ft"][0, ii] = obs_tpn["ft"]
             episode_data["arm"][0, ii] = obs_tpn["arm"]
             episode_data["action"][0, ii] = u
-            episode_data["gt_plate_pos"][0, jj] = info["achieved_goal"] 
+            episode_data["gt_plate_pos"][0, ii] = info["achieved_goal"] 
 
             # Initialize hidden state of dynamics with previous step after stepping
             wrapped_dyn.set_nstep_hidden_state()
@@ -411,6 +412,7 @@ def control_experiment(args):
         if testing:
             rewards = -((episode_data["gt_plate_pos"][0] - gt_plate_pos_g.cpu().numpy())**2).sum(-1)
             ret = np.sum(rewards)
+            print(ret)
             if not args.debug:
                 writer.add_scalar("Return", ret, episode)
         
