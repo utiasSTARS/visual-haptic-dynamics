@@ -85,6 +85,7 @@ def parse_control_experiment_args():
     parser.add_argument('--n_test_episodes', type=int, default=8, help='Test model every n episodes (remove exploration noise)')
     parser.add_argument('--n_epochs', type=int, default=128, help='Train model for n epochs')
     parser.add_argument('--n_checkpoint_episodes', type=int, default=64, help='Save model every n epochs')
+    parser.add_argument('--n_worker', type=int, default=0,  help='Amount of workers for dataloading.')
     parser.add_argument('--opt', choices=['adam', 'sgd'], default='adam', help='Optimizer used')
     parser.add_argument('--lr', type=float, default= 3e-4, help='Learning rate')
     parser.add_argument('--render', type=str2bool, default=True, help='Debug and do not save models or log anything')
