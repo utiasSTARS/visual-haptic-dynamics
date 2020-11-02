@@ -412,7 +412,6 @@ def control_experiment(args):
         if testing:
             rewards = -((episode_data["gt_plate_pos"][0] - gt_plate_pos_g.cpu().numpy())**2).sum(-1)
             ret = np.sum(rewards)
-            print(ret)
             if not args.debug:
                 writer.add_scalar("Return", ret, episode)
         
