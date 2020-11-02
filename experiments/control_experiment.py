@@ -139,13 +139,13 @@ def solve_mpc(z_0, z_g, u_0, f, device, opt, horizon):
         )
     return u
 
-def generate_loader(dataset, worker_init_fn=None):
+def generate_loader(dataset, worker_init_fn=None, workers=0):
     dataset_idx = list(range(len(dataset)))
     sampler = SubsetRandomSampler(dataset_idx)
     loader = DataLoader(
         dataset,
         batch_size=32,
-        num_workers=0,
+        num_workers=workers,
         sampler=sampler,
         worker_init_fn= worker_init_fn
     )
@@ -228,8 +228,6 @@ def control_experiment(args):
         dataset.append(checkpoint['appended_data'], format=False)
 
     for episode in range(checkpoint_episodes + 1, args.n_episodes + 1):
-        print(f"\n Episode {episode}/{args.n_episodes}")
-
         # Training updates
         if collected_episodes == args.n_train_episodes:
             print("Updating models")
@@ -239,7 +237,8 @@ def control_experiment(args):
             # New loader with appended data
             loader = generate_loader(
                 dataset, 
-                worker_init_fn=_init_fn
+                worker_init_fn=_init_fn,
+                workers=args.n_worker
             )
             
             for epoch in range(checkpoint_epochs + 1, checkpoint_epochs + args.n_epochs + 1):                
@@ -256,15 +255,17 @@ def control_experiment(args):
                     f"Avg train loss: {summary['avg_total_l']}, "
                     f"Time per epoch: {epoch_time}"))
                 
-                for k, v in summary.items():
-                    writer.add_scalar(f"Model_loss/{k}/train", v, epoch)
+                if not args.debug:
+                    for k, v in summary.items():
+                        writer.add_scalar(f"Model_loss/{k}/train", v, epoch)
 
             checkpoint_epochs = epoch
 
             for k, v in nets.items():
                 v.eval()
             collected_episodes = 0
-        
+            
+        print(f"\n Episode {episode}/{args.n_episodes}")
         # Logging time per episode collection
         tic_ep = time.time()
 
@@ -379,21 +380,22 @@ def control_experiment(args):
 
             u += eps
             u = np.clip(u, -1.0, 1.0)
-            if args.debug:
-                print("controls: ", u, ", added noise: ", eps, ", original controls: ", u - eps)
+            # if args.debug:
+                # print("controls: ", u, ", added noise: ", eps, ", original controls: ", u - eps)
+            u = np.array([0.75, 0.0])
 
             # Send control input one time step (n=1)
             obs_tpn, reward, done, info = env.step(u)
+
+            # Initialize hidden state of dynamics with step (n=1) after stepping
+            wrapped_dyn.set_nstep_hidden_state()
 
             # Store transition in episode data
             episode_data["img"][0, ii] = obs_tpn["img"]
             episode_data["ft"][0, ii] = obs_tpn["ft"]
             episode_data["arm"][0, ii] = obs_tpn["arm"]
             episode_data["action"][0, ii] = u
-            episode_data["gt_plate_pos"][0, jj] = info["achieved_goal"] 
-
-            # Initialize hidden state of dynamics with previous step after stepping
-            wrapped_dyn.set_nstep_hidden_state()
+            episode_data["gt_plate_pos"][0, ii] = info["achieved_goal"] 
 
             # Updated state
             img_tpn, context_data_tpn = format_obs(obs_tpn, device=args.device)
