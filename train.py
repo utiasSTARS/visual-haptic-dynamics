@@ -15,6 +15,7 @@ import json
 import os, sys, time
 import re
 import pickle as pkl
+import bisect
 
 import torch
 import torch.nn as nn
@@ -45,7 +46,7 @@ def setup_opt_iter(args):
     else:
         loss_REC = nn.MSELoss(reduction='none')
 
-    def opt_iter(epoch, loader, nets, device, opt=None):
+    def opt_iter(loader, nets, device, opt=None, n_step=1):
         """Single training epoch."""
         if opt:
             for k, v in nets.items():
@@ -209,13 +210,13 @@ def setup_opt_iter(args):
             length = p_z["mu"].shape[0]
 
             # N-step transition distributions
-            if epoch > args.opt_n_step_pred_epochs:
+            if n_step > 1:
                 # New references for convenience
                 p_z_nstep = p_z
                 q_z_nstep = {k:v[1:] for k, v in q_z.items()}
                 u_nstep = u_ll[1:]
 
-                for ii in range(min(args.n_step_pred - 1, length - 1)):
+                for ii in range(min(n_step - 1, length - 1)):
                     p_z_nstep = {k:v[:-1] for k, v in p_z_nstep.items()}
                     h_t = h_t[:-1]
                     u_nstep = u_nstep[1:]
@@ -405,7 +406,8 @@ def train(args):
             than the already trained checkpoint epochs {checkpoint_epochs}"""
     
     opt_iter = setup_opt_iter(args)
-    
+    n_step_lookup = list(args.opt_n_step_pred_epochs)
+
     # Training loop
     try:
         opt = opt_vae
@@ -415,24 +417,25 @@ def train(args):
                 opt = opt_all
             elif epoch >= args.opt_vae_epochs:
                 opt = opt_vae_base
-            
+            n_step_pred = bisect.bisect_left(n_step_lookup, epoch) + 1
+
             # Train for one epoch        
             summary_train = opt_iter(
-                epoch=epoch, 
                 loader=train_loader, 
                 nets=nets, 
                 device=device,
-                opt=opt
+                opt=opt,
+                n_step=n_step_pred
             )
 
             # Calculate validtion loss
             if args.val_split > 0:
                 with torch.no_grad():
                     summary_val = opt_iter(
-                        epoch=epoch, 
                         loader=val_loader,
                         nets=nets,
-                        device=device
+                        device=device,
+                        n_step=n_step_pred
                     )
 
             epoch_time = time.time() - tic
@@ -462,6 +465,7 @@ def train(args):
                         checkpoint_dir + "checkpoint.pth"
                     )
     finally:
+        pass
         if not args.debug:
             # Save models
             for k, v in nets.items():
