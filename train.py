@@ -275,7 +275,7 @@ def setup_opt_iter(args):
                 total_loss.backward()
                 # clip for stable RNN training
                 for k, v in nets.items():
-                    torch.nn.utils.clip_grad_norm_(v.parameters(), 0.5)
+                    torch.nn.utils.clip_grad_norm_(v.parameters(), 0.50)
                 opt.step()
 
         # Summary stats from epoch

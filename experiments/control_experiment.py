@@ -231,8 +231,6 @@ def control_experiment(args):
         # Training updates
         if collected_episodes == args.n_train_episodes:
             print("Updating models")
-            for k, v in nets.items():
-                v.train()
 
             # New loader with appended data
             loader = generate_loader(
@@ -241,14 +239,21 @@ def control_experiment(args):
                 workers=args.n_worker
             )
             
-            for epoch in range(checkpoint_epochs + 1, checkpoint_epochs + args.n_epochs + 1):                
+            for ii, epoch in enumerate(range(checkpoint_epochs + 1, checkpoint_epochs + args.n_epochs + 1), 1):                                
+                
+                # Schedule n-step
+                if ii > (args.n_epochs / 2.0):
+                    n_step = 2
+                else:
+                    n_step = 1
+
                 tic = time.time()
                 summary = opt_iter(
-                    epoch=epoch, 
                     loader=loader, 
                     nets=nets, 
                     device=args.device,
-                    opt=opt
+                    opt=opt,
+                    n_step=n_step
                 )
                 epoch_time = time.time() - tic
                 print((f"Epoch {epoch}/{checkpoint_epochs + args.n_epochs}: " 
@@ -290,7 +295,7 @@ def control_experiment(args):
         img_hist = deque([], (1 + model_args.frame_stacks))
 
         # Step to produce a history
-        for jj in range(10):
+        for jj in range(5):
             obs_tp1, _, _, _ = env.step(np.array([0.35, 0]))
             img_tp1, context_data_tp1 = format_obs(obs_tp1, device=args.device)
             img_hist.appendleft(img_tp1)
@@ -382,7 +387,6 @@ def control_experiment(args):
             u = np.clip(u, -1.0, 1.0)
             # if args.debug:
                 # print("controls: ", u, ", added noise: ", eps, ", original controls: ", u - eps)
-            u = np.array([0.75, 0.0])
 
             # Send control input one time step (n=1)
             obs_tpn, reward, done, info = env.step(u)
