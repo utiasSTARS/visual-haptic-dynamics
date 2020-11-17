@@ -1,14 +1,17 @@
 python ../experiments/control_experiment.py \
---model_path /Users/oliver/visual-haptic-dynamics/saved_models/nstep2_z16_net512_l0_lm_osc_v_r0.95_kl0.80_lr3e4 \
+--model_path /home/olimoyo/visual-haptic-dynamics/saved_models/nstep2_z16_net512_l0_lm_osc_v_r0.95_kl0.80_lr3e4 \
+--dataset_path /home/olimoyo/visual-haptic-dynamics/experiments/data/datasets/visual_haptic_2D_len16_osc_withGT_8C12919B740845539C0E75B5CBAF7965.pkl \
 --H 6 \
 --mpc_opt cvxopt \
---device cpu \
+--device "cuda" \
 --n_episodes 1024 \
 --n_train_episodes 16 \
---n_test_episodes 1 \
---n_epochs 128 \
---n_checkpoint_episodes 4 \
+--n_test_episodes 4 \
+--n_epochs 512 \
+--n_checkpoint_episodes 64 \
+--n_worker 0 \
 --opt adam \
 --render False \
 --exploration_noise_var 0.2 \
---debug False
+--debug True \
+--lr 1e-3
