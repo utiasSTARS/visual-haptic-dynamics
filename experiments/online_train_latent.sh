@@ -11,7 +11,8 @@ python ../experiments/control_experiment.py \
 --n_checkpoint_episodes 64 \
 --n_worker 0 \
 --opt adam \
---render False \
+--render True \
 --exploration_noise_var 0.2 \
 --debug True \
---lr 1e-3
+--lr 1e-3 \
+--comment "test"
