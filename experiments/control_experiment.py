@@ -382,7 +382,6 @@ def control_experiment(args):
             u = np.clip(u, -1.0, 1.0)
             # if args.debug:
                 # print("controls: ", u, ", added noise: ", eps, ", original controls: ", u - eps)
-            u = np.array([0.75, 0.0])
 
             # Send control input one time step (n=1)
             obs_tpn, reward, done, info = env.step(u)

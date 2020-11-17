@@ -4,7 +4,8 @@
 #SBATCH --gres=gpu:1
 #SBATCH -p p100
 #SBATCH --mem=32G
-#SBATCH --qos=nopreemption
+#SBATCH --account=legacy
+#SBATCH --qos=legacy
 #SBATCH -o ./slurm_output/%J.out # this is where the output goes
 #SBATCH --cpus-per-gpu=32        # number of CPUs we want per GPU
 #SBATCH --gpus-per-task=1       # number of GPUs we want per task

@@ -1,6 +1,9 @@
 import os, sys
 os.sys.path.insert(0, "..")
 import matplotlib.pyplot as plt
+parent_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+import gzip
+import pickle as pkl
 
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
@@ -10,7 +13,7 @@ from datasets import ImgCached, VisualHaptic, BAIRPush
 
 def test_bair():
     print("Testing BAIR")
-    dataset = BAIRPush(dir="/home/olimoyo/visual-haptic-dynamics/experiments/data/datasets/processed_data")
+    dataset = BAIRPush(dir=os.path.join(parent_dir, "experiments/data/datasets/processed_data"))
     ds_size = len(dataset)
     idx = list(range(ds_size))
     sampler = SubsetRandomSampler(idx)
@@ -75,7 +78,41 @@ def test_vh():
         print("action", data["action"].shape)
         break
 
+def test_mit_push():
+    print("Testing MIT push")
+
+    def load_zipped_pickle(filename):
+        with gzip.open(filename, 'rb') as f:
+            loaded_object = pkl.load(f)
+            return loaded_object
+
+    dataset = VisualHaptic(
+            dir=os.path.join(parent_dir, "experiments/data/datasets/mit_push/min-tr2.5_min-rot0.5_len48.pkl"),
+            rgb=False,
+            loader=load_zipped_pickle,
+            normalize_ft=1.0
+        )
+
+    ds_size = len(dataset)
+    idx = list(range(ds_size))
+    sampler = SubsetRandomSampler(idx)
+    train_loader = DataLoader(
+        dataset,
+        batch_size=32,
+        num_workers=0,
+        sampler=sampler
+    )
+
+    for idx, data in enumerate(train_loader):
+        print(idx)
+        print("img", data["img"].shape, "min: ", torch.min(data["img"]), "max: ", torch.max(data["img"]))
+        print("ft", data["ft"].shape)
+        print("arm", data["arm"].shape)
+        print("action", data["action"].shape)
+        break
+
 if __name__=="__main__":
     # test_cached()
     # test_vh()
-    test_bair()
+    # test_bair()
+    test_mit_push()

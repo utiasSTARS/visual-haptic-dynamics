@@ -22,15 +22,15 @@ class BAIRPush(object):
     def __init__(self, dir, train=True, seq_len=20, offset_control=True):
         self.root_dir = dir 
         if train:
-            self.data_dir = os.path.join(self.root_dir, "train")
+            data_dir = os.path.join(self.root_dir, "train")
             self.ordered = False
         else:
-            self.data_dir = os.path.join(self.root_dir, "test")
+            data_dir = os.path.join(self.root_dir, "test")
             self.ordered = True 
         self.dirs = []
-        for d1 in os.listdir(self.data_dir):
-            for d2 in os.listdir('%s/%s' % (self.data_dir, d1)):
-                self.dirs.append('%s/%s/%s' % (self.data_dir, d1, d2))
+        for d1 in os.listdir(data_dir):
+            for d2 in os.listdir('%s/%s' % (data_dir, d1)):
+                self.dirs.append('%s/%s/%s' % (data_dir, d1, d2))
         self.seq_len = seq_len
         self.d = 0
         self.offset_control = offset_control
@@ -75,22 +75,23 @@ class BAIRPush(object):
         return self.get_seq(index)
 
 class VisualHaptic(data.Dataset):
-    def __init__(self, dir, loader=pkl_loader, transform=None, rgb=False):
+    def __init__(self, dir, loader=pkl_loader, img_transform=None, rgb=False, normalize_ft=100):
         """
         Args:
             dir (string): Directory of the cache.
             loader (callable): Function to load a sample given its path.
         """
         self.rgb = rgb
-        self.transform = transform
+        self.transform = img_transform
         self.loader = loader
         self.extra_dirs = []
+        self.normalize_ft = normalize_ft
 
         print("Loading cache for dataset")
         self.dir = dir
-        self.data = loader(dir) 
-        self.original_data_size = self.data["img"].shape[0]
-        self.data = self.format_data(self.data)
+        data = loader(dir) 
+        self.original_data_size = data["img"].shape[0]
+        self.data = self.format_data(data)
 
     def format_data(self, data):
         batch_size = data["img"].shape[0]
@@ -101,7 +102,7 @@ class VisualHaptic(data.Dataset):
         else:
             data["img"] = np.expand_dims(rgb2gray(data["img"])[..., 0], axis=2)
 
-        data["ft"] /= 100.0
+        data["ft"] /= self.normalize_ft
         
         if self.transform is not None:
             for ii in range(batch_size):

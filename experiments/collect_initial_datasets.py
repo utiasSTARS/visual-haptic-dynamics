@@ -60,7 +60,7 @@ def visual_haptic_2D_osc(frameskip=2):
             for _ in range(5):
                 env.step(action=np.array([0, h]))
             for jj in range(ll): 
-                u_x = 0.35 * m
+                u_x = np.clip(np.random.normal(0.35 * m, 0.20), 0.00, 1.00) 
                 u_y = np.clip(np.random.normal(0, 0.25), -0.30, 0.30) 
                 obs, reward, done, info = env.step(action=np.array([u_x, u_y]))
                 data["img"][ii, jj] = obs["img"]
@@ -162,8 +162,8 @@ if __name__ == "__main__":
     # data = visual_haptic_1D()
     # data = visual_haptic_2D()
     
-    fs = 2
-    data = visual_haptic_2D(frameskip=fs)
-    # data = visual_haptic_2D_osc(frameskip=fs)
+    # data = visual_haptic_2D(frameskip=2)
+    data = visual_haptic_2D_osc(frameskip=2)
 
-    # write_file_pkl(data=data, name=f"visual_haptic_2D_len16_withGT", location="./data/datasets/")
+    write_file_pkl(data=data, name="visual_haptic_2D_len16_oscxy_withGT", location="./data/datasets/")
+    write_file_pkl(data=data["config"], name="visual_haptic_2D_len16_oscxy_withGT_config", location="./data/datasets/")

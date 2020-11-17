@@ -16,10 +16,10 @@ from skimage.io import imsave
 import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('--data_dir', default='', help='base directory to save processed data')
-opt = parser.parse_args()
+args = parser.parse_args()
 
 def get_seq(dname):
-    data_dir = f'{opt.data_dir}/softmotion30_44k/{dname}'
+    data_dir = f'{args.data_dir}/softmotion30_44k/{dname}'
 
     filenames = gfile.Glob(os.path.join(data_dir, '*'))
     if not filenames:
@@ -72,7 +72,7 @@ def convert_data(dname):
             break
         f = f.split('/')[-1]
 
-        save_dir = f'{opt.data_dir}/processed_data/{dname}/{f[:-10]}/{k}/'
+        save_dir = f'{args.data_dir}/processed_data/{dname}/{f[:-10]}/{k}/'
         os.makedirs(save_dir, exist_ok=True)
         for i in range(len(image_seq)):
             imsave(save_dir + f'{i}.png', image_seq[i])
