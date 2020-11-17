@@ -365,7 +365,8 @@ def train(args):
     # Setup dataset
     dataset = VisualHaptic(
         args.dataset,
-        rgb=args.dim_x[0] == 3
+        rgb=args.dim_x[0] == 3,
+        normalize_ft = args.ft_normalization
     )
 
     dataset_idx = list(range(len(dataset)))

@@ -290,14 +290,16 @@ def load_vh_models(args, path=None, mode='eval', device='cuda:0'):
 
     if args.context_modality != "none":
         if args.context_modality == "joint": 
-            data_dim = 12
-        elif args.context_modality == "arm" or "ft": 
-            data_dim=6
+            data_dim = args.dim_arm + args.dim_ft
+        elif args.context_modality == "arm": 
+            data_dim = args.dim_arm
+        elif args.context_modality == "ft":
+            data_dim = args.dim_ft
 
         if args.use_context_frame_stack:
-            data_len = 64
+            data_len = 2 * args.context_seq_len
         else:
-            data_len = 32
+            data_len = args.context_seq_len
 
         context_enc = CNNEncoder1D(
             input=data_dim,
