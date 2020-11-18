@@ -12,18 +12,17 @@ weight_inits=('custom')
 Ks=(15)
 rnn_nets=('gru')
 dyn_nets=('linearmix')
-n_epochs=(4)
+n_epochs=(8192)
 opt=('adam')
-opt_vae_base_epochs=(1)
-opt_n_step_pred_epochs=(2)
-debug=('False')
+opt_vae_base_epochs=(1024)
+opt_n_step_pred_epochs=(4096)
+debug=('True')
 nl=('relu')
 frame_stack=(1)
 val_split=(0.1)
 lam_rec=(0.95)
 lam_kl=(0.80)
 n_checkpoint_epoch=(1)
-n_step_pred=2
 task="push64vh"
 comment="${task}_gru_test"
 context_modality="joint"
@@ -46,7 +45,6 @@ for n in {1..1}; do
                                                 --use_context_frame_stack $use_context_frame_stack \
                                                 --context $context \
                                                 --K $K \
-                                                --n_step_pred $n_step_pred \
                                                 --dim_u 2 \
                                                 --dim_z 16 \
                                                 --dim_x "1,64,64" \

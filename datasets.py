@@ -5,16 +5,25 @@ import torch.utils.data as data
 import torch
 import numpy as np
 import pickle as pkl
+import gzip
 from utils import rgb2gray
 import os, io
 
 from skimage.io import imread
 from PIL import Image
 
+def is_gz_file(filepath):
+    with open(filepath, 'rb') as test_f:
+        return test_f.read(2) == b'\x1f\x8b'
+
 def pkl_loader(path):
     """A data loader for pickle files."""
-    with open(path, 'rb') as f:
-        data = pkl.load(f)
+    if is_gz_file(path):
+        with gzip.open(path, 'rb') as f:
+            data = pkl.load(f)
+    else:
+        with open(path, 'rb') as f:
+            data = pkl.load(f)
     return data
 
 class BAIRPush(object):

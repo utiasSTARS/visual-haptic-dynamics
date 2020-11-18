@@ -1,6 +1,6 @@
-device="cuda:1"
+device="cuda:0"
 
-dataset="/home/olimoyo/visual-haptic-dynamics/experiments/data/datasets/min-tr2.5_min-rot0.5_len48.pkl"
+dataset="/home/olimoyo/visual-haptic-dynamics/experiments/data/datasets/mit_push/min-tr2.5_min-rot0.5_len48.pkl"
 storage_base_path="/home/olimoyo/visual-haptic-dynamics/saved_models/monolith/"
 
 n_batches=(32)
@@ -11,20 +11,19 @@ weight_inits=('custom')
 Ks=(15)
 rnn_nets=('gru')
 dyn_nets=('linearmix')
-n_epochs=(4)
+n_epochs=(8192)
 opt=('adam')
-opt_vae_base_epochs=(1)
-opt_n_step_pred_epochs=(2)
+opt_vae_base_epochs=(1024)
+opt_n_step_pred_epochs=(4096)
 debug=('True')
 nl=('relu')
 frame_stack=(1)
-val_split=(0.1)
+val_split=(0.0)
 lam_rec=(0.95)
 lam_kl=(0.80)
-n_checkpoint_epoch=(1)
-n_step_pred=2
-task="push64vh"
-comment="${task}_gru_test"
+n_checkpoint_epoch=(64)
+task="mitpush64vh"
+comment="${task}_gru_test_untrained"
 context_modality="joint"
 context="none"
 use_context_frame_stack=('False')
@@ -45,15 +44,14 @@ for n in {1..1}; do
                                     for bi_directional in ${bi_directionals[@]}; do
                                         for n_epoch in ${n_epochs[@]}; do
                                             python ../train.py \
-                                                --dim_arm $dim_arm
-                                                --dim_ft $dim_ft
-                                                --context_seq_len $context_seq_len
-                                                --ft_normalization $ft_normalization
+                                                --dim_arm $dim_arm \
+                                                --dim_ft $dim_ft \
+                                                --context_seq_len $context_seq_len \
+                                                --ft_normalization $ft_normalization \
                                                 --context_modality $context_modality \
                                                 --use_context_frame_stack $use_context_frame_stack \
                                                 --context $context \
                                                 --K $K \
-                                                --n_step_pred $n_step_pred \
                                                 --dim_u 2 \
                                                 --dim_z 16 \
                                                 --dim_x "1,64,64" \

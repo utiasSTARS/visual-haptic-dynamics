@@ -408,7 +408,7 @@ def train(args):
     
     opt_iter = setup_opt_iter(args)
     n_step_lookup = list(args.opt_n_step_pred_epochs)
-
+    
     # Training loop
     try:
         opt = opt_vae
