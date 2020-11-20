@@ -327,7 +327,7 @@ class RNNEncoder(nn.Module):
         dim_in, 
         dim_out, 
         hidden_size=256,
-        net_type="lstm"
+        net_type="gru"
     ):
         super(RNNEncoder, self).__init__()
         if net_type == "gru":

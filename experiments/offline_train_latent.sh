@@ -26,7 +26,7 @@ n_checkpoint_epoch=(1)
 task="push64vh"
 comment="${task}_gru_test"
 context_modality="joint"
-context="ssm"
+context="rssm"
 use_context_frame_stack=('False')
 
 for n in {1..1}; do

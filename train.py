@@ -114,7 +114,7 @@ def setup_opt_iter(args):
                 var_z = torch.diag_embed(torch.exp(logvar_z))
                 # Group sample, mean, covariance
                 q_z = {"z": z, "mu": mu_z, "cov": var_z}
-            elif args.context == "ssm":
+            elif args.context == "ssm" or "rssm":
                 q_z = {
                     "z": torch.empty((n, l, args.dim_z), requires_grad=False, device=device),
                     "mu": torch.empty((n, l, args.dim_z), requires_grad=False, device=device),
@@ -131,10 +131,25 @@ def setup_opt_iter(args):
                     device=device
                 ).repeat(n, 1)
 
+                if args.context == "rssm":
+                    h_0 = torch.zeros(
+                        (1, n, 256), 
+                        requires_grad=False, 
+                        device=device
+                    )
+
                 # Roll out
                 for ii in range(l):
+                    if args.context == "ssm":
+                        inp = z_0
+                    elif args.context == "rssm":
+                        z_0 = z_0.unsqueeze(0)
+                        out, h = nets["rssm_enc"](z_0, h_0)
+                        inp = out[0]
+                        h_0 = h
+
                     z, mu_z, logvar_z = nets["mix"](
-                        torch.cat((z_0, z_cat_enc[ii]), axis=-1)
+                        torch.cat((inp, z_cat_enc[ii]), axis=-1)
                     )
                     var_z = torch.diag_embed(torch.exp(logvar_z))
                     q_z["z"][:, ii] = z 
@@ -142,8 +157,6 @@ def setup_opt_iter(args):
                     q_z["cov"][:, ii] = var_z
                     z_0 = z
                 q_z = {k:v.reshape(-1, *v.shape[2:]) for k, v in q_z.items()}
-            elif args.context == "rssm":
-                pass
 
             # 2. Reconstruction
             z_all_dec = []

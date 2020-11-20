@@ -312,11 +312,11 @@ def load_vh_models(args, path=None, mode='eval', device='cuda:0'):
         z_dim_in += args.dim_z_context
     elif args.context == "rssm":
         nets["rssm_enc"] = RNNEncoder(
-            dim_in=args.dim_z_context * 2,
+            dim_in=args.dim_z_context,
             dim_out=args.dim_z_context,
         ).to(device=device)
         # Hidden state and sample from previous step
-        z_dim_in += args.dim_z_context * 2
+        z_dim_in += args.dim_z_context
 
     dim_z_rec = args.dim_z
     if args.use_binary_ce:
