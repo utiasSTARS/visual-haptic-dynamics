@@ -105,7 +105,7 @@ def setup_opt_iter(args):
 
             x_ll = {k:v.reshape(-1, *v.shape[2:]) for k, v in x_ll.items()}
 
-            # 1. Encoding
+            # 1. Encoding q(z) distribution
             if args.context in ["initial_image", "goal_image"]:
                 context_img_rep = context_img.unsqueeze(1).repeat(1, l, 1, 1, 1)
                 context_img_rep = context_img_rep.reshape(-1, *context_img_rep.shape[2:])
@@ -139,7 +139,7 @@ def setup_opt_iter(args):
 
             # Concatenate modalities and mix
             z_cat_enc = torch.cat(z_all_enc, dim=1)
-            z, mu_z, logvar_z = nets["mix"](z_cat_enc)
+            z, mu_z, logvar_z = nets["mix"](z_cat_enc) #TODO: Fix this to roll out and take previous distribution into account, or RSSM
             var_z = torch.diag_embed(torch.exp(logvar_z))
 
             # Group sample, mean, covariance

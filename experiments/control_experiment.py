@@ -175,6 +175,7 @@ def control_experiment(args):
         writer = SummaryWriter(log_dir=result_dir)
 
     # Load initial weights trained with offline dataset
+    #XXX: path=None for no-pretrained weight, modify model_args to change model parameters
     nets = load_vh_models(
         path=args.model_path, 
         args=model_args, 
@@ -198,7 +199,8 @@ def control_experiment(args):
 
     params = [list(v.parameters()) for k, v in nets.items() if "enc" in k]
     params = [v for sl in params for v in sl] # remove nested list
-
+    
+    #XXX: If needed add other scheduled optimizers here
     opt = opt_type(
         params, 
         lr=args.lr
@@ -216,6 +218,7 @@ def control_experiment(args):
     checkpoint_episodes = 0
     checkpoint_epochs = model_args.n_epoch
     opt_iter = setup_opt_iter(model_args)
+    n_step_lookup = list(args.opt_n_step_pred_epochs)
 
     if os.path.exists(checkpoint_dir + "checkpoint.pth"):
         checkpoint = torch.load(checkpoint_dir + "checkpoint.pth")
@@ -242,10 +245,7 @@ def control_experiment(args):
             for ii, epoch in enumerate(range(checkpoint_epochs + 1, checkpoint_epochs + args.n_epochs + 1), 1):                                
                 
                 # Schedule n-step
-                if ii > (args.n_epochs / 2.0):
-                    n_step = 2
-                else:
-                    n_step = 1
+                n_step_pred = bisect.bisect_left(n_step_lookup, epoch) + 1
 
                 tic = time.time()
                 summary = opt_iter(
@@ -253,7 +253,7 @@ def control_experiment(args):
                     nets=nets, 
                     device=args.device,
                     opt=opt,
-                    n_step=n_step
+                    n_step=n_step_pred
                 )
                 epoch_time = time.time() - tic
                 print((f"Epoch {epoch}/{checkpoint_epochs + args.n_epochs}: " 

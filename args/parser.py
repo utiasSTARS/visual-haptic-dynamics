@@ -96,6 +96,7 @@ def parse_control_experiment_args():
     parser.add_argument('--exploration_noise_var', type=float, default=0.3, help='Exploration noise used')
     parser.add_argument('--debug', type=str2bool, default=False, help='Debug and do not save models or log anything')
     parser.add_argument('--comment', type=str, default="None", help='Comment to describe save directory')
+    parser.add_argument('--opt_n_step_pred_epochs', type=str2inttuple, default=(64,), help='Number of epochs before training with n step reconstruction')
 
     args = parser.parse_args()
     return args
