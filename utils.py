@@ -270,14 +270,10 @@ def load_vh_models(args, path=None, mode='eval', device='cuda:0'):
 
     nets = {}
     z_dim_in = 0
-    stack = 1
-
-    if args.context in ["initial_image", "goal_image"]:
-        stack = 2
 
     # Networks
-    img_enc = FullyConvEncoderVAE(
-        input=args.dim_x[0] * (args.frame_stacks + 1) * stack,
+    nets["img_enc"] = FullyConvEncoderVAE(
+        input=args.dim_x[0] * (args.frame_stacks + 1),
         latent_size=args.dim_z_img,
         bn=args.use_batch_norm,
         drop=args.use_dropout,
@@ -285,7 +281,6 @@ def load_vh_models(args, path=None, mode='eval', device='cuda:0'):
         img_dim=args.dim_x[1],
         stochastic=False
     ).to(device=device)
-    nets["img_enc"] = img_enc
     z_dim_in += args.dim_z_img
 
     if args.context_modality != "none":
@@ -301,7 +296,7 @@ def load_vh_models(args, path=None, mode='eval', device='cuda:0'):
         else:
             data_len = args.context_seq_len
 
-        context_enc = CNNEncoder1D(
+        nets["context_enc"] = CNNEncoder1D(
             input=data_dim,
             datalength=data_len,
             latent_size=args.dim_z_context,
@@ -310,42 +305,26 @@ def load_vh_models(args, path=None, mode='eval', device='cuda:0'):
             nl=nl,
             stochastic=False
         ).to(device=device)
-        nets["context_enc"] = context_enc
         z_dim_in += args.dim_z_context
 
-    if args.context in ["initial_latent_state", "goal_latent_state"]:
-        context_img_enc = FullyConvEncoderVAE(
-            input=args.dim_x[0] * (args.frame_stacks + 1),
-            latent_size=args.dim_z_context,
-            bn=args.use_batch_norm,
-            drop=args.use_dropout,
-            nl=nl,
-            img_dim=args.dim_x[1],
-            stochastic=False
-        ).to(device=device)
-        nets["context_img_enc"] = context_img_enc
+    if args.context == "ssm":
+        # Only sample from previous step
         z_dim_in += args.dim_z_context
-    elif args.context in ["all_past_states"]:
-        context_img_rnn = RNNEncoder(
-            dim_in=args.dim_z_context,
+    elif args.context == "rssm":
+        nets["rssm_enc"] = RNNEncoder(
+            dim_in=args.dim_z_context * 2,
             dim_out=args.dim_z_context,
         ).to(device=device)
-        nets["context_img_rnn_enc"] = context_img_rnn
-        z_dim_in += args.dim_z_context
+        # Hidden state and sample from previous step
+        z_dim_in += args.dim_z_context * 2
 
     dim_z_rec = args.dim_z
-
-    if args.context in ["initial_latent_state", "goal_latent_state", "all_past_states"]:
-        dim_z_rec += args.dim_z_context
-
     if args.use_binary_ce:
         output_nl = None
-    elif args.context in ["initial_image", "goal_image"]:
-        output_nl = nn.Tanh()
     else:
         output_nl = nn.Sigmoid()
 
-    img_dec = FullyConvDecoderVAE(
+    nets["img_dec"] = FullyConvDecoderVAE(
         input=args.dim_x[0] * (args.frame_stacks + 1),
         latent_size=dim_z_rec,
         bn=args.use_batch_norm,
@@ -354,9 +333,8 @@ def load_vh_models(args, path=None, mode='eval', device='cuda:0'):
         img_dim=args.dim_x[1],
         output_nl=output_nl
     ).to(device=device)
-    nets["img_dec"] = img_dec
 
-    mix = FCNEncoderVAE(
+    nets["mix"] = FCNEncoderVAE(
         dim_in=z_dim_in,
         dim_out=args.dim_z,
         bn=args.use_batch_norm,
@@ -365,11 +343,10 @@ def load_vh_models(args, path=None, mode='eval', device='cuda:0'):
         hidden_size=args.fc_hidden_size,
         stochastic=True
     ).to(device=device)
-    nets["mix"] = mix
 
     # Dynamics network
     if args.dyn_net == "linearmix":
-        dyn = LinearMixSSM(
+        nets["dyn"] = LinearMixSSM(
             dim_z=args.dim_z,
             dim_u=args.dim_u,
             hidden_size=args.rnn_hidden_size,
@@ -378,7 +355,7 @@ def load_vh_models(args, path=None, mode='eval', device='cuda:0'):
             K=args.K
         ).to(device=device)
     elif args.dyn_net == "linearrank1":
-        dyn = LinearSSM(
+        nets["dyn"] = LinearSSM(
             dim_z=args.dim_z,
             dim_u=args.dim_u,
             hidden_size=args.rnn_hidden_size,
@@ -386,7 +363,7 @@ def load_vh_models(args, path=None, mode='eval', device='cuda:0'):
             net_type=args.rnn_net
         ).to(device=device)
     elif args.dyn_net == "nonlinear":
-        dyn = NonLinearSSM(
+        nets["dyn"] = NonLinearSSM(
             dim_z=args.dim_z,
             dim_u=args.dim_u,
             hidden_size=args.rnn_hidden_size,
@@ -395,7 +372,6 @@ def load_vh_models(args, path=None, mode='eval', device='cuda:0'):
         ).to(device=device)
     else:
         raise NotImplementedError()
-    nets["dyn"] = dyn
     
     if path is not None:
         for k, model in nets.items():

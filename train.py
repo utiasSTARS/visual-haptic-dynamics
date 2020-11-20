@@ -94,25 +94,9 @@ def setup_opt_iter(args):
             u_ll = u[:, ll:]
             n, l = x_ll['img'].shape[0], x_ll['img'].shape[1]
 
-            if args.context not in ["initial_image", "goal_image"]:
-                x_ll['target_img'] = x_ll['img']
-
-            if args.context in ["initial_latent_state", "initial_image"]:
-                context_img = x_ll["img"][:, 0]
-            elif args.context in ["goal_latent_state", "goal_image"]:
-                #XXX: Assume last image as goal
-                context_img = x_ll["img"][:, -1]
-
             x_ll = {k:v.reshape(-1, *v.shape[2:]) for k, v in x_ll.items()}
 
             # 1. Encoding q(z) distribution
-            if args.context in ["initial_image", "goal_image"]:
-                context_img_rep = context_img.unsqueeze(1).repeat(1, l, 1, 1, 1)
-                context_img_rep = context_img_rep.reshape(-1, *context_img_rep.shape[2:])
-                # Concatenate images
-                x_ll['target_img'] = x_ll['img'] - context_img_rep
-                x_ll['img'] = torch.cat((x_ll['img'], context_img_rep), dim=1)
-                
             z_all_enc = []
             z_img = nets["img_enc"](x_ll['img'])
             z_all_enc.append(z_img)
@@ -121,42 +105,55 @@ def setup_opt_iter(args):
                 z_context = nets["context_enc"](x_ll["context"])
                 z_all_enc.append(z_context)
 
-            if args.context in ["initial_latent_state", "goal_latent_state"]:
-                z_img_context = nets["context_img_enc"](context_img)
-                # Repeat context for the whole trajectory
-                z_img_context = z_img_context.unsqueeze(1).repeat(1, l, 1)
-                z_img_context = z_img_context.reshape(-1, z_img_context.shape[-1])
-                z_all_enc.append(z_img_context)
-            elif args.context in ["all_past_states"]:
-                # Use all but current state
-                context_input = z_img.reshape(n, l, *z_img.shape[1:])[:, :-1].transpose(1,0)
-                z_img_context, _ = nets["context_img_rnn_enc"](context_input)
-                pad = torch.zeros((1, *z_img_context.shape[1:])).float().to(device=device)
-                z_img_context = torch.cat((pad, z_img_context), dim=0)
-                z_img_context = z_img_context.transpose(1, 0)
-                z_img_context = z_img_context.reshape(-1, *z_img_context.shape[2:])
-                z_all_enc.append(z_img_context)
-
             # Concatenate modalities and mix
             z_cat_enc = torch.cat(z_all_enc, dim=1)
-            z, mu_z, logvar_z = nets["mix"](z_cat_enc) #TODO: Fix this to roll out and take previous distribution into account, or RSSM
-            var_z = torch.diag_embed(torch.exp(logvar_z))
 
-            # Group sample, mean, covariance
-            q_z = {"z": z, "mu": mu_z, "cov": var_z}
+            if args.context == "none":
+                # If only CNN is used for recognition, process in batch instead of roll out
+                z, mu_z, logvar_z = nets["mix"](z_cat_enc)
+                var_z = torch.diag_embed(torch.exp(logvar_z))
+                # Group sample, mean, covariance
+                q_z = {"z": z, "mu": mu_z, "cov": var_z}
+            elif args.context == "ssm":
+                q_z = {
+                    "z": torch.empty((n, l, args.dim_z), requires_grad=False, device=device),
+                    "mu": torch.empty((n, l, args.dim_z), requires_grad=False, device=device),
+                    "cov": torch.empty((n, l, args.dim_z, args.dim_z), requires_grad=False, device=device)
+                }
+
+                z_cat_enc = z_cat_enc.reshape(
+                    n, l, *z_cat_enc.shape[1:]
+                ).transpose(1,0)
+
+                z_0 =torch.zeros(
+                    args.dim_z, 
+                    requires_grad=False, 
+                    device=device
+                ).repeat(n, 1)
+
+                # Roll out
+                for ii in range(l):
+                    z, mu_z, logvar_z = nets["mix"](
+                        torch.cat((z_0, z_cat_enc[ii]), axis=-1)
+                    )
+                    var_z = torch.diag_embed(torch.exp(logvar_z))
+                    q_z["z"][:, ii] = z 
+                    q_z["mu"][:, ii] = mu_z
+                    q_z["cov"][:, ii] = var_z
+                    z_0 = z
+                q_z = {k:v.reshape(-1, *v.shape[2:]) for k, v in q_z.items()}
+            elif args.context == "rssm":
+                pass
 
             # 2. Reconstruction
             z_all_dec = []
             z_all_dec.append(q_z["z"])
 
-            if args.context in ["initial_latent_state", "goal_latent_state", "all_past_states"]:
-                z_all_dec.append(z_img_context)
-
             # Concatenate modalities and decode
             z_cat_dec = torch.cat(z_all_dec, dim=1)
             x_hat_img = nets["img_dec"](z_cat_dec)
             loss_rec_img = (torch.sum(
-                loss_REC(x_hat_img, x_ll['target_img'])
+                loss_REC(x_hat_img, x_ll['img'])
             )) / (n)
 
             running_stats['img_rec_l'].append(loss_rec_img.item())
