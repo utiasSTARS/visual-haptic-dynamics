@@ -3,7 +3,7 @@
 #SBATCH --array=1-8%8
 #SBATCH --gres=gpu:1
 #SBATCH -p p100
-#SBATCH --mem=16G
+#SBATCH --mem=32G
 #SBATCH --account=legacy
 #SBATCH --qos=legacy
 #SBATCH -o ./slurm_output/%J.out # this is where the output goes

@@ -57,8 +57,12 @@ def parse_vh_training_args():
     parser.add_argument('--non_linearity', choices=['relu', 'elu', 'softplus'], default='relu', help='Activation used for decoder neural network')
     parser.add_argument('--frame_stacks', type=int, default=1, help="Number of frames to stack")
     parser.add_argument('--context_modality', choices=['none', 'arm', 'ft', 'joint'], default='none', help='Context modality')
+    parser.add_argument('--context_seq_len', type=int, default=32, help='Sequence length of high frequency data per image')
     parser.add_argument('--use_context_frame_stack', type=str2bool, default=False, help='Stack context modality')
-    parser.add_argument('--context', choices=['initial_latent_state', 'goal_latent_state', 'initial_image', 'goal_image', 'all_past_states', 'none'], default='none', help='Extra information for recognition network')
+    parser.add_argument('--context', choices=['none', 'ssm', 'rssm'], default='none', help='Extra information for recognition network')
+    parser.add_argument('--ft_normalization', type=int, default=100.0, help='Normalize ft data by this')
+    parser.add_argument('--dim_arm', type=int, default=6, help='Feature length of arm sensors')
+    parser.add_argument('--dim_ft', type=int, default=6, help='Feature length of ft data')
 
     # Training Settings
     parser.add_argument('--lr', type=float, default= 3e-4, help='Learning rate')
@@ -92,6 +96,7 @@ def parse_control_experiment_args():
     parser.add_argument('--exploration_noise_var', type=float, default=0.3, help='Exploration noise used')
     parser.add_argument('--debug', type=str2bool, default=False, help='Debug and do not save models or log anything')
     parser.add_argument('--comment', type=str, default="None", help='Comment to describe save directory')
+    parser.add_argument('--opt_n_step_pred_epochs', type=str2inttuple, default=(64,), help='Number of epochs before training with n step reconstruction')
 
     args = parser.parse_args()
     return args

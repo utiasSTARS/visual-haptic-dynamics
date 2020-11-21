@@ -1,7 +1,6 @@
-device="cuda:1"
+device="cuda:0"
 
-# dataset="/home/olimoyo/visual-haptic-dynamics/experiments/data/datasets/visual_haptic_2D_len16_withGT_3D9E4376CF4746EEA20DCD520218038D.pkl"
-dataset="/home/olimoyo/visual-haptic-dynamics/experiments/data/datasets/visual_haptic_2D_len16_osc_withGT_8C12919B740845539C0E75B5CBAF7965.pkl"
+dataset="/home/olimoyo/visual-haptic-dynamics/experiments/data/datasets/mit_push/min-tr2.5_min-rot0.5_len48.pkl"
 storage_base_path="/home/olimoyo/visual-haptic-dynamics/saved_models/monolith/"
 
 n_batches=(32)
@@ -19,15 +18,19 @@ opt_n_step_pred_epochs=(4096)
 debug=('True')
 nl=('relu')
 frame_stack=(1)
-val_split=(0.1)
+val_split=(0.0)
 lam_rec=(0.95)
 lam_kl=(0.80)
-n_checkpoint_epoch=(1)
-task="push64vh"
-comment="${task}_gru_test"
+n_checkpoint_epoch=(64)
+task="mitpush64vh"
+comment="${task}_gru_test_untrained"
 context_modality="joint"
-context="rssm"
+context="none"
 use_context_frame_stack=('False')
+ft_normalization=(1)
+dim_arm=(2)
+dim_ft=(3)
+context_seq_len=(10)
 
 for n in {1..1}; do
     for dyn_net in ${dyn_nets[@]}; do
@@ -41,6 +44,10 @@ for n in {1..1}; do
                                     for bi_directional in ${bi_directionals[@]}; do
                                         for n_epoch in ${n_epochs[@]}; do
                                             python ../train.py \
+                                                --dim_arm $dim_arm \
+                                                --dim_ft $dim_ft \
+                                                --context_seq_len $context_seq_len \
+                                                --ft_normalization $ft_normalization \
                                                 --context_modality $context_modality \
                                                 --use_context_frame_stack $use_context_frame_stack \
                                                 --context $context \
@@ -48,7 +55,7 @@ for n in {1..1}; do
                                                 --dim_u 2 \
                                                 --dim_z 16 \
                                                 --dim_x "1,64,64" \
-                                                --n_worker 16 \
+                                                --n_worker 8 \
                                                 --use_binary_ce "False" \
                                                 --n_epoch $n_epoch \
                                                 --n_batch $n_batch \
