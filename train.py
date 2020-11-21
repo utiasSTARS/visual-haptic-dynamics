@@ -116,9 +116,9 @@ def setup_opt_iter(args):
                 q_z = {"z": z, "mu": mu_z, "cov": var_z}
             elif args.context == "ssm" or "rssm":
                 q_z = {
-                    "z": torch.empty((n, l, args.dim_z), requires_grad=False, device=device),
-                    "mu": torch.empty((n, l, args.dim_z), requires_grad=False, device=device),
-                    "cov": torch.empty((n, l, args.dim_z, args.dim_z), requires_grad=False, device=device)
+                    "z": torch.empty((n, l, args.dim_z), device=device),
+                    "mu": torch.empty((n, l, args.dim_z), device=device),
+                    "cov": torch.empty((n, l, args.dim_z, args.dim_z), device=device)
                 }
 
                 z_cat_enc = z_cat_enc.reshape(
