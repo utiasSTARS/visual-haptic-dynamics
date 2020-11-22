@@ -162,6 +162,8 @@ def setup_opt_iter(args):
             z_all_dec = []
             z_all_dec.append(q_z["z"])
 
+            #TODO: Append CVAE stuff
+
             # Concatenate modalities and decode
             z_cat_dec = torch.cat(z_all_dec, dim=1)
             x_hat_img = nets["img_dec"](z_cat_dec)
@@ -418,7 +420,7 @@ def train(args):
     
     opt_iter = setup_opt_iter(args)
     n_step_lookup = list(args.opt_n_step_pred_epochs)
-    
+
     # Training loop
     try:
         opt = opt_vae
@@ -459,11 +461,11 @@ def train(args):
             if not args.debug:
                 # Tensorboard 
                 for k, v in summary_train.items():
-                    writer.add_scalar(f"loss/{k}/train", v, epoch)
+                    writer.add_scalar(f"train/{k}", v, epoch)
 
                 if args.val_split > 0:
                     for k, v in summary_val.items():
-                        writer.add_scalar(f"loss/{k}/train", v, epoch)
+                        writer.add_scalar(f"val/{k}", v, epoch)
 
                 # Save model at intermittent checkpoints 
                 if epoch % args.n_checkpoint_epoch == 0:
