@@ -382,8 +382,8 @@ def train(args):
     )
 
     # Append any extra datasets
-    for extra_datasets in args.dataset[1:]
-        dataset.append_cache(extra_datasets)
+    for extra_dataset in args.dataset[1:]:
+        dataset.append_cache(extra_dataset)
 
     dataset_idx = list(range(len(dataset)))
     random.shuffle(dataset_idx)

@@ -155,6 +155,8 @@ class VisualHaptic(data.Dataset):
 
         if not self.data["config"] == data["config"]:
             print("Warning: adding data with different env configs")
+            print("Original: ", self.data["config"])
+            print("Appended: ", data["config"])
 
         for key in data.keys():
             if key == "config":

@@ -190,8 +190,8 @@ def control_experiment(args):
     )
 
     # Append any extra datasets
-    for extra_datasets in args.dataset_path[1:]
-        dataset.append_cache(extra_datasets)
+    for extra_dataset in args.dataset_path[1:]:
+        dataset.append_cache(extra_dataset)
         
     # Load optimizer
     if args.opt == "adam":
