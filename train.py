@@ -169,7 +169,7 @@ def setup_opt_iter(args):
             x_hat_img = nets["img_dec"](z_cat_dec)
             loss_rec_img = (torch.sum(
                 loss_REC(x_hat_img, x_ll['img'])
-            )) / (n)
+            )) / n
 
             running_stats['img_rec_l'].append(loss_rec_img.item())
 
@@ -216,7 +216,7 @@ def setup_opt_iter(args):
                 cov0=q_z["cov"][1:],
                 mu1=p_z["mu"],
                 cov1=p_z["cov"]
-            ) / (n)
+            ) / n
 
             # Original length before calculating n-step predictions
             length = p_z["mu"].shape[0]
@@ -376,10 +376,14 @@ def train(args):
 
     # Setup dataset
     dataset = VisualHaptic(
-        args.dataset,
+        args.dataset[0],
         rgb=args.dim_x[0] == 3,
         normalize_ft = args.ft_normalization
     )
+
+    # Append any extra datasets
+    for extra_datasets in args.dataset[1:]
+        dataset.append_cache(extra_datasets)
 
     dataset_idx = list(range(len(dataset)))
     random.shuffle(dataset_idx)

@@ -19,7 +19,7 @@ def parse_common_training_args(parser=None):
     parser.add_argument('--random_seed', type=int, default=333, help='Random seed')
 
     # Dataset Settings
-    parser.add_argument('--dataset', type=str, required=True,  help='Name of dataset to train on')
+    parser.add_argument('--dataset', nargs='+', type=str, required=True, help='Name of dataset to train on')
     parser.add_argument('--val_split', type=float, default=0, help='Amount of dataset to use for validation')
 
     # Training Settings
@@ -79,7 +79,7 @@ def parse_vh_training_args():
 def parse_control_experiment_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_path', type=str, required=True, help='Path to directory of model')
-    parser.add_argument('--dataset_path', type=str, default="/Users/oliver/visual-haptic-dynamics/experiments/data/datasets/visual_haptic_2D_len16_osc_withGT_8C12919B740845539C0E75B5CBAF7965.pkl", help='Path to directory of offline dataset')
+    parser.add_argument('--dataset_path', nargs='+', type=str, default="/Users/oliver/visual-haptic-dynamics/experiments/data/datasets/visual_haptic_2D_len16_osc_withGT_8C12919B740845539C0E75B5CBAF7965.pkl", help='Path to directory of offline dataset')
     parser.add_argument('--H', type=int, default=6, help='Horizon length for MPC controller')
     parser.add_argument('--mpc_opt', choices=['grad', 'cem', 'cvxopt'], default='cvxopt', help='Optimization used for MPC')
     parser.add_argument('--device', type=str, default='cpu', help='Device to use for PyTorch')

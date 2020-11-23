@@ -185,10 +185,14 @@ def control_experiment(args):
     
     # Load dataset
     dataset = VisualHaptic(
-        args.dataset_path,
+        args.dataset_path[0],
         rgb=model_args.dim_x[0] == 3
     )
 
+    # Append any extra datasets
+    for extra_datasets in args.dataset_path[1:]
+        dataset.append_cache(extra_datasets)
+        
     # Load optimizer
     if args.opt == "adam":
         opt_type = torch.optim.Adam

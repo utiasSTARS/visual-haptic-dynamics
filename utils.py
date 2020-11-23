@@ -315,7 +315,7 @@ def load_vh_models(args, path=None, mode='eval', device='cuda:0'):
             dim_in=args.dim_z_context,
             dim_out=args.dim_z_context,
         ).to(device=device)
-        # Hidden state and sample from previous step
+        # Sample from previous step and recurrent hidden state
         z_dim_in += args.dim_z_context
 
     dim_z_rec = args.dim_z
