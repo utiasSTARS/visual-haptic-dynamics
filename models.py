@@ -22,6 +22,7 @@ class LinearMixSSM(nn.Module):
         self, dim_z, dim_u, hidden_size=128, 
         K=1, layers=1, bidirectional=False, 
         net_type="lstm", learn_uncertainty=True,
+        train_initial_hidden=False
     ):
         super(LinearMixSSM, self).__init__()
         self.K = K
@@ -56,6 +57,13 @@ class LinearMixSSM(nn.Module):
         self.learn_uncertainty = learn_uncertainty
         if self.learn_uncertainty: 
             self.fc_logvar = nn.Linear(hidden_size, dim_z)
+        
+        self.train_initial_hidden = train_initial_hidden
+        if self.train_initial_hidden:
+            if bidirectional:
+                self.h_0 = nn.Parameter(torch.randn(layers * 2, 1, hidden_size))
+            else:
+                self.h_0 = nn.Parameter(torch.randn(layers, 1, hidden_size))
 
     def forward(
         self, z_t, mu_t, var_t, u, 
@@ -90,7 +98,10 @@ class LinearMixSSM(nn.Module):
         l, n, _ = z_t.shape
         inp = torch.cat([z_t, u], dim=-1)
         if h_0 is None:
-            h_t, h_n = self.rnn(inp)
+            if self.train_initial_hidden:
+                h_t, h_n = self.rnn(inp, self.h_0.repeat(1, n, 1))
+            else:
+                h_t, h_n = self.rnn(inp)
         else:
             h_t, h_n = self.rnn(inp, h_0)
 
@@ -169,8 +180,11 @@ class LinearSSM(nn.Module):
         bidirectional: Use bidirectional version
         net_type: Use the LSTM or GRU variation
     """
-    def __init__(self, dim_z, dim_u, hidden_size=128,
-                layers=1, bidirectional=False, net_type="lstm"):
+    def __init__(
+            self, dim_z, dim_u, hidden_size=128,
+            layers=1, bidirectional=False, 
+            net_type="lstm", train_initial_hidden=False
+        ):
         super(LinearSSM, self).__init__()
         self.dim_z = dim_z
         self.dim_u = dim_u
@@ -198,6 +212,13 @@ class LinearSSM(nn.Module):
             self.linear = nn.Linear(in_features=hidden_size, out_features=n_outputs)
 
         self.sigmoid = nn.Sigmoid()
+        
+        self.train_initial_hidden = train_initial_hidden
+        if self.train_initial_hidden:
+            if bidirectional:
+                self.h_0 = nn.Parameter(torch.randn(layers * 2, 1, hidden_size))
+            else:
+                self.h_0 = nn.Parameter(torch.randn(layers, 1, hidden_size))
 
     def forward(self, z_t, mu_t, var_t, u, h_0=None, single=False, return_all_hidden=False):
         """
@@ -228,7 +249,10 @@ class LinearSSM(nn.Module):
 
         inp = torch.cat([z_t, u], dim=-1)
         if h_0 is None:
-            h_t, h_n = self.rnn(inp)
+            if self.train_initial_hidden:
+                h_t, h_n = self.rnn(inp, self.h_0.repeat(1, n, 1))
+            else:
+                h_t, h_n = self.rnn(inp)
         else:
             h_t, h_n = self.rnn(inp, h_0)
 
@@ -298,8 +322,11 @@ class NonLinearSSM(nn.Module):
         bidirectional: Use bidirectional version
         net_type: Use the LSTM or GRU variation
     """
-    def __init__(self, dim_z, dim_u, hidden_size=128,
-                layers=1, bidirectional=False, net_type="lstm"):    
+    def __init__(
+        self, dim_z, dim_u, hidden_size=128,
+        layers=1, bidirectional=False, 
+        net_type="lstm", train_initial_hidden=False
+    ):    
         super(NonLinearSSM, self).__init__()
         self.dim_z = dim_z
         self.dim_u = dim_u
@@ -326,6 +353,13 @@ class NonLinearSSM(nn.Module):
         else:
             self.fc_mu = nn.Linear(hidden_size, dim_z)
             self.fc_logvar = nn.Linear(hidden_size, dim_z)
+        
+        self.train_initial_hidden = train_initial_hidden
+        if self.train_initial_hidden:
+            if bidirectional:
+                self.h_0 = nn.Parameter(torch.randn(layers * 2, 1, hidden_size))
+            else:
+                self.h_0 = nn.Parameter(torch.randn(layers, 1, hidden_size))
 
     def forward(self, z_t, mu_t, var_t, u, h_0=None, single=False, return_all_hidden=False):
         """
@@ -356,7 +390,10 @@ class NonLinearSSM(nn.Module):
 
         inp = torch.cat([z_t, u], dim=-1)
         if h_0 is None:
-            h_t, h_n = self.rnn(inp)
+            if self.train_initial_hidden:
+                h_t, h_n = self.rnn(inp, self.h_0.repeat(1, n, 1))
+            else:
+                h_t, h_n = self.rnn(inp)
         else:
             h_t, h_n = self.rnn(inp, h_0)
 

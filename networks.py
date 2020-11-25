@@ -327,7 +327,8 @@ class RNNEncoder(nn.Module):
         dim_in, 
         dim_out, 
         hidden_size=256,
-        net_type="gru"
+        net_type="gru",
+        train_initial_hidden=False
     ):
         super(RNNEncoder, self).__init__()
         if net_type == "gru":
@@ -347,13 +348,19 @@ class RNNEncoder(nn.Module):
 
         self.fc = torch.nn.Linear(hidden_size, dim_out)
 
+        self.train_initial_hidden = train_initial_hidden
+        if self.train_initial_hidden:
+            self.h_0 = nn.Parameter(torch.randn(1, 1, hidden_size))
+            
     def forward(self, x, h=None):
         l, n = x.shape[0], x.shape[1]
         if h is None:
-            h_t, h_n = self.rnn(x)
+            if self.train_initial_hidden:
+                h_t, h_n = self.rnn(x, self.h_0.repeat(1, n, 1))
+            else:
+                h_t, h_n = self.rnn(x)
         else:
             h_t, h_n = self.rnn(x, h)
-            
         out = self.fc(h_t.reshape(-1, *h_t.shape[2:]))
         out = out.reshape(l, n, *out.shape[1:])
         return out, h_n

@@ -1,33 +1,33 @@
 device="cuda:1"
 
-# dataset="/home/olimoyo/visual-haptic-dynamics/experiments/data/datasets/visual_haptic_2D_len16_withGT_3D9E4376CF4746EEA20DCD520218038D.pkl"
-dataset="/home/olimoyo/visual-haptic-dynamics/experiments/data/datasets/visual_haptic_2D_len16_osc_withGT_8C12919B740845539C0E75B5CBAF7965.pkl"
+dataset="/home/olimoyo/visual-haptic-dynamics/experiments/data/datasets/pendulum64_total_2048_traj_16_repeat_2_with_angle_train.pkl"
 storage_base_path="/home/olimoyo/visual-haptic-dynamics/saved_models/monolith/"
 
 n_batches=(32)
 learning_rates=(3e-4)
 batch_norms=('True')
 bi_directionals=('False')
-weight_inits=('custom')
+weight_inits=('default')
 Ks=(15)
 rnn_nets=('gru')
 dyn_nets=('linearmix')
-n_epochs=(8192)
+n_epochs=(1024)
 opt=('adam')
-opt_vae_base_epochs=(1024)
-opt_n_step_pred_epochs=(4096)
+opt_vae_base_epochs=(256)
+opt_n_step_pred_epochs=(512)
 debug=('True')
 nl=('relu')
-frame_stack=(1)
+frame_stack=(0)
 val_split=(0.1)
 lam_rec=(0.95)
 lam_kl=(0.80)
-n_checkpoint_epoch=(1)
-task="push64vh"
+n_checkpoint_epoch=(9999)
+task="pendulum64"
 comment="${task}_gru_test"
-context_modality="joint"
-context="rssm"
+context_modality="none"
+context="none"
 use_context_frame_stack=('False')
+train_initial_hidden=('True')
 
 for n in {1..1}; do
     for dyn_net in ${dyn_nets[@]}; do
@@ -41,11 +41,12 @@ for n in {1..1}; do
                                     for bi_directional in ${bi_directionals[@]}; do
                                         for n_epoch in ${n_epochs[@]}; do
                                             python ../train.py \
+                                                --train_initial_hidden $train_initial_hidden \
                                                 --context_modality $context_modality \
                                                 --use_context_frame_stack $use_context_frame_stack \
                                                 --context $context \
                                                 --K $K \
-                                                --dim_u 2 \
+                                                --dim_u 1 \
                                                 --dim_z 16 \
                                                 --dim_x "1,64,64" \
                                                 --n_worker 16 \

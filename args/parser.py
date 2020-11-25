@@ -72,6 +72,7 @@ def parse_vh_training_args():
     parser.add_argument('--lam_rec', type=float, default=0.95, help='Weight of image reconstruction loss')
     parser.add_argument('--lam_kl', type=float, default=0.80, help='Weight of kl loss')
     parser.add_argument('--use_binary_ce', type=str2bool, default=False, help='Use Binary Cross Entropy loss insted of default Mean Squared Error loss')
+    parser.add_argument('--train_initial_hidden', type=str2bool, default=False, help='Train the initial hidden state')
 
     args = parse_common_training_args(parser=parser)
     return args

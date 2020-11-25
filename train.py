@@ -36,7 +36,7 @@ from models import (
     LinearSSM, 
     NonLinearSSM
 )
-from datasets import VisualHaptic
+from datasets import VisualHaptic, ImgCached
 from losses import torch_kl
 
 def setup_opt_iter(args):
@@ -132,11 +132,7 @@ def setup_opt_iter(args):
                 ).repeat(n, 1)
 
                 if args.context == "rssm":
-                    h_0 = torch.zeros(
-                        (1, n, 256), 
-                        requires_grad=False, 
-                        device=device
-                    )
+                    h_0 = None
 
                 # Roll out
                 for ii in range(l):
@@ -210,7 +206,7 @@ def setup_opt_iter(args):
                 return_all_hidden=True
             )
             p_z = {"z": z_t1_hat, "mu": mu_z_t1_hat, "cov": var_z_t1_hat}
-            
+
             loss_kl += torch_kl(
                 mu0=q_z["mu"][1:],
                 cov0=q_z["cov"][1:],
@@ -311,7 +307,13 @@ def train(args):
 
     # Keeping track of results and hyperparameters
     save_dir = os.path.join(args.storage_base_path, args.comment)
-    checkpoint_dir = os.path.join(save_dir, "checkpoints/")
+
+    slurm_id = os.environ.get('SLURM_JOB_ID')
+    if slurm_id is not None:
+        user = os.environ.get('USER')
+        checkpoint_dir = f"/checkpoint/{user}/{slurm_id}"
+    else:
+        checkpoint_dir = os.path.join(save_dir, "checkpoints/")
 
     if not args.debug:
         os.makedirs(save_dir, exist_ok=True)
@@ -375,11 +377,17 @@ def train(args):
     )
 
     # Setup dataset
-    dataset = VisualHaptic(
-        args.dataset[0],
-        rgb=args.dim_x[0] == 3,
-        normalize_ft = args.ft_normalization
-    )
+    if args.task == "push64vh":
+        dataset = VisualHaptic(
+            args.dataset[0],
+            rgb=args.dim_x[0] == 3,
+            normalize_ft = args.ft_normalization
+        )
+    elif args.task == "pendulum64":
+        dataset = ImgCached(
+            args.dataset[0],
+            rgb=args.dim_x[0] == 3,
+        )
 
     # Append any extra datasets
     for extra_dataset in args.dataset[1:]:
@@ -482,7 +490,6 @@ def train(args):
                         checkpoint_dir + "checkpoint.pth"
                     )
     finally:
-        pass
         if not args.debug:
             # Save models
             for k, v in nets.items():

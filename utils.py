@@ -314,6 +314,7 @@ def load_vh_models(args, path=None, mode='eval', device='cuda:0'):
         nets["rssm_enc"] = RNNEncoder(
             dim_in=args.dim_z_context,
             dim_out=args.dim_z_context,
+            train_initial_hidden=args.train_initial_hidden
         ).to(device=device)
         # Sample from previous step and recurrent hidden state
         z_dim_in += args.dim_z_context
@@ -352,7 +353,8 @@ def load_vh_models(args, path=None, mode='eval', device='cuda:0'):
             hidden_size=args.rnn_hidden_size,
             bidirectional=args.use_bidirectional,
             net_type=args.rnn_net,
-            K=args.K
+            K=args.K,
+            train_initial_hidden=args.train_initial_hidden
         ).to(device=device)
     elif args.dyn_net == "linearrank1":
         nets["dyn"] = LinearSSM(
@@ -360,7 +362,8 @@ def load_vh_models(args, path=None, mode='eval', device='cuda:0'):
             dim_u=args.dim_u,
             hidden_size=args.rnn_hidden_size,
             bidirectional=args.use_bidirectional,
-            net_type=args.rnn_net
+            net_type=args.rnn_net,
+            train_initial_hidden=args.train_initial_hidden
         ).to(device=device)
     elif args.dyn_net == "nonlinear":
         nets["dyn"] = NonLinearSSM(
@@ -368,7 +371,8 @@ def load_vh_models(args, path=None, mode='eval', device='cuda:0'):
             dim_u=args.dim_u,
             hidden_size=args.rnn_hidden_size,
             bidirectional=args.use_bidirectional,
-            net_type=args.rnn_net
+            net_type=args.rnn_net,
+            train_initial_hidden=args.train_initial_hidden
         ).to(device=device)
     else:
         raise NotImplementedError()
