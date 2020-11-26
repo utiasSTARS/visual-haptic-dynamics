@@ -338,6 +338,8 @@ def train(args):
         opt_type = torch.optim.Adam
     elif args.opt == "sgd":
         opt_type = torch.optim.SGD
+    elif args.opt == "rmsprop":
+        opt_type = torch.optim.RMSprop
     else:
         raise NotImplementedError()
     

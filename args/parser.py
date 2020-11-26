@@ -32,10 +32,10 @@ def parse_common_training_args(parser=None):
     # Network Settings                        
     parser.add_argument('--use_batch_norm', type=str2bool, default=True, help='Use batch normalization')
     parser.add_argument('--use_dropout', type=str2bool, default=False, help='Use dropout')
-    parser.add_argument('--weight_init', choices=['custom', 'default'], default='custom',  help='Weight initialization')
+    parser.add_argument('--weight_init', choices=['custom', 'default'], default='default',  help='Weight initialization')
 
     # Optimizer Settings                        
-    parser.add_argument('--opt', choices=['adam', 'sgd'], default='adam',  help='Optimizer used')
+    parser.add_argument('--opt', choices=['adam', 'sgd', 'rmsprop'], default='adam',  help='Optimizer used')
     args = parser.parse_args()
     return args
 
