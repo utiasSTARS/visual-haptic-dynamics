@@ -18,6 +18,7 @@ from models import (LinearMixSSM,
 import gym
 from collections import deque
 from gym import spaces
+import os 
 
 class FrameStack(gym.Wrapper):
     def __init__(self, env, k):
@@ -100,6 +101,7 @@ def set_seed_torch(seed):
     torch.cuda.manual_seed(seed)
     torch.cuda.manual_seed_all(seed) 
     random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
         
 def to_img(x, shape):
     assert len(shape) == 2

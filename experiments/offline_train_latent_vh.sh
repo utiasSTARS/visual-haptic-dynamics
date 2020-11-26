@@ -12,23 +12,25 @@ weight_inits=('default')
 Ks=(15)
 rnn_nets=('gru')
 dyn_nets=('nonlinear')
-n_epochs=(1024)
+n_epochs=(2048)
 opt=('adam')
 opt_vae_base_epochs=(256)
-opt_n_step_pred_epochs=(512)
-debug=('True')
+opt_n_step_pred_epochs=(1024)
+debug=('False')
 nl=('relu')
 frame_stack=(1)
-val_split=(0.1)
+val_split=(0.0)
 lam_rec=(0.95)
 lam_kl=(0.80)
-n_checkpoint_epoch=(20)
+n_checkpoint_epoch=(3)
 task="push64vh"
 comment="${task}_checkpoint_test"
 context_modality="joint"
 context="none"
 use_context_frame_stack=('False')
 train_initial_hidden=('True')
+fc_hidden_size=(256)
+rnn_hidden_size=(256)
 
 for n in {1..1}; do
     for dyn_net in ${dyn_nets[@]}; do
@@ -50,7 +52,7 @@ for n in {1..1}; do
                                                 --dim_u 2 \
                                                 --dim_z 16 \
                                                 --dim_x "1,64,64" \
-                                                --n_worker 16 \
+                                                --n_worker 4 \
                                                 --use_binary_ce "False" \
                                                 --n_epoch $n_epoch \
                                                 --n_batch $n_batch \
@@ -63,8 +65,8 @@ for n in {1..1}; do
                                                 --lam_rec $lam_rec \
                                                 --lam_kl $lam_kl \
                                                 --storage_base_path $storage_base_path \
-                                                --fc_hidden_size 256 \
-                                                --rnn_hidden_size 256 \
+                                                --fc_hidden_size $fc_hidden_size \
+                                                --rnn_hidden_size $rnn_hidden_size \
                                                 --use_bidirectional $bi_directional \
                                                 --use_batch_norm $batch_norm \
                                                 --opt_vae_epochs 0 \

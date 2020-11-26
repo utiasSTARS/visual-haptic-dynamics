@@ -297,13 +297,14 @@ def train(args):
 
     assert 0 <= args.opt_vae_epochs <= args.opt_vae_base_epochs <= args.n_epoch
 
+    torch.backends.cudnn.deterministic = args.cudnn_deterministic
+    torch.backends.cudnn.benchmark = args.cudnn_benchmark
+
     set_seed_torch(args.random_seed)
     def _init_fn(worker_id):
         np.random.seed(int(args.random_seed))
 
     device = torch.device(args.device)
-    torch.backends.cudnn.deterministic = args.cudnn_deterministic
-    torch.backends.cudnn.benchmark = args.cudnn_benchmark
 
     # Keeping track of results and hyperparameters
     save_dir = os.path.join(args.storage_base_path, args.comment)
@@ -395,6 +396,7 @@ def train(args):
 
     dataset_idx = list(range(len(dataset)))
     random.shuffle(dataset_idx)
+
     split = int(np.floor(args.val_split * len(dataset)))
 
     train_sampler = SubsetRandomSampler(dataset_idx[split:])
@@ -436,6 +438,7 @@ def train(args):
     # Training loop
     try:
         opt = opt_vae
+        tb_data = []
         for epoch in range(checkpoint_epochs + 1, args.n_epoch + 1):
             tic = time.time()
             if epoch >= args.opt_vae_base_epochs:
@@ -469,18 +472,23 @@ def train(args):
                 f"Avg train loss: {summary_train['avg_total_l']}, "
                 f"Avg val loss: {summary_val['avg_total_l'] if args.val_split > 0 else 'N/A'}, "
                 f"Time per epoch: {epoch_time}"))
-            
+
             if not args.debug:
-                # Tensorboard 
+                # Temporarily store tensorboard data
                 for k, v in summary_train.items():
-                    writer.add_scalar(f"train/{k}", v, epoch)
+                    tb_data.append((f"train/{k}", v, epoch))
 
                 if args.val_split > 0:
                     for k, v in summary_val.items():
-                        writer.add_scalar(f"val/{k}", v, epoch)
+                        tb_data.append((f"train/{k}", v, epoch))
 
-                # Save model at intermittent checkpoints 
                 if epoch % args.n_checkpoint_epoch == 0:
+                    # Write tensorboard data
+                    for data in tb_data:
+                        writer.add_scalar(data[0], data[1], data[2])
+                    tb_data = []
+
+                    # Save model at intermittent checkpoints 
                     torch.save(
                         {**{k: v.state_dict() for k, v in nets.items()},
                         'opt_all': opt_all.state_dict(),
