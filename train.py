@@ -33,7 +33,6 @@ from networks import (
 )
 from models import (
     LinearMixSSM, 
-    LinearSSM, 
     NonLinearSSM
 )
 from datasets import VisualHaptic, ImgCached
@@ -218,6 +217,7 @@ def setup_opt_iter(args):
             length = p_z["mu"].shape[0]
 
             # N-step transition distributions
+            #XXX: This doesn't work with LSTM
             if n_step > 1:
                 # New references for convenience
                 p_z_nstep = p_z
@@ -325,6 +325,7 @@ def train(args):
         with open(save_dir + '/hyperparameters.txt', 'w') as f:
             json.dump(args.__dict__, f, indent=2)
         writer = SummaryWriter(log_dir=save_dir)
+        tb_data = []
 
     # Setup network models
     nets = load_vh_models(args, device=device)
@@ -345,8 +346,6 @@ def train(args):
     
     if args.dyn_net == "linearmix":
         base_params = [nets["dyn"].A, nets["dyn"].B]
-    elif args.dyn_net == "linearrank1":
-        base_params = []
     elif args.dyn_net == "nonlinear":
         base_params = []
     else:
@@ -440,7 +439,6 @@ def train(args):
     # Training loop
     try:
         opt = opt_vae
-        tb_data = []
         for epoch in range(checkpoint_epochs + 1, args.n_epoch + 1):
             tic = time.time()
             if epoch >= args.opt_vae_base_epochs:

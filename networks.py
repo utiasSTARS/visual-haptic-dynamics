@@ -330,6 +330,8 @@ class RNNEncoder(nn.Module):
         net_type="gru",
         train_initial_hidden=False
     ):
+        self.train_initial_hidden = train_initial_hidden
+        self.net_type = net_type
         super(RNNEncoder, self).__init__()
         if net_type == "gru":
             self.rnn = nn.GRU(
@@ -338,6 +340,8 @@ class RNNEncoder(nn.Module):
                 num_layers=1, 
                 bidirectional=False
             )
+            if self.train_initial_hidden:
+                self.h_0 = nn.Parameter(torch.randn(1, 1, hidden_size))
         elif net_type =="lstm":
             self.rnn = nn.LSTM(
                 input_size=dim_in, 
@@ -345,18 +349,24 @@ class RNNEncoder(nn.Module):
                 num_layers=1, 
                 bidirectional=False
             )
+            if self.train_initial_hidden:
+                self.h_0 = nn.Parameter(torch.randn(1, 1, hidden_size))
+                self.c_0 = nn.Parameter(torch.randn(1, 1, hidden_size))
 
         self.fc = torch.nn.Linear(hidden_size, dim_out)
-
-        self.train_initial_hidden = train_initial_hidden
-        if self.train_initial_hidden:
-            self.h_0 = nn.Parameter(torch.randn(1, 1, hidden_size))
             
     def forward(self, x, h=None):
         l, n = x.shape[0], x.shape[1]
         if h is None:
             if self.train_initial_hidden:
-                h_t, h_n = self.rnn(x, self.h_0.repeat(1, n, 1))
+                if self.net_type == "gru":
+                    h_0 = self.h_0.repeat(1, n, 1)
+                elif self.net_type == "lstm":
+                    h_0 = (
+                        self.h_0.repeat(1, n, 1),
+                        self.c_0.repeat(1, n, 1)
+                    )
+                h_t, h_n = self.rnn(x, h_0)
             else:
                 h_t, h_n = self.rnn(x)
         else:

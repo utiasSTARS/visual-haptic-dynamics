@@ -52,7 +52,7 @@ for n in {1..1}; do
                                                 --dim_u 2 \
                                                 --dim_z 16 \
                                                 --dim_x "1,64,64" \
-                                                --n_worker 4 \
+                                                --n_worker 0 \
                                                 --use_binary_ce "False" \
                                                 --n_epoch $n_epoch \
                                                 --n_batch $n_batch \

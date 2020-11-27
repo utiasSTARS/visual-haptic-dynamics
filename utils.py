@@ -13,7 +13,6 @@ from networks import (FullyConvEncoderVAE,
                         CNNEncoder1D,
                         RNNEncoder)
 from models import (LinearMixSSM, 
-                    LinearSSM, 
                     NonLinearSSM)
 import gym
 from collections import deque
@@ -356,15 +355,6 @@ def load_vh_models(args, path=None, mode='eval', device='cuda:0'):
             bidirectional=args.use_bidirectional,
             net_type=args.rnn_net,
             K=args.K,
-            train_initial_hidden=args.train_initial_hidden
-        ).to(device=device)
-    elif args.dyn_net == "linearrank1":
-        nets["dyn"] = LinearSSM(
-            dim_z=args.dim_z,
-            dim_u=args.dim_u,
-            hidden_size=args.rnn_hidden_size,
-            bidirectional=args.use_bidirectional,
-            net_type=args.rnn_net,
             train_initial_hidden=args.train_initial_hidden
         ).to(device=device)
     elif args.dyn_net == "nonlinear":

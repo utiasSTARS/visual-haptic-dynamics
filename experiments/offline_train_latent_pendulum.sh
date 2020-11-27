@@ -11,19 +11,19 @@ weight_inits=('default')
 Ks=(15)
 rnn_nets=('gru')
 dyn_nets=('linearmix')
-n_epochs=(1024)
+n_epochs=(4096)
 opt=('adam')
-opt_vae_base_epochs=(256)
-opt_n_step_pred_epochs=(512)
+opt_vae_base_epochs=(1024)
+opt_n_step_pred_epochs=(9999)
 debug=('True')
 nl=('relu')
-frame_stack=(0)
+frame_stack=(1)
 val_split=(0.1)
 lam_rec=(0.95)
 lam_kl=(0.80)
-n_checkpoint_epoch=(9999)
+n_checkpoint_epoch=(64)
 task="pendulum64"
-comment="${task}_gru_test"
+comment="${task}_z3"
 context_modality="none"
 context="none"
 use_context_frame_stack=('False')
@@ -47,9 +47,10 @@ for n in {1..1}; do
                                                 --context $context \
                                                 --K $K \
                                                 --dim_u 1 \
-                                                --dim_z 16 \
+                                                --dim_z 3 \
+                                                --dim_z_img 3 \
                                                 --dim_x "1,64,64" \
-                                                --n_worker 16 \
+                                                --n_worker 0 \
                                                 --use_binary_ce "False" \
                                                 --n_epoch $n_epoch \
                                                 --n_batch $n_batch \
