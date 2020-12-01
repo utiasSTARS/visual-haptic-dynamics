@@ -360,6 +360,11 @@ def train(args):
     else:
         raise NotImplementedError()
 
+    if args.context == "rssm":
+        extra_params = list(nets["mix"].parameters())
+    else:
+        extra_params = []
+
     enc_params = [list(v.parameters()) for k, v in nets.items() if "enc" in k]
     enc_params = [v for sl in enc_params for v in sl] # remove nested list
 
@@ -369,20 +374,20 @@ def train(args):
     opt_vae = opt_type(
         enc_params + 
         dec_params +
-        list(nets["mix"].parameters()),
+        extra_params,
         lr=args.lr
     )
     opt_vae_base = opt_type(
         enc_params +
         dec_params +
-        list(nets["mix"].parameters()) +
+        extra_params +
         base_params, 
         lr=args.lr
     )
     opt_all = opt_type(
         enc_params +
         dec_params +
-        list(nets["mix"].parameters()) +
+        extra_params +
         list(nets["dyn"].parameters()), 
         lr=args.lr
     )
