@@ -188,13 +188,6 @@ def setup_opt_iter(args):
                 device=device
             ).repeat(1, n, 1, 1)
 
-            loss_kl += torch_kl(
-                mu0=q_z["mu"][0:1],
-                cov0=q_z["cov"][0:1],
-                mu1=mu_z_i,
-                cov1=var_z_i
-            ) / n
-
             # Prior transition distributions
             z_t1_hat, mu_z_t1_hat, var_z_t1_hat, (h_t, _) = nets["dyn"](
                 z_t=q_z["z"][:-1], 
@@ -207,10 +200,10 @@ def setup_opt_iter(args):
             p_z = {"z": z_t1_hat, "mu": mu_z_t1_hat, "cov": var_z_t1_hat}
 
             loss_kl += torch_kl(
-                mu0=q_z["mu"][1:],
-                cov0=q_z["cov"][1:],
-                mu1=p_z["mu"],
-                cov1=p_z["cov"]
+                mu0=q_z["mu"],
+                cov0=q_z["cov"],
+                mu1=torch.cat((mu_z_i, p_z["mu"]), axis=0),
+                cov1=torch.cat((var_z_i, p_z["cov"]), axis=0)
             ) / n
 
             # Original length before calculating n-step predictions
