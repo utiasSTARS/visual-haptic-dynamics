@@ -63,6 +63,8 @@ def parse_vh_training_args():
     parser.add_argument('--ft_normalization', type=int, default=100.0, help='Normalize ft data by this')
     parser.add_argument('--dim_arm', type=int, default=6, help='Feature length of arm sensors')
     parser.add_argument('--dim_ft', type=int, default=6, help='Feature length of ft data')
+    parser.add_argument('--reconstruct_context', type=str2bool, default=False, help='Reconstruct context modality')
+    parser.add_argument('--use_scheduler', type=str2bool, default=False, help='Use learning rate scheduler')
 
     # Training Settings
     parser.add_argument('--lr', type=float, default= 3e-4, help='Learning rate')

@@ -60,6 +60,8 @@ def setup_opt_iter(args):
         
         # Keep track of losses
         running_stats = {"total_l": [], "kl_l": [], "img_rec_l": []}
+        if args.reconstruct_context and args.context_modality != "none":
+            running_stats["context_rec_l"] = []
 
         for idx, data in enumerate(loader):
             if idx == args.n_example:
@@ -96,7 +98,6 @@ def setup_opt_iter(args):
                 x_ll[k] = x[k][:, ll:]
             u_ll = u[:, ll:]
             n, l = x_ll['img'].shape[0], x_ll['img'].shape[1]
-
             x_ll = {k:v.reshape(-1, *v.shape[2:]) for k, v in x_ll.items()}
 
             # 1. Encoding q(z) distribution
@@ -174,8 +175,14 @@ def setup_opt_iter(args):
             loss_rec_img = (torch.sum(
                 loss_REC(x_hat_img, x_ll['img'])
             )) / n
-
             running_stats['img_rec_l'].append(loss_rec_img.item())
+
+            if args.context_modality != "none" and args.reconstruct_context:
+                x_hat_context = nets["context_dec"](q_z["z"])
+                loss_rec_context = (torch.sum(
+                    loss_REC(x_hat_context, x_ll['context'])
+                )) / n
+                running_stats['context_rec_l'].append(loss_rec_context.item())
 
             # 3. Dynamics constraint with KL
             loss_kl = 0
@@ -271,14 +278,26 @@ def setup_opt_iter(args):
                 loss_kl.item()
             )
 
-            running_stats['total_l'].append(
-                loss_rec_img.item() +
-                loss_kl.item()
-            )
-
-            # Jointly optimize everything
-            total_loss = args.lam_rec * loss_rec_img + \
-                args.lam_kl * loss_kl 
+            if args.context_modality != "none" and args.reconstruct_context:
+                running_stats['total_l'].append(
+                    loss_rec_img.item() +
+                    loss_rec_context.item() +
+                    loss_kl.item()
+                )
+                # Jointly optimize everything
+                total_loss = \
+                    args.lam_rec * loss_rec_img + \
+                    args.lam_rec * loss_rec_context + \
+                    args.lam_kl * loss_kl 
+            else:
+                running_stats['total_l'].append(
+                    loss_rec_img.item() +
+                    loss_kl.item()
+                )
+                # Jointly optimize everything
+                total_loss = \
+                    args.lam_rec * loss_rec_img + \
+                    args.lam_kl * loss_kl 
 
             if opt:
                 opt.zero_grad()
@@ -385,6 +404,9 @@ def train(args):
         lr=args.lr
     )
 
+    if args.use_scheduler:
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(opt_all)
+
     # Setup dataset
     if args.task == "push64vh":
         dataset = VisualHaptic(
@@ -472,13 +494,24 @@ def train(args):
                         device=device,
                         n_step=n_step_pred
                     )
+                if args.use_scheduler and epoch >= args.opt_vae_base_epochs:
+                    scheduler.step(summary_val['avg_total_l'])
 
             epoch_time = time.time() - tic
 
-            print((f"Epoch {epoch}/{args.n_epoch}: " 
-                f"Avg train loss: {summary_train['avg_total_l']}, "
-                f"Avg val loss: {summary_val['avg_total_l'] if args.val_split > 0 else 'N/A'}, "
-                f"Time per epoch: {epoch_time}"))
+            print((
+                f"Epoch {epoch}/{args.n_epoch}, Time per epoch: {epoch_time}: "
+                f"\n[Train] "
+                f"Total: {summary_train['avg_total_l']}, "
+                f"Image rec: {summary_train['avg_img_rec_l']}, "
+                f"Context rec: {summary_train['avg_context_rec_l'] if (args.reconstruct_context and args.context_modality != 'none') else 'N/A'}, "
+                f"KL: {summary_train['avg_kl_l']}"
+                f"\n[Val] "
+                f"Total: : {summary_val['avg_total_l'] if (args.val_split > 0) else 'N/A'}, "
+                f"Image rec: {summary_val['avg_img_rec_l'] if (args.val_split > 0) else 'N/A'}, "
+                f"Context rec: {summary_val['avg_context_rec_l'] if (args.val_split > 0 and args.reconstruct_context and args.context_modality != 'none') else 'N/A'}, "
+                f"KL: {summary_val['avg_kl_l'] if (args.val_split > 0) else 'N/A'}"
+            ))
 
             if not args.debug:
                 # Temporarily store tensorboard data

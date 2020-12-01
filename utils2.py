@@ -219,15 +219,16 @@ def load_vh_models(args, path=None, mode='eval', device='cuda:0'):
         stochastic=True
     ).to(device=device)
 
-    # nets["context_dec"] = CNNDecoder1D(
-    #     input=data_dim, 
-    #     latent_size=dim_z_rec, 
-    #     bn=args.use_batch_norm, 
-    #     drop=args.use_dropout, 
-    #     nl=nl, 
-    #     output_nl=output_nl, 
-    #     datalength=data_len
-    # )
+    if args.context_modality != "none":
+        nets["context_dec"] = CNNDecoder1D(
+            input=data_dim, 
+            latent_size=dim_z_rec, 
+            bn=args.use_batch_norm, 
+            drop=args.use_dropout, 
+            nl=nl, 
+            output_nl=output_nl, 
+            datalength=data_len
+        ).to(device=device)
 
     # Dynamics network
     if args.dyn_net == "linearmix":

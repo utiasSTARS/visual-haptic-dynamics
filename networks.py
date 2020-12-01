@@ -232,17 +232,17 @@ class CNNEncoder1D(nn.Module):
         if drop: self.layers.append(nn.Dropout(p=0.5))
         self.layers.append(nl)
 
-        self.layers.append(torch.nn.Conv1d(64, 128, kernel_size, stride=1, padding=1, bias=False))
-        if bn: self.layers.append(nn.BatchNorm1d(128, track_running_stats=True))
-        if drop: self.layers.append(nn.Dropout(p=0.5))
-        self.layers.append(nl)
+        # self.layers.append(torch.nn.Conv1d(64, 128, kernel_size, stride=1, padding=1, bias=False))
+        # if bn: self.layers.append(nn.BatchNorm1d(128, track_running_stats=True))
+        # if drop: self.layers.append(nn.Dropout(p=0.5))
+        # self.layers.append(nl)
 
-        self.layers.append(torch.nn.Conv1d(128, 256, kernel_size, stride=1, padding=1, bias=False))
-        if bn: self.layers.append(nn.BatchNorm1d(256, track_running_stats=True))
-        if drop: self.layers.append(nn.Dropout(p=0.5))
-        self.layers.append(nl)
+        # self.layers.append(torch.nn.Conv1d(128, 256, kernel_size, stride=1, padding=1, bias=False))
+        # if bn: self.layers.append(nn.BatchNorm1d(256, track_running_stats=True))
+        # if drop: self.layers.append(nn.Dropout(p=0.5))
+        # self.layers.append(nl)
 
-        n_size = 256 * datalength
+        n_size = 64 * datalength
 
         if self.stochastic:
             self.fc_mu = nn.Linear(n_size, latent_size)
@@ -277,17 +277,17 @@ class CNNDecoder1D(nn.Module):
         self.layers = nn.ModuleList()
 
         self.datalength = datalength
-        n_size = 256 * datalength
+        n_size = 64 * datalength
 
-        self.layers.append(nn.ConvTranspose1d(256, 128, kernel_size, stride=1, padding=1, bias=False))
-        if bn: self.layers.append(nn.BatchNorm1d(128))
-        if drop: self.layers.append(nn.Dropout(p=0.5))
-        self.layers.append(nl)
+        # self.layers.append(nn.ConvTranspose1d(256, 128, kernel_size, stride=1, padding=1, bias=False))
+        # if bn: self.layers.append(nn.BatchNorm1d(128))
+        # if drop: self.layers.append(nn.Dropout(p=0.5))
+        # self.layers.append(nl)
 
-        self.layers.append(nn.ConvTranspose1d(128, 64, kernel_size, stride=1, padding=1, bias=False))
-        if bn: self.layers.append(nn.BatchNorm1d(64, track_running_stats=True))
-        if drop: self.layers.append(nn.Dropout(p=0.5))
-        self.layers.append(nl)
+        # self.layers.append(nn.ConvTranspose1d(128, 64, kernel_size, stride=1, padding=1, bias=False))
+        # if bn: self.layers.append(nn.BatchNorm1d(64, track_running_stats=True))
+        # if drop: self.layers.append(nn.Dropout(p=0.5))
+        # self.layers.append(nl)
 
         self.layers.append(nn.ConvTranspose1d(64, 32, kernel_size, stride=1, padding=1, bias=False))
         if bn: self.layers.append(nn.BatchNorm1d(32, track_running_stats=True))
@@ -313,8 +313,7 @@ class CNNDecoder1D(nn.Module):
             x = self.nl(self.dropout(self.linear(x)))
         else:
             x = self.nl(self.linear(x))
-
-        x = x.reshape(-1, 256, self.datalength)
+        x = x.reshape(-1, 64, self.datalength)
         for i in range(len(self.layers)):
             x = self.layers[i](x)
 
