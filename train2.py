@@ -214,7 +214,7 @@ def setup_opt_iter(args):
                 return_all_hidden=True
             )
             p_z = {"z": z_t1_hat, "mu": mu_z_t1_hat, "cov": var_z_t1_hat}
-
+            
             loss_kl += torch_kl(
                 mu0=q_z["mu"],
                 cov0=q_z["cov"],

@@ -239,7 +239,8 @@ def load_vh_models(args, path=None, mode='eval', device='cuda:0'):
             bidirectional=args.use_bidirectional,
             net_type=args.rnn_net,
             K=args.K,
-            train_initial_hidden=args.train_initial_hidden
+            train_initial_hidden=args.train_initial_hidden,
+            learn_uncertainty=args.learn_uncertainty
         ).to(device=device)
     elif args.dyn_net == "nonlinear":
         nets["dyn"] = NonLinearSSM(

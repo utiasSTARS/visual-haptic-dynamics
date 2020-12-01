@@ -21,7 +21,7 @@ class LinearMixSSM(nn.Module):
     def __init__(
         self, dim_z, dim_u, hidden_size=128, 
         K=1, layers=1, bidirectional=False, 
-        net_type="lstm", learn_uncertainty=True,
+        net_type="lstm", learn_uncertainty=False,
         train_initial_hidden=False
     ):
         super(LinearMixSSM, self).__init__()
