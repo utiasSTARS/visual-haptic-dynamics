@@ -117,7 +117,7 @@ def common_init_weights(m):
         if m.bias is not None:
             nn.init.zeros_(m.bias)
         # consider also xavier_uniform_, kaiming_uniform_ , orthogonal_
-    elif type(m) == nn.Conv2d or type(m) == nn.Conv3d:
+    elif type(m) == nn.Conv1d or type(m) == nn.Conv2d or type(m) == nn.Conv3d:
         nn.init.kaiming_uniform_(m.weight)
         if m.bias is not None:
             m.bias.data.fill_(0)
@@ -126,6 +126,20 @@ def common_init_weights(m):
         nn.init.xavier_uniform_(m.weight_ih_l0)
         nn.init.zeros_(m.bias_hh_l0)
         nn.init.zeros_(m.bias_ih_l0)
+
+def weight_norm(m):
+    weight_norm_layers = [
+        nn.Linear, 
+        nn.Conv1d, 
+        nn.Conv2d, 
+        nn.Conv3d,
+        nn.ConvTranspose1d,
+        nn.ConvTranspose2d,
+        nn.ConvTranspose3d,
+    ]
+
+    if type(m) in weight_norm_layers:
+        torch.nn.utils.weight_norm(m)
 
 def load_vh_models(args, path=None, mode='eval', device='cuda:0'):
     """Load the trained visual haptic models based on args."""
@@ -193,6 +207,16 @@ def load_vh_models(args, path=None, mode='eval', device='cuda:0'):
         # Sample from previous step and recurrent hidden state
         z_dim_in += args.dim_z_context
 
+        nets["mix"] = FCNEncoderVAE(
+            dim_in=z_dim_in,
+            dim_out=args.dim_z,
+            bn=args.use_batch_norm,
+            drop=args.use_dropout,
+            nl=nl,
+            hidden_size=args.fc_hidden_size,
+            stochastic=True
+        ).to(device=device)
+
     dim_z_rec = args.dim_z
     if args.use_binary_ce:
         output_nl = None
@@ -207,16 +231,6 @@ def load_vh_models(args, path=None, mode='eval', device='cuda:0'):
         nl=nl,
         img_dim=args.dim_x[1],
         output_nl=output_nl
-    ).to(device=device)
-
-    nets["mix"] = FCNEncoderVAE(
-        dim_in=z_dim_in,
-        dim_out=args.dim_z,
-        bn=args.use_batch_norm,
-        drop=args.use_dropout,
-        nl=nl,
-        hidden_size=args.fc_hidden_size,
-        stochastic=True
     ).to(device=device)
 
     if args.context_modality != "none":
@@ -253,7 +267,7 @@ def load_vh_models(args, path=None, mode='eval', device='cuda:0'):
         ).to(device=device)
     else:
         raise NotImplementedError()
-    
+
     if path is not None:
         for k, model in nets.items():
             try:

@@ -1,6 +1,7 @@
 from utils2 import (
     set_seed_torch, 
     common_init_weights, 
+    weight_norm,
     Normalize,
     frame_stack,
     load_vh_models
@@ -332,6 +333,7 @@ def train(args):
 
     slurm_id = os.environ.get('SLURM_JOB_ID')
     if slurm_id is not None:
+        save_dir = save_dir + "_" + slurm_id
         user = os.environ.get('USER')
         checkpoint_dir = f"/checkpoint/{user}/{slurm_id}"
     else:
@@ -354,6 +356,10 @@ def train(args):
     if args.weight_init == 'custom':
         for k, v in nets.items():
             v.apply(common_init_weights)
+    
+    if args.use_weight_norm:
+        for k, v in nets.items():
+            v.apply(weight_norm)
 
     # Setup optimizers
     if args.opt == "adam":

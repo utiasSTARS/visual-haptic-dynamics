@@ -31,6 +31,7 @@ def parse_common_training_args(parser=None):
 
     # Network Settings                        
     parser.add_argument('--use_batch_norm', type=str2bool, default=True, help='Use batch normalization')
+    parser.add_argument('--use_weight_norm', type=str2bool, default=False, help='Use weight normalization')
     parser.add_argument('--use_dropout', type=str2bool, default=False, help='Use dropout')
     parser.add_argument('--weight_init', choices=['custom', 'default'], default='default',  help='Weight initialization')
 
