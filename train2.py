@@ -328,15 +328,13 @@ def train(args):
 
     device = torch.device(args.device)
 
-    # Keeping track of results and hyperparameters
-    save_dir = os.path.join(args.storage_base_path, args.comment)
-
     slurm_id = os.environ.get('SLURM_JOB_ID')
     if slurm_id is not None:
-        save_dir = slurm_id + "_" + save_dir
+        save_dir = os.path.join(args.storage_base_path, slurm_id + "_" + args.comment)
         user = os.environ.get('USER')
         checkpoint_dir = f"/checkpoint/{user}/{slurm_id}"
     else:
+        save_dir = os.path.join(args.storage_base_path, args.comment)
         checkpoint_dir = os.path.join(save_dir, "checkpoints/")
 
     if not args.debug:
