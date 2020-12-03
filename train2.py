@@ -38,7 +38,7 @@ from models import (
     ProductOfExperts
 )
 from datasets import VisualHaptic, ImgCached
-from losses import torch_kl
+from losses import torch_kl, kl
 
 def setup_opt_iter(args):
     # Loss functions
@@ -216,7 +216,7 @@ def setup_opt_iter(args):
             )
             p_z = {"z": z_t1_hat, "mu": mu_z_t1_hat, "cov": var_z_t1_hat}
             
-            loss_kl += torch_kl(
+            loss_kl += kl(
                 mu0=q_z["mu"],
                 cov0=q_z["cov"],
                 mu1=torch.cat((mu_z_i, p_z["mu"]), axis=0),
@@ -268,7 +268,7 @@ def setup_opt_iter(args):
                     u_nstep = u_nstep.reshape(l_nstep, n_nstep, *u_nstep.shape[1:])
                     h_t = h_t.reshape(l_nstep, n_nstep, *h_t.shape[1:])
 
-                    loss_kl += torch_kl(
+                    loss_kl += kl(
                         mu0=q_z_nstep["mu"],
                         cov0=q_z_nstep["cov"],
                         mu1=p_z_nstep["mu"],
@@ -333,7 +333,7 @@ def train(args):
 
     slurm_id = os.environ.get('SLURM_JOB_ID')
     if slurm_id is not None:
-        save_dir = save_dir + "_" + slurm_id
+        save_dir = slurm_id + "_" + save_dir
         user = os.environ.get('USER')
         checkpoint_dir = f"/checkpoint/{user}/{slurm_id}"
     else:
