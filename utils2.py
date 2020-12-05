@@ -268,6 +268,10 @@ def load_vh_models(args, path=None, mode='eval', device='cuda:0'):
     else:
         raise NotImplementedError()
 
+    if args.use_weight_norm:
+        for k, v in nets.items():
+            v.apply(weight_norm)
+
     if path is not None:
         for k, model in nets.items():
             try:

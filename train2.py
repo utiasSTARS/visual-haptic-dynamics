@@ -50,7 +50,7 @@ def setup_opt_iter(args):
     if args.context_modality != "none":
         poe = ProductOfExperts()
 
-    def opt_iter(loader, nets, device, opt=None, n_step=1):
+    def opt_iter(loader, nets, device, opt=None, n_step=1, kl_annealing_factor=1.0):
         """Single training epoch."""
         if opt:
             for k, v in nets.items():
@@ -298,7 +298,7 @@ def setup_opt_iter(args):
                 # Jointly optimize everything
                 total_loss = \
                     args.lam_rec * loss_rec_img + \
-                    args.lam_kl * loss_kl 
+                    kl_annealing_factor * args.lam_kl * loss_kl 
 
             if opt:
                 opt.zero_grad()
@@ -354,10 +354,6 @@ def train(args):
     if args.weight_init == 'custom':
         for k, v in nets.items():
             v.apply(common_init_weights)
-    
-    if args.use_weight_norm:
-        for k, v in nets.items():
-            v.apply(weight_norm)
 
     # Setup optimizers
     if args.opt == "adam":
@@ -474,11 +470,17 @@ def train(args):
         opt = opt_vae
         for epoch in range(checkpoint_epochs + 1, args.n_epoch + 1):
             tic = time.time()
+
+            # Optimizer used
             if epoch >= args.opt_vae_base_epochs:
                 opt = opt_all
             elif epoch >= args.opt_vae_epochs:
                 opt = opt_vae_base
+
+            # Training iteration settings
             n_step_pred = bisect.bisect_left(n_step_lookup, epoch) + 1
+            if args.n_annealing_epoch > 0:
+                annealing_factor = max(epoch / args.n_annealing_epoch, 1.0)
 
             # Train for one epoch        
             summary_train = opt_iter(
@@ -486,7 +488,8 @@ def train(args):
                 nets=nets, 
                 device=device,
                 opt=opt,
-                n_step=n_step_pred
+                n_step=n_step_pred,
+                kl_annealing_factor=annealing_factor
             )
 
             # Calculate validtion loss
