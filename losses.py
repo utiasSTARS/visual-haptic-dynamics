@@ -3,7 +3,7 @@ Custom losses.
 """
 import torch
 
-def kl(mu0, cov0, mu1, cov1, eps=1e-5):
+def kl(mu0, cov0, mu1, cov1, eps=1e-8):
     """
     KL(N0 || N1), Kl divergence between two gaussians N0 ~ N(mu0, cov0) and 
     N1 ~ N(mu1, cov1), where cov0 and cov 1 are specifically diagonal matrices.
@@ -21,8 +21,7 @@ def kl(mu0, cov0, mu1, cov1, eps=1e-5):
     a = sumf(ivar1 * var0) # (bs,)
     b = sumf((mu1 - mu0)**2 * ivar1)
     c = -k
-    d = torch.log(prodf(var1) / prodf(var0))
-
+    d = sumf(torch.log(var1)) - sumf(torch.log(var0))
     loss_kl = torch.sum(0.5 * (a+b+c+d))
     return loss_kl
 
