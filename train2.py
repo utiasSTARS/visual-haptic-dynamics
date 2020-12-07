@@ -103,6 +103,7 @@ def setup_opt_iter(args):
 
             # 1. Encoding q(z) distribution
             z_img, mu_z_img, logvar_z_img = nets["img_enc"](x_ll['img'])
+
             if args.context_modality != "none":
                 _, mu_z_context, logvar_z_context = nets["context_enc"](x_ll["context"])
                 # Mix modalities with product of experts
@@ -227,7 +228,7 @@ def setup_opt_iter(args):
             length = p_z["mu"].shape[0]
 
             # N-step transition distributions
-            #XXX: This doesn't work with LSTM
+            # XXX: This doesn't work with LSTM
             if n_step > 1:
                 # New references for convenience
                 p_z_nstep = p_z
@@ -289,7 +290,7 @@ def setup_opt_iter(args):
                 total_loss = \
                     args.lam_rec * loss_rec_img + \
                     args.lam_rec * loss_rec_context + \
-                    args.lam_kl * loss_kl 
+                    kl_annealing_factor * args.lam_kl * loss_kl 
             else:
                 running_stats['total_l'].append(
                     loss_rec_img.item() +
@@ -480,8 +481,10 @@ def train(args):
             # Training iteration settings
             n_step_pred = bisect.bisect_left(n_step_lookup, epoch) + 1
             if args.n_annealing_epoch > 0:
-                annealing_factor = max(epoch / args.n_annealing_epoch, 1.0)
-
+                annealing_factor = min(epoch / args.n_annealing_epoch, 1.0)
+            else:
+                annealing_factor = 1.0
+                
             # Train for one epoch        
             summary_train = opt_iter(
                 loader=train_loader, 
