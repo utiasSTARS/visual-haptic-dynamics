@@ -176,14 +176,14 @@ def setup_opt_iter(args):
             x_hat_img = nets["img_dec"](q_z["z"])
             loss_rec_img = (torch.sum(
                 loss_REC(x_hat_img, x_ll['img'])
-            )) / n
+            )) / (n * l)
             running_stats['img_rec_l'].append(loss_rec_img.item())
 
             if args.context_modality != "none" and args.reconstruct_context:
                 x_hat_context = nets["context_dec"](q_z["z"])
                 loss_rec_context = (torch.sum(
                     loss_REC(x_hat_context, x_ll['context'])
-                )) / n
+                )) / (n * l)
                 running_stats['context_rec_l'].append(loss_rec_context.item())
 
             # 3. Dynamics constraint with KL
@@ -222,7 +222,11 @@ def setup_opt_iter(args):
                 cov0=q_z["cov"],
                 mu1=torch.cat((mu_z_i, p_z["mu"]), axis=0),
                 cov1=torch.cat((var_z_i, p_z["cov"]), axis=0)
-            ) / n
+            ) / (n * l)
+            # print("mu", torch.min(q_z["mu"]), torch.max(q_z["mu"]))
+            # print("cov",torch.min(q_z["cov"]), torch.max(q_z["cov"]))
+            # print("mu", torch.min(p_z["mu"]), torch.max(p_z["mu"]))
+            # print("cov", torch.min(p_z["cov"]), torch.max(p_z["cov"]))
 
             # Original length before calculating n-step predictions
             length = p_z["mu"].shape[0]
@@ -274,7 +278,7 @@ def setup_opt_iter(args):
                         cov0=q_z_nstep["cov"],
                         mu1=p_z_nstep["mu"],
                         cov1=p_z_nstep["cov"]
-                    ) / n
+                    ) / (n * l)
 
             running_stats['kl_l'].append(
                 loss_kl.item()
