@@ -240,7 +240,7 @@ def load_vh_models(args, path=None, mode='eval', device='cuda:0'):
             bn=args.use_batch_norm, 
             drop=args.use_dropout, 
             nl=nl, 
-            output_nl=output_nl, 
+            output_nl=None, 
             datalength=data_len
         ).to(device=device)
 
