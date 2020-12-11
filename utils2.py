@@ -126,7 +126,7 @@ def common_init_weights(m):
         nn.init.xavier_uniform_(m.weight_ih_l0)
         nn.init.zeros_(m.bias_hh_l0)
         nn.init.zeros_(m.bias_ih_l0)
-
+        
 def weight_norm(m):
     weight_norm_layers = [
         nn.Linear, 
@@ -233,7 +233,7 @@ def load_vh_models(args, path=None, mode='eval', device='cuda:0'):
         output_nl=output_nl
     ).to(device=device)
 
-    if args.context_modality != "none":
+    if args.context_modality != "none" and args.reconstruct_context:
         nets["context_dec"] = CNNDecoder1D(
             input=data_dim, 
             latent_size=dim_z_rec, 

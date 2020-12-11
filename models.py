@@ -320,7 +320,7 @@ class ProductOfExperts(nn.Module):
     mu: (bs x M x D)
     logvar: (bs x M X D)
     """
-    def forward(self, mu, logvar, eps=1e-8, prior=True):
+    def forward(self, mu, logvar, eps=1e-8, prior=False):
         if prior:
             bs, d = mu.shape[0], mu.shape[-1]
             device = mu.device
@@ -332,11 +332,11 @@ class ProductOfExperts(nn.Module):
                 logvar, 
                 torch.zeros((bs, 1, d), requires_grad=False, device=device)
             ), axis=1)
-        
-        logvar_pd = torch.sum(logvar, dim=1)
-        var_pd = torch.exp(logvar_pd) + eps
 
         T = torch.exp(-logvar)
+        var_pd = 1 / torch.sum(T, dim=1)
+        logvar_pd = torch.log(var_pd + eps)
+
         mu_pd = torch.sum(mu * T, dim=1) * var_pd
 
         return mu_pd, logvar_pd

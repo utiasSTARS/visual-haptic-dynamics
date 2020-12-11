@@ -91,7 +91,7 @@ class FullyConvDecoderVAE(nn.Module):
             raise NotImplementedError()
 
         self.layers.append(nn.ConvTranspose2d(n_size, 128, 5, stride=2, bias=False))
-        if bn: self.layers.append(nn.BatchNorm2d(128))
+        if bn: self.layers.append(nn.BatchNorm2d(128, track_running_stats=True))
         if drop: self.layers.append(nn.Dropout(p=0.5))
         self.layers.append(nl)
 
@@ -125,7 +125,7 @@ class FullyConvDecoderVAE(nn.Module):
             self.layers.append(output_nl)
 
         self.linear = nn.Linear(latent_size, n_size, bias=False)
-        self.batchn = nn.BatchNorm1d(n_size)
+        self.batchn = nn.BatchNorm1d(n_size, track_running_stats=True)
         self.dropout = nn.Dropout(p=0.5)
         self.nl = nl
         
@@ -277,7 +277,7 @@ class CNNDecoder1D(nn.Module):
         n_size = 256 * datalength
 
         self.layers.append(nn.ConvTranspose1d(256, 128, kernel_size, stride=1, padding=1, bias=False))
-        if bn: self.layers.append(nn.BatchNorm1d(128))
+        if bn: self.layers.append(nn.BatchNorm1d(128, track_running_stats=True))
         if drop: self.layers.append(nn.Dropout(p=0.5))
         self.layers.append(nl)
 
@@ -297,7 +297,7 @@ class CNNDecoder1D(nn.Module):
             self.layers.append(output_nl)
 
         self.linear = nn.Linear(latent_size, n_size, bias=False)
-        self.batchn = nn.BatchNorm1d(n_size)
+        self.batchn = nn.BatchNorm1d(n_size, track_running_stats=True)
         self.dropout = nn.Dropout(p=0.5)
         self.nl = nl
         
