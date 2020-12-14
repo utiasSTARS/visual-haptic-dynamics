@@ -106,6 +106,7 @@ def setup_opt_iter(args):
 
             if args.context_modality != "none":
                 _, mu_z_context, logvar_z_context = nets["context_enc"](x_ll["context"])
+
                 # Mix modalities with product of experts
                 mu_z_obs_enc, logvar_z_obs_enc  = poe(
                     mu=torch.cat((
@@ -223,10 +224,6 @@ def setup_opt_iter(args):
                 mu1=torch.cat((mu_z_i, p_z["mu"]), axis=0),
                 cov1=torch.cat((var_z_i, p_z["cov"]), axis=0)
             ) / (n * l)
-            # print("mu", torch.min(q_z["mu"]), torch.max(q_z["mu"]))
-            # print("cov",torch.min(q_z["cov"]), torch.max(q_z["cov"]))
-            # print("mu", torch.min(p_z["mu"]), torch.max(p_z["mu"]))
-            # print("cov", torch.min(p_z["cov"]), torch.max(p_z["cov"]))
 
             # Original length before calculating n-step predictions
             length = p_z["mu"].shape[0]
@@ -461,6 +458,7 @@ def train(args):
         opt_vae.load_state_dict(checkpoint['opt_vae'])
         opt_vae_base.load_state_dict(checkpoint['opt_vae_base'])
         opt_all.load_state_dict(checkpoint['opt_all'])
+        lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
         checkpoint_epochs = checkpoint['epoch']
         print(f"Resuming training from checkpoint at epoch {checkpoint_epochs}")
         assert (checkpoint_epochs < args.n_epoch), \
@@ -548,6 +546,7 @@ def train(args):
                         'opt_all': opt_all.state_dict(),
                         'opt_vae': opt_vae.state_dict(),
                         'opt_vae_base': opt_vae_base.state_dict(),
+                        'lr_scheduler': scheduler.state_dict(),
                         'epoch': epoch}, 
                         checkpoint_dir + "checkpoint.pth"
                     )
