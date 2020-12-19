@@ -88,16 +88,13 @@ def setup_opt_iter(args):
                 if not args.use_context_frame_stack:
                     x["context"] = x["context"][:, args.frame_stacks:]
 
-            # Randomly and uniformly sample?
-            # ll = np.random.randint(ep_len-1)
-
             # Train from index 0 all the time
-            ll = 0
-            x_ll = {}
+            range_ll = range(0, ep_len)
 
+            x_ll = {}
             for k in x:
-                x_ll[k] = x[k][:, ll:]
-            u_ll = u[:, ll:]
+                x_ll[k] = x[k][:, range_ll]
+            u_ll = u[:, range_ll]
             n, l = x_ll['img'].shape[0], x_ll['img'].shape[1]
             x_ll = {k:v.reshape(-1, *v.shape[2:]) for k, v in x_ll.items()}
 
@@ -458,7 +455,8 @@ def train(args):
         opt_vae.load_state_dict(checkpoint['opt_vae'])
         opt_vae_base.load_state_dict(checkpoint['opt_vae_base'])
         opt_all.load_state_dict(checkpoint['opt_all'])
-        lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
+        if args.use_scheduler:
+            scheduler.load_state_dict(checkpoint['lr_scheduler'])
         checkpoint_epochs = checkpoint['epoch']
         print(f"Resuming training from checkpoint at epoch {checkpoint_epochs}")
         assert (checkpoint_epochs < args.n_epoch), \
@@ -466,7 +464,6 @@ def train(args):
             than the already trained checkpoint epochs {checkpoint_epochs}"""
     
     opt_iter = setup_opt_iter(args)
-    n_step_lookup = list(args.opt_n_step_pred_epochs)
 
     # Training loop
     try:
@@ -481,7 +478,7 @@ def train(args):
                 opt = opt_vae_base
 
             # Training iteration settings
-            n_step_pred = bisect.bisect_left(n_step_lookup, epoch) + 1
+            n_step_pred = bisect.bisect_left(args.opt_n_step_pred_epochs, epoch) + 1
             if args.n_annealing_epoch > 0:
                 annealing_factor = min(epoch / args.n_annealing_epoch, 1.0)
             else:
@@ -504,7 +501,8 @@ def train(args):
                         loader=val_loader,
                         nets=nets,
                         device=device,
-                        n_step=n_step_pred
+                        n_step=n_step_pred,
+                        kl_annealing_factor=annealing_factor
                     )
                 if args.use_scheduler and epoch >= args.opt_vae_base_epochs:
                     scheduler.step(summary_val['avg_total_l'])
@@ -541,13 +539,17 @@ def train(args):
                     tb_data = []
 
                     # Save model at intermittent checkpoints 
-                    torch.save(
-                        {**{k: v.state_dict() for k, v in nets.items()},
+                    save_dict = {
+                        **{k: v.state_dict() for k, v in nets.items()},
                         'opt_all': opt_all.state_dict(),
                         'opt_vae': opt_vae.state_dict(),
                         'opt_vae_base': opt_vae_base.state_dict(),
-                        'lr_scheduler': scheduler.state_dict(),
-                        'epoch': epoch}, 
+                        'epoch': epoch
+                    }
+                    if args.use_scheduler:
+                        save_dict['lr_scheduler'] = scheduler.state_dict()
+                    torch.save(
+                        save_dict, 
                         checkpoint_dir + "checkpoint.pth"
                     )
     finally:
@@ -557,7 +559,7 @@ def train(args):
                 torch.save(v.state_dict(), save_dir + f"/{k}.pth")
             if args.val_split > 0:
                 with open(save_dir + "/val_idx.pkl", "wb") as f:
-                    pkl.dump(dataset_idx[split:], f)
+                    pkl.dump(dataset_idx[:split], f)
             writer.close()
 
 def main():
