@@ -145,7 +145,16 @@ class FullyConvDecoderVAE(nn.Module):
 
 
 class FCNEncoderVAE(nn.Module):
-    def __init__(self, dim_in, dim_out, bn=False, drop=False, nl=nn.ReLU(), hidden_size=800, stochastic=True):
+    def __init__(
+        self, 
+        dim_in, 
+        dim_out, 
+        bn=False, 
+        drop=False, 
+        nl=nn.ReLU(), 
+        hidden_size=256, 
+        stochastic=True
+    ):
         super(FCNEncoderVAE, self).__init__()
         self.flatten = Flatten()
         self.stochastic = stochastic
@@ -323,11 +332,13 @@ class RNNEncoder(nn.Module):
         dim_out, 
         hidden_size=256,
         net_type="gru",
-        train_initial_hidden=False
+        train_initial_hidden=False,
+        stochastic=False
     ):
         self.train_initial_hidden = train_initial_hidden
         self.net_type = net_type
         super(RNNEncoder, self).__init__()
+        self.stochastic = stochastic
         if net_type == "gru":
             self.rnn = nn.GRU(
                 input_size=dim_in, 
@@ -348,7 +359,11 @@ class RNNEncoder(nn.Module):
                 self.h_0 = nn.Parameter(torch.randn(1, 1, hidden_size))
                 self.c_0 = nn.Parameter(torch.randn(1, 1, hidden_size))
 
-        self.fc = torch.nn.Linear(hidden_size, dim_out)
+        if self.stochastic:
+            self.fc_mu = nn.Linear(hidden_size, dim_out)
+            self.fc_logvar = nn.Linear(hidden_size, dim_out)
+        else:
+            self.fc = torch.nn.Linear(hidden_size, dim_out)
             
     def forward(self, x, h=None):
         l, n = x.shape[0], x.shape[1]
@@ -366,6 +381,19 @@ class RNNEncoder(nn.Module):
                 h_t, h_n = self.rnn(x)
         else:
             h_t, h_n = self.rnn(x, h)
-        out = self.fc(h_t.reshape(-1, *h_t.shape[2:]))
-        out = out.reshape(l, n, *out.shape[1:])
-        return out, h_n
+
+        if self.stochastic:
+            mu = self.fc_mu(h_t.reshape(-1, *h_t.shape[2:]))
+            logvar = self.fc_logvar(h_t.reshape(-1, *h_t.shape[2:]))
+            # Reparameterize
+            std = torch.exp(logvar / 2.0)
+            eps = torch.randn_like(std)
+            z = mu + eps * std
+            z = z.reshape(l, n, *z.shape[1:])
+            mu = mu.reshape(l, n, *mu.shape[1:])
+            logvar = logvar.reshape(l, n, *logvar.shape[1:])
+            return z, mu, logvar, h_n
+        else:
+            out = self.fc(h_t.reshape(-1, *h_t.shape[2:]))
+            out = out.reshape(l, n, *out.shape[1:])
+            return out, h_n

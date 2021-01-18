@@ -60,13 +60,14 @@ def parse_vh_training_args():
     parser.add_argument('--context_modality', choices=['none', 'arm', 'ft', 'joint'], default='none', help='Context modality')
     parser.add_argument('--context_seq_len', type=int, default=32, help='Sequence length of high frequency data per image')
     parser.add_argument('--use_context_frame_stack', type=str2bool, default=False, help='Stack context modality')
-    parser.add_argument('--context', choices=['none', 'ssm', 'rssm'], default='none', help='Extra information for recognition network')
-    parser.add_argument('--ft_normalization', type=int, default=100.0, help='Normalize ft data by this')
+    parser.add_argument('--inference_network', choices=['none', 'ssm', 'rssm'], default='none', help='Extra information for recognition network')
+    parser.add_argument('--ft_normalization', type=float, default=100.0, help='Normalize ft data by this')
     parser.add_argument('--dim_arm', type=int, default=6, help='Feature length of arm sensors')
     parser.add_argument('--dim_ft', type=int, default=6, help='Feature length of ft data')
     parser.add_argument('--reconstruct_context', type=str2bool, default=False, help='Reconstruct context modality')
     parser.add_argument('--use_scheduler', type=str2bool, default=False, help='Use learning rate scheduler')
     parser.add_argument('--learn_uncertainty', type=str2bool, default=False, help='Learn transition uncertainty')
+    parser.add_argument('--use_prior_expert', type=str2bool, default=False, help='Use prior expert in poe')
 
     # Training Settings
     parser.add_argument('--lr', type=float, default= 3e-4, help='Learning rate')
