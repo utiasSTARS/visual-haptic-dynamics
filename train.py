@@ -39,15 +39,155 @@ from models import (
 from datasets import VisualHaptic, ImgCached
 from losses import torch_kl, kl
 
+def encode(nets, args, x_ll, u_ll, device):
+    if args.context_modality != "none":
+        poe = ProductOfExperts()
+
+    # Batch and sequence length
+    n, l = u_ll.shape[0], u_ll.shape[1]
+
+    # Final encoding distribution
+    q_z = {"z": None, "mu": None, "cov": None}
+
+    # 1.a. Encoding q(z) distribution for image
+    q_z_img = {"z": None, "mu": None, "logvar": None}
+    if args.inference_network == "none":
+        q_z_img["z"], q_z_img["mu"], q_z_img["logvar"] = nets["img_enc"](x_ll['img'])
+    elif args.inference_network == "ssm":
+        #TODO: SSM implementation
+        pass
+    elif args.inference_network == "rssm":
+        z_img_inp = nets["img_enc"](x_ll['img'])
+        z_img_inp = z_img_inp.reshape(n, l, *z_img_inp.shape[1:]).transpose(1,0)
+        q_z_img["z"], q_z_img["mu"], q_z_img["logvar"], _ = nets["img_rssm_enc"](z_img_inp)
+        q_z_img = {k:v.transpose(1,0).reshape(-1, *v.shape[2:]) for k, v in q_z_img.items()}
+    
+    # 1.b. Encoding q(z) distribution for extra modalities
+    if args.context_modality != "none":
+        q_z_context = {"z": None, "mu": None, "logvar": None}
+        if args.inference_network == "none":
+            q_z_context["z"], q_z_context["mu"], q_z_context["logvar"] = nets["context_enc"](x_ll["context"])
+        elif args.inference_network == "ssm":
+            #TODO: SSM implementation
+            pass
+        elif args.inference_network == "rssm":
+            z_context_inp  = nets["context_enc"](x_ll["context"])
+            z_context_inp = z_context_inp.reshape(n, l, *z_context_inp.shape[1:]).transpose(1,0)
+            q_z_context["z"], q_z_context["mu"], q_z_context["logvar"], _ = nets["context_rssm_enc"](z_context_inp)
+            q_z_context = {k:v.transpose(1,0).reshape(-1, *v.shape[2:]) for k, v in q_z_context.items()}
+        
+        # Include prior expert factorization
+        if args.use_prior_expert:
+            # Split up
+            q_z_img = {k:v.reshape(n, l, *v.shape[1:]).transpose(1,0) for k, v in q_z_img.items()}
+            q_z_context = {k:v.reshape(n, l, *v.shape[1:]).transpose(1,0) for k, v in q_z_context.items()}
+
+            # Temp roll out variables
+            z_obs_roll = torch.empty((n, l, args.dim_z), device=device)
+            mu_z_obs_roll = torch.empty((n, l, args.dim_z), device=device)
+            logvar_z_obs_roll = torch.empty((n, l, args.dim_z), device=device)
+
+            # Prior transition distributions with roll out
+            p_z = {
+                "z": torch.empty((l - 1, n, args.dim_z), device=device), 
+                "mu": torch.empty((l - 1, n, args.dim_z), device=device), 
+                "cov": torch.empty((l - 1, n, args.dim_z, args.dim_z), device=device)
+            }
+            h_t = torch.empty((l - 1, n, args.rnn_hidden_size), device=device)
+
+            # Initial distribution as first prior
+            mu_z_prior = torch.zeros(
+                args.dim_z, 
+                requires_grad=False, 
+                device=device
+            ).repeat(n, 1)
+
+            logvar_z_prior = torch.log(20.00 * torch.ones(
+                args.dim_z, 
+                requires_grad=False, 
+                device=device
+            ).repeat(n, 1))
+
+            h_i = None
+            u_ll = u_ll.transpose(1,0)
+            for ii in range(l):
+                # Mix modalities with product of experts
+                mu_z_obs_l, logvar_z_obs_l  = poe(
+                    mu=torch.cat((
+                        q_z_img["mu"][ii].unsqueeze(1), 
+                        q_z_context["mu"][ii].unsqueeze(1),
+                        mu_z_prior.unsqueeze(1)
+                    ), axis=1),
+                    logvar=torch.cat((
+                        q_z_img["logvar"][ii].unsqueeze(1), 
+                        q_z_context["logvar"][ii].unsqueeze(1),
+                        logvar_z_prior.unsqueeze(1)
+                    ), axis=1), 
+                )
+                std_z_obs_l = torch.exp(logvar_z_obs_l / 2.0)
+                eps = torch.randn_like(std_z_obs_l)
+                z_obs_l = mu_z_obs_l + eps * std_z_obs_l
+
+                z_obs_roll[:, ii] = z_obs_l
+                mu_z_obs_roll[:, ii] = mu_z_obs_l
+                logvar_z_obs_roll[:, ii] = logvar_z_obs_l
+                var_z_obs_l = torch.diag_embed(torch.exp(logvar_z_obs_l))
+
+                # Forward step
+                if (ii + 1) < l: 
+                    z_t1_single, mu_z_t1_single, var_z_t1_single, (h_t1_single, h_next) = nets["dyn"](
+                        z_t=z_obs_l.unsqueeze(0), 
+                        mu_t=mu_z_obs_l.unsqueeze(0), 
+                        var_t=var_z_obs_l.unsqueeze(0), 
+                        u=u_ll[ii + 1].unsqueeze(0),
+                        h_0=h_i,
+                        return_all_hidden=True
+                    )
+                    p_z["z"][ii] = z_t1_single[0] 
+                    p_z["mu"][ii] = mu_z_t1_single[0] 
+                    p_z["cov"][ii] = var_z_t1_single[0] 
+                    h_t[ii] = h_t1_single[0]
+
+                    # Reinitialize 
+                    mu_z_prior = mu_z_t1_single[0]
+                    logvar_z_prior = torch.log(torch.diagonal(var_z_t1_single[0], dim1=-2, dim2=-1))
+                    h_i = h_next
+
+            q_z["z"] = z_obs_roll.reshape(-1, *z_obs_roll.shape[2:])
+            q_z["mu"] = mu_z_obs_roll.reshape(-1, *mu_z_obs_roll.shape[2:])
+            q_z["cov"] = torch.diag_embed(torch.exp(logvar_z_obs_roll.reshape(-1, *logvar_z_obs_roll.shape[2:])))
+            return q_z, p_z
+        else:
+            # Mix modalities with product of experts
+            mu_z_obs_enc, logvar_z_obs_enc  = poe(
+                mu=torch.cat((
+                    q_z_img["mu"].unsqueeze(1), 
+                    q_z_context["mu"].unsqueeze(1)
+                ), axis=1),
+                logvar=torch.cat((
+                    q_z_img["logvar"].unsqueeze(1), 
+                    q_z_context["logvar"].unsqueeze(1)
+                ), axis=1) 
+            )
+            std_z_obs_enc = torch.exp(logvar_z_obs_enc / 2.0)
+            eps = torch.randn_like(std_z_obs_enc)
+
+            q_z["z"] = mu_z_obs_enc + eps * std_z_obs_enc
+            q_z["mu"] = mu_z_obs_enc
+            q_z["cov"] = torch.diag_embed(torch.exp(logvar_z_obs_enc))
+            return q_z
+    else:
+        q_z["z"] = q_z_img["z"]
+        q_z["mu"] = q_z_img["mu"]
+        q_z["cov"] = torch.diag_embed(torch.exp(q_z_img["logvar"]))
+        return q_z 
+
 def setup_opt_iter(args):
     # Loss functions
     if args.use_binary_ce:
         loss_REC = nn.BCEWithLogitsLoss(reduction='none')
     else:
         loss_REC = nn.MSELoss(reduction='none')
-    
-    if args.context_modality != "none":
-        poe = ProductOfExperts()
 
     def opt_iter(loader, nets, device, opt=None, n_step=1, kl_annealing_factor=1.0):
         """Single training epoch."""
@@ -83,9 +223,9 @@ def setup_opt_iter(args):
                 x["context"] = x["context"].float().to(device=device) # (n, l, f, 6)
                 if args.use_context_frame_stack:
                     x['context'] = frame_stack(x['context'], frames=args.frame_stacks)
-                x["context"] = x["context"].transpose(-1, -2)
-                if not args.use_context_frame_stack:
+                else:
                     x["context"] = x["context"][:, args.frame_stacks:]
+                x["context"] = x["context"].transpose(-1, -2)
 
             # Train from index 0 all the time
             range_ll = range(0, ep_len)
@@ -95,139 +235,11 @@ def setup_opt_iter(args):
             u_ll = u[:, range_ll]
             n, l = x_ll['img'].shape[0], x_ll['img'].shape[1]
             x_ll = {k:v.reshape(-1, *v.shape[2:]) for k, v in x_ll.items()}
-
-            # Final encoding distribution
-            q_z = {"z": None, "mu": None, "cov": None}
-
-            # 1.a. Encoding q(z) distribution for image
-            q_z_img = {"z": None, "mu": None, "logvar": None}
-            if args.inference_network == "none":
-                q_z_img["z"], q_z_img["mu"], q_z_img["logvar"] = nets["img_enc"](x_ll['img'])
-            elif args.inference_network == "ssm":
-                #TODO: SSM implementation
-                pass
-            elif args.inference_network == "rssm":
-                z_img_inp = nets["img_enc"](x_ll['img'])
-                z_img_inp = z_img_inp.reshape(n, l, *z_img_inp.shape[1:]).transpose(1,0)
-                q_z_img["z"], q_z_img["mu"], q_z_img["logvar"], _ = nets["img_rssm_enc"](z_img_inp)
-                q_z_img = {k:v.transpose(1,0).reshape(-1, *v.shape[2:]) for k, v in q_z_img.items()}
-            
-            # 1.b. Encoding q(z) distribution for extra modalities
-            if args.context_modality != "none":
-                q_z_context = {"z": None, "mu": None, "logvar": None}
-                if args.inference_network == "none":
-                    q_z_context["z"], q_z_context["mu"], q_z_context["logvar"] = nets["context_enc"](x_ll["context"])
-                elif args.inference_network == "ssm":
-                    #TODO: SSM implementation
-                    pass
-                elif args.inference_network == "rssm":
-                    z_context_inp  = nets["context_enc"](x_ll["context"])
-                    z_context_inp = z_context_inp.reshape(n, l, *z_context_inp.shape[1:]).transpose(1,0)
-                    q_z_context["z"], q_z_context["mu"], q_z_context["logvar"], _ = nets["context_rssm_enc"](z_context_inp)
-                    q_z_context = {k:v.transpose(1,0).reshape(-1, *v.shape[2:]) for k, v in q_z_context.items()}
-                
-                # Include prior expert factorization
-                if args.use_prior_expert:
-                    # Split up
-                    q_z_img = {k:v.reshape(n, l, *v.shape[1:]).transpose(1,0) for k, v in q_z_img.items()}
-                    q_z_context = {k:v.reshape(n, l, *v.shape[1:]).transpose(1,0) for k, v in q_z_context.items()}
-
-                    # Temp roll out variables
-                    z_obs_roll = torch.empty((n, l, args.dim_z), device=device)
-                    mu_z_obs_roll = torch.empty((n, l, args.dim_z), device=device)
-                    logvar_z_obs_roll = torch.empty((n, l, args.dim_z), device=device)
-
-                    # Prior transition distributions with roll out
-                    p_z = {
-                        "z": torch.empty((l - 1, n, args.dim_z), device=device), 
-                        "mu": torch.empty((l - 1, n, args.dim_z), device=device), 
-                        "cov": torch.empty((l - 1, n, args.dim_z, args.dim_z), device=device)
-                    }
-                    h_t = torch.empty((l - 1, n, args.rnn_hidden_size), device=device)
-
-                    # Initial distribution as first prior
-                    mu_z_prior = torch.zeros(
-                        args.dim_z, 
-                        requires_grad=False, 
-                        device=device
-                    ).repeat(n, 1)
-
-                    logvar_z_prior = torch.log(20.00 * torch.ones(
-                        args.dim_z, 
-                        requires_grad=False, 
-                        device=device
-                    ).repeat(n, 1))
-
-                    h_i = None
-                    u_ll = u_ll.transpose(1,0)
-                    for ii in range(l):
-                        # Mix modalities with product of experts
-                        mu_z_obs_l, logvar_z_obs_l  = poe(
-                            mu=torch.cat((
-                                q_z_img["mu"][ii].unsqueeze(1), 
-                                q_z_context["mu"][ii].unsqueeze(1),
-                                mu_z_prior.unsqueeze(1)
-                            ), axis=1),
-                            logvar=torch.cat((
-                                q_z_img["logvar"][ii].unsqueeze(1), 
-                                q_z_context["logvar"][ii].unsqueeze(1),
-                                logvar_z_prior.unsqueeze(1)
-                            ), axis=1), 
-                        )
-                        std_z_obs_l = torch.exp(logvar_z_obs_l / 2.0)
-                        eps = torch.randn_like(std_z_obs_l)
-                        z_obs_l = mu_z_obs_l + eps * std_z_obs_l
-
-                        z_obs_roll[:, ii] = z_obs_l
-                        mu_z_obs_roll[:, ii] = mu_z_obs_l
-                        logvar_z_obs_roll[:, ii] = logvar_z_obs_l
-                        var_z_obs_l = torch.diag_embed(torch.exp(logvar_z_obs_l))
-
-                        # Forward step
-                        if (ii + 1) < l: 
-                            z_t1_single, mu_z_t1_single, var_z_t1_single, (h_t1_single, h_next) = nets["dyn"](
-                                z_t=z_obs_l.unsqueeze(0), 
-                                mu_t=mu_z_obs_l.unsqueeze(0), 
-                                var_t=var_z_obs_l.unsqueeze(0), 
-                                u=u_ll[ii + 1].unsqueeze(0),
-                                h_0=h_i,
-                                return_all_hidden=True
-                            )
-                            p_z["z"][ii] = z_t1_single[0] 
-                            p_z["mu"][ii] = mu_z_t1_single[0] 
-                            p_z["cov"][ii] = var_z_t1_single[0] 
-                            h_t[ii] = h_t1_single[0]
-
-                            # Reinitialize 
-                            mu_z_prior = mu_z_t1_single[0]
-                            logvar_z_prior = torch.log(torch.diagonal(var_z_t1_single[0], dim1=-2, dim2=-1))
-                            h_i = h_next
-
-                    q_z["z"] = z_obs_roll.reshape(-1, *z_obs_roll.shape[2:])
-                    q_z["mu"] = mu_z_obs_roll.reshape(-1, *mu_z_obs_roll.shape[2:])
-                    q_z["cov"] = torch.diag_embed(torch.exp(logvar_z_obs_roll.reshape(-1, *logvar_z_obs_roll.shape[2:])))
-                else:
-                    # Mix modalities with product of experts
-                    mu_z_obs_enc, logvar_z_obs_enc  = poe(
-                        mu=torch.cat((
-                            q_z_img["mu"].unsqueeze(1), 
-                            q_z_context["mu"].unsqueeze(1)
-                        ), axis=1),
-                        logvar=torch.cat((
-                            q_z_img["logvar"].unsqueeze(1), 
-                            q_z_context["logvar"].unsqueeze(1)
-                        ), axis=1) 
-                    )
-                    std_z_obs_enc = torch.exp(logvar_z_obs_enc / 2.0)
-                    eps = torch.randn_like(std_z_obs_enc)
-
-                    q_z["z"] = mu_z_obs_enc + eps * std_z_obs_enc
-                    q_z["mu"] = mu_z_obs_enc
-                    q_z["cov"] = torch.diag_embed(torch.exp(logvar_z_obs_enc))
+            print(x_ll["img"].shape, u_ll.shape)
+            if args.use_prior_expert:
+                q_z, p_z = encode(nets, args, x_ll, u_ll, device=device)
             else:
-                q_z["z"] = q_z_img["z"]
-                q_z["mu"] = q_z_img["mu"]
-                q_z["cov"] = torch.diag_embed(torch.exp(q_z_img["logvar"]))
+                q_z = encode(nets, args, x_ll, u_ll, device=device)
 
             # 2. Reconstruction
             x_hat_img = nets["img_dec"](q_z["z"])
