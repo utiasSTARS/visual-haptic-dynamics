@@ -5,23 +5,16 @@ import gzip
 import numpy as np
 from PIL import Image
 import warnings
+import re
 
 def load_zipped_pickle(filename):
     with gzip.open(filename, 'rb') as f:
-        loaded_object = pkl.load(f)
+        loaded_object = pkl.load(f, fix_imports=True, encoding="latin1")
         return loaded_object
 
 def save_zipped_pickle(obj, filename):
     with gzip.open(filename, 'wb') as f:
         pkl.dump(obj, f)
-
-def save_traj_figs(dir, traj):
-    if traj.dtype is not np.uint8:
-        traj = (traj * 255).astype(np.uint8)
-
-    for ii in range(traj.shape[0]):
-        im = Image.fromarray(traj[ii])
-        im.save(os.path.join(dir, f"{ii}.png"))
 
 def sanitize_data(
     data_dir, 
@@ -46,6 +39,8 @@ def sanitize_data(
     traj_per_category = total_trajs / data_sources
     dataset = []
 
+    ii = 0
+    jj = 0
     for datapath in datapaths:
         filenames = [os.path.join(datapath, f) for f in os.listdir(datapath)]
         added_traj = 0
@@ -59,21 +54,25 @@ def sanitize_data(
             pose = trajectory["object"][:(min_length * 10)]
             pose_offset = np.roll(pose, shift=1, axis=0)
             pose_offset[0] = pose[0]
+            tr_diff = np.abs(pose[:, :2] - pose_offset[:, :2])
             rot_diff = np.abs(pose[:, 2] - pose_offset[:, 2])
             total_tr_diff = np.sum(np.sqrt(np.sum((pose[:, :2] - pose_offset[:, :2])**2, axis=-1)) * 100)
             total_rot_diff = np.sum(rot_diff)
 
-            # If a jump more than ~15 degrees happens at 180hz -> orientation error
-            if (rot_diff > 0.25).any():
+            # If a jump more than ~5 degrees happens at 180hz -> orientation error
+            if (rot_diff > 0.0875).any():
+                continue
+
+            # If a translation jump of more than 0.5 cm happens...
+            if ((tr_diff * 100) > 0.5).any():
                 continue
             
             if total_tr_diff > min_tr or total_rot_diff > min_rot:
                 dataset.append(trajectory)
+                added_traj += 1
 
-            added_traj += 1
             if added_traj >= traj_per_category:
                 break
-
     return dataset
 
 def trim_data(dataset, length):
@@ -102,10 +101,9 @@ def package_data(dataset):
         for jj in range(l):
             idx_i = jj * 10
             idx_f = (jj + 1) * 10
-            # print(ii, jj, idx_i, idx_f)
             packaged_dataset["ft"][ii][jj] = data["force"][idx_i:idx_f]
             packaged_dataset["arm"][ii][jj] = data["tip"][idx_i:idx_f]
-            packaged_dataset["action"][ii][jj] = data["tip"][idx_f - 1] - data["tip"][idx_i]
+            packaged_dataset["action"][ii][jj] = data["tip"][idx_f-1] - data["tip"][idx_i]
             packaged_dataset["gt_plate_pos"][ii][jj] = data["object"][idx_i:idx_f]
     
     for k, v in packaged_dataset.items():
@@ -128,11 +126,7 @@ if __name__ == "__main__":
         total_trajs=4096,
         surfaces=['delrin', 'plywood', 'pu', 'abs'], 
         objects=['ellip1', 'ellip2', 'ellip3']
-        # surfaces=['delrin'], 
-        # objects=['ellip1']
     )
-    print("Total trajectories:", len(dataset))
-
     dataset = trim_data(dataset, length=48)
     processed_dataset = package_data(dataset)
 
@@ -141,5 +135,5 @@ if __name__ == "__main__":
 
     save_zipped_pickle(
         processed_dataset, 
-        os.path.join(args.save_dir, "min-tr2.5_min-rot0.5_len48.pkl")
+        os.path.join(args.save_dir, "rng-initial_min-tr2.5_min-rot0.5_len48.pkl")
     )
