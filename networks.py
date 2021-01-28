@@ -91,7 +91,7 @@ class FullyConvDecoderVAE(nn.Module):
             raise NotImplementedError()
 
         self.layers.append(nn.ConvTranspose2d(n_size, 128, 5, stride=2, bias=False))
-        if bn: self.layers.append(nn.BatchNorm2d(128))
+        if bn: self.layers.append(nn.BatchNorm2d(128, track_running_stats=True))
         if drop: self.layers.append(nn.Dropout(p=0.5))
         self.layers.append(nl)
 
@@ -107,8 +107,6 @@ class FullyConvDecoderVAE(nn.Module):
             self.layers.append(nl)
 
             self.layers.append(nn.ConvTranspose2d(32, input, 6, stride=2, bias=False))
-            if bn: self.layers.append(nn.BatchNorm2d(input, track_running_stats=True))
-            if drop: self.layers.append(nn.Dropout(p=0.5))
         elif img_dim == 128:
             self.layers.append(nn.ConvTranspose2d(64, 32, 5, stride=2, bias=False))
             if bn: self.layers.append(nn.BatchNorm2d(32, track_running_stats=True))
@@ -120,8 +118,6 @@ class FullyConvDecoderVAE(nn.Module):
             if drop: self.layers.append(nn.Dropout(p=0.5))
 
             self.layers.append(nn.ConvTranspose2d(16, input, 6, stride=2, bias=False))
-            if bn: self.layers.append(nn.BatchNorm2d(input, track_running_stats=True))
-            if drop: self.layers.append(nn.Dropout(p=0.5))
         else:
             raise NotImplementedError()
 
@@ -129,7 +125,7 @@ class FullyConvDecoderVAE(nn.Module):
             self.layers.append(output_nl)
 
         self.linear = nn.Linear(latent_size, n_size, bias=False)
-        self.batchn = nn.BatchNorm1d(n_size)
+        self.batchn = nn.BatchNorm1d(n_size, track_running_stats=True)
         self.dropout = nn.Dropout(p=0.5)
         self.nl = nl
         
@@ -149,7 +145,16 @@ class FullyConvDecoderVAE(nn.Module):
 
 
 class FCNEncoderVAE(nn.Module):
-    def __init__(self, dim_in, dim_out, bn=False, drop=False, nl=nn.ReLU(), hidden_size=800, stochastic=True):
+    def __init__(
+        self, 
+        dim_in, 
+        dim_out, 
+        bn=False, 
+        drop=False, 
+        nl=nn.ReLU(), 
+        hidden_size=256, 
+        stochastic=True
+    ):
         super(FCNEncoderVAE, self).__init__()
         self.flatten = Flatten()
         self.stochastic = stochastic
@@ -232,17 +237,17 @@ class CNNEncoder1D(nn.Module):
         if drop: self.layers.append(nn.Dropout(p=0.5))
         self.layers.append(nl)
 
-        # self.layers.append(torch.nn.Conv1d(64, 128, kernel_size, stride=1, padding=1, bias=False))
-        # if bn: self.layers.append(nn.BatchNorm1d(128, track_running_stats=True))
-        # if drop: self.layers.append(nn.Dropout(p=0.5))
-        # self.layers.append(nl)
+        self.layers.append(torch.nn.Conv1d(64, 128, kernel_size, stride=1, padding=1, bias=False))
+        if bn: self.layers.append(nn.BatchNorm1d(128, track_running_stats=True))
+        if drop: self.layers.append(nn.Dropout(p=0.5))
+        self.layers.append(nl)
 
-        # self.layers.append(torch.nn.Conv1d(128, 256, kernel_size, stride=1, padding=1, bias=False))
-        # if bn: self.layers.append(nn.BatchNorm1d(256, track_running_stats=True))
-        # if drop: self.layers.append(nn.Dropout(p=0.5))
-        # self.layers.append(nl)
+        self.layers.append(torch.nn.Conv1d(128, 256, kernel_size, stride=1, padding=1, bias=False))
+        if bn: self.layers.append(nn.BatchNorm1d(256, track_running_stats=True))
+        if drop: self.layers.append(nn.Dropout(p=0.5))
+        self.layers.append(nl)
 
-        n_size = 64 * datalength
+        n_size = 256 * datalength
 
         if self.stochastic:
             self.fc_mu = nn.Linear(n_size, latent_size)
@@ -252,6 +257,7 @@ class CNNEncoder1D(nn.Module):
         self.flatten = Flatten()
 
     def forward(self, x):
+
         for l in self.layers:
             x = l(x)
 
@@ -277,17 +283,17 @@ class CNNDecoder1D(nn.Module):
         self.layers = nn.ModuleList()
 
         self.datalength = datalength
-        n_size = 64 * datalength
+        n_size = 256 * datalength
 
-        # self.layers.append(nn.ConvTranspose1d(256, 128, kernel_size, stride=1, padding=1, bias=False))
-        # if bn: self.layers.append(nn.BatchNorm1d(128))
-        # if drop: self.layers.append(nn.Dropout(p=0.5))
-        # self.layers.append(nl)
+        self.layers.append(nn.ConvTranspose1d(256, 128, kernel_size, stride=1, padding=1, bias=False))
+        if bn: self.layers.append(nn.BatchNorm1d(128, track_running_stats=True))
+        if drop: self.layers.append(nn.Dropout(p=0.5))
+        self.layers.append(nl)
 
-        # self.layers.append(nn.ConvTranspose1d(128, 64, kernel_size, stride=1, padding=1, bias=False))
-        # if bn: self.layers.append(nn.BatchNorm1d(64, track_running_stats=True))
-        # if drop: self.layers.append(nn.Dropout(p=0.5))
-        # self.layers.append(nl)
+        self.layers.append(nn.ConvTranspose1d(128, 64, kernel_size, stride=1, padding=1, bias=False))
+        if bn: self.layers.append(nn.BatchNorm1d(64, track_running_stats=True))
+        if drop: self.layers.append(nn.Dropout(p=0.5))
+        self.layers.append(nl)
 
         self.layers.append(nn.ConvTranspose1d(64, 32, kernel_size, stride=1, padding=1, bias=False))
         if bn: self.layers.append(nn.BatchNorm1d(32, track_running_stats=True))
@@ -295,14 +301,12 @@ class CNNDecoder1D(nn.Module):
         self.layers.append(nl)
 
         self.layers.append(nn.ConvTranspose1d(32, input, kernel_size, stride=1, padding=1, bias=False))
-        if bn: self.layers.append(nn.BatchNorm1d(input, track_running_stats=True))
-        if drop: self.layers.append(nn.Dropout(p=0.5))
 
         if output_nl != None:
             self.layers.append(output_nl)
 
         self.linear = nn.Linear(latent_size, n_size, bias=False)
-        self.batchn = nn.BatchNorm1d(n_size)
+        self.batchn = nn.BatchNorm1d(n_size, track_running_stats=True)
         self.dropout = nn.Dropout(p=0.5)
         self.nl = nl
         
@@ -313,7 +317,8 @@ class CNNDecoder1D(nn.Module):
             x = self.nl(self.dropout(self.linear(x)))
         else:
             x = self.nl(self.linear(x))
-        x = x.reshape(-1, 64, self.datalength)
+
+        x = x.reshape(-1, 256, self.datalength)
         for i in range(len(self.layers)):
             x = self.layers[i](x)
 
@@ -327,11 +332,13 @@ class RNNEncoder(nn.Module):
         dim_out, 
         hidden_size=256,
         net_type="gru",
-        train_initial_hidden=False
+        train_initial_hidden=False,
+        stochastic=False
     ):
         self.train_initial_hidden = train_initial_hidden
         self.net_type = net_type
         super(RNNEncoder, self).__init__()
+        self.stochastic = stochastic
         if net_type == "gru":
             self.rnn = nn.GRU(
                 input_size=dim_in, 
@@ -352,7 +359,11 @@ class RNNEncoder(nn.Module):
                 self.h_0 = nn.Parameter(torch.randn(1, 1, hidden_size))
                 self.c_0 = nn.Parameter(torch.randn(1, 1, hidden_size))
 
-        self.fc = torch.nn.Linear(hidden_size, dim_out)
+        if self.stochastic:
+            self.fc_mu = nn.Linear(hidden_size, dim_out)
+            self.fc_logvar = nn.Linear(hidden_size, dim_out)
+        else:
+            self.fc = torch.nn.Linear(hidden_size, dim_out)
             
     def forward(self, x, h=None):
         l, n = x.shape[0], x.shape[1]
@@ -370,6 +381,19 @@ class RNNEncoder(nn.Module):
                 h_t, h_n = self.rnn(x)
         else:
             h_t, h_n = self.rnn(x, h)
-        out = self.fc(h_t.reshape(-1, *h_t.shape[2:]))
-        out = out.reshape(l, n, *out.shape[1:])
-        return out, h_n
+
+        if self.stochastic:
+            mu = self.fc_mu(h_t.reshape(-1, *h_t.shape[2:]))
+            logvar = self.fc_logvar(h_t.reshape(-1, *h_t.shape[2:]))
+            # Reparameterize
+            std = torch.exp(logvar / 2.0)
+            eps = torch.randn_like(std)
+            z = mu + eps * std
+            z = z.reshape(l, n, *z.shape[1:])
+            mu = mu.reshape(l, n, *mu.shape[1:])
+            logvar = logvar.reshape(l, n, *logvar.shape[1:])
+            return z, mu, logvar, h_n
+        else:
+            out = self.fc(h_t.reshape(-1, *h_t.shape[2:]))
+            out = out.reshape(l, n, *out.shape[1:])
+            return out, h_n

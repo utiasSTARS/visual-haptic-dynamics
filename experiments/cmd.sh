@@ -8,6 +8,7 @@
 #SBATCH --output ./slurm_output/%J.out # this is where the output goes
 #SBATCH --cpus-per-gpu=16        # number of CPUs we want per GPU
 #SBATCH --gpus-per-task=1       # number of GPUs we want per task
+#SBATCH --open-mode=append
 
 . /scratch/ssd001/home/limoyool/pt151.env
 cmd_line=$(sed "${SLURM_ARRAY_TASK_ID}q;d" ${1})

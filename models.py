@@ -315,14 +315,14 @@ class NonLinearSSM(nn.Module):
         return z_t1, mu_t1, var_t1, h
 
 class ProductOfExperts(nn.Module):
-    """A generalized product of M experts.
+    """A product of M experts with diagonal covariances.
     Implementation based on https://github.com/mhw32/multimodal-vae-public/.
     mu: (bs x M x D)
     logvar: (bs x M X D)
     """
-    def forward(self, mu, logvar, eps=1e-8, prior=True):
+    def forward(self, mu, logvar, eps=1e-8, prior=False):
         if prior:
-            bs, d = mu.shape[0], mu.shape[2]
+            bs, d = mu.shape[0], mu.shape[-1]
             device = mu.device
             mu = torch.cat((
                 mu, 
@@ -333,10 +333,10 @@ class ProductOfExperts(nn.Module):
                 torch.zeros((bs, 1, d), requires_grad=False, device=device)
             ), axis=1)
 
-        var = torch.exp(logvar) + eps
-        # Precision
-        T = 1.0 / (var + eps)
-        mu_pd = torch.sum(mu * T, dim=1) / torch.sum(T, dim=1)
-        var_pd = 1.0 / torch.sum(T, dim=1)
+        T = torch.exp(-logvar)
+        var_pd = 1 / torch.sum(T, dim=1)
         logvar_pd = torch.log(var_pd + eps)
+
+        mu_pd = torch.sum(mu * T, dim=1) * var_pd
+
         return mu_pd, logvar_pd

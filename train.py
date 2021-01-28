@@ -1,7 +1,7 @@
 from utils import (
     set_seed_torch, 
     common_init_weights, 
-    Normalize,
+    weight_norm,
     frame_stack,
     load_vh_models
 )
@@ -33,10 +33,154 @@ from networks import (
 )
 from models import (
     LinearMixSSM, 
-    NonLinearSSM
+    NonLinearSSM,
+    ProductOfExperts
 )
 from datasets import VisualHaptic, ImgCached
-from losses import torch_kl
+from losses import torch_kl, kl
+
+def encode(nets, args, x_ll, u_ll, device):
+    if args.context_modality != "none":
+        poe = ProductOfExperts()
+
+    # Batch and sequence length
+    n, l = u_ll.shape[0], u_ll.shape[1]
+
+    # Final encoding distribution
+    q_z = {"z": None, "mu": None, "cov": None}
+
+    # 1.a. Encoding q(z) distribution for image
+    q_z_img = {"z": None, "mu": None, "logvar": None}
+    if args.inference_network == "none":
+        q_z_img["z"], q_z_img["mu"], q_z_img["logvar"] = nets["img_enc"](x_ll['img'])
+    elif args.inference_network == "ssm":
+        #TODO: SSM implementation
+        pass
+    elif args.inference_network == "rssm":
+        z_img_inp = nets["img_enc"](x_ll['img'])
+        z_img_inp = z_img_inp.reshape(n, l, *z_img_inp.shape[1:]).transpose(1,0)
+        q_z_img["z"], q_z_img["mu"], q_z_img["logvar"], _ = nets["img_rssm_enc"](z_img_inp)
+        q_z_img = {k:v.transpose(1,0).reshape(-1, *v.shape[2:]) for k, v in q_z_img.items()}
+    
+    # 1.b. Encoding q(z) distribution for extra modalities
+    if args.context_modality != "none":
+        q_z_context = {"z": None, "mu": None, "logvar": None}
+        if args.inference_network == "none":
+            q_z_context["z"], q_z_context["mu"], q_z_context["logvar"] = nets["context_enc"](x_ll["context"])
+        elif args.inference_network == "ssm":
+            #TODO: SSM implementation
+            pass
+        elif args.inference_network == "rssm":
+            z_context_inp  = nets["context_enc"](x_ll["context"])
+            z_context_inp = z_context_inp.reshape(n, l, *z_context_inp.shape[1:]).transpose(1,0)
+            q_z_context["z"], q_z_context["mu"], q_z_context["logvar"], _ = nets["context_rssm_enc"](z_context_inp)
+            q_z_context = {k:v.transpose(1,0).reshape(-1, *v.shape[2:]) for k, v in q_z_context.items()}
+        
+        # Include prior expert factorization
+        if args.use_prior_expert:
+            # Split up
+            q_z_img = {k:v.reshape(n, l, *v.shape[1:]).transpose(1,0) for k, v in q_z_img.items()}
+            q_z_context = {k:v.reshape(n, l, *v.shape[1:]).transpose(1,0) for k, v in q_z_context.items()}
+
+            # Temp roll out variables
+            z_obs_roll = torch.empty((n, l, args.dim_z), device=device)
+            mu_z_obs_roll = torch.empty((n, l, args.dim_z), device=device)
+            logvar_z_obs_roll = torch.empty((n, l, args.dim_z), device=device)
+
+            # Prior transition distributions with roll out
+            p_z = {
+                "z": torch.empty((l - 1, n, args.dim_z), device=device), 
+                "mu": torch.empty((l - 1, n, args.dim_z), device=device), 
+                "cov": torch.empty((l - 1, n, args.dim_z, args.dim_z), device=device)
+            }
+            h_t = torch.empty((l - 1, n, args.rnn_hidden_size), device=device)
+
+            # Initial distribution as first prior
+            mu_z_prior = torch.zeros(
+                args.dim_z, 
+                requires_grad=False, 
+                device=device
+            ).repeat(n, 1)
+
+            logvar_z_prior = torch.log(20.00 * torch.ones(
+                args.dim_z, 
+                requires_grad=False, 
+                device=device
+            ).repeat(n, 1))
+
+            h_i = None
+            u_ll = u_ll.transpose(1,0)
+            for ii in range(l):
+                # Mix modalities with product of experts
+                mu_z_obs_l, logvar_z_obs_l  = poe(
+                    mu=torch.cat((
+                        q_z_img["mu"][ii].unsqueeze(1), 
+                        q_z_context["mu"][ii].unsqueeze(1),
+                        mu_z_prior.unsqueeze(1)
+                    ), axis=1),
+                    logvar=torch.cat((
+                        q_z_img["logvar"][ii].unsqueeze(1), 
+                        q_z_context["logvar"][ii].unsqueeze(1),
+                        logvar_z_prior.unsqueeze(1)
+                    ), axis=1), 
+                )
+                std_z_obs_l = torch.exp(logvar_z_obs_l / 2.0)
+                eps = torch.randn_like(std_z_obs_l)
+                z_obs_l = mu_z_obs_l + eps * std_z_obs_l
+
+                z_obs_roll[:, ii] = z_obs_l
+                mu_z_obs_roll[:, ii] = mu_z_obs_l
+                logvar_z_obs_roll[:, ii] = logvar_z_obs_l
+                var_z_obs_l = torch.diag_embed(torch.exp(logvar_z_obs_l))
+
+                # Forward step
+                if (ii + 1) < l: 
+                    z_t1_single, mu_z_t1_single, var_z_t1_single, (h_t1_single, h_next) = nets["dyn"](
+                        z_t=z_obs_l.unsqueeze(0), 
+                        mu_t=mu_z_obs_l.unsqueeze(0), 
+                        var_t=var_z_obs_l.unsqueeze(0), 
+                        u=u_ll[ii + 1].unsqueeze(0),
+                        h_0=h_i,
+                        return_all_hidden=True
+                    )
+                    p_z["z"][ii] = z_t1_single[0] 
+                    p_z["mu"][ii] = mu_z_t1_single[0] 
+                    p_z["cov"][ii] = var_z_t1_single[0] 
+                    h_t[ii] = h_t1_single[0]
+
+                    # Reinitialize 
+                    mu_z_prior = mu_z_t1_single[0]
+                    logvar_z_prior = torch.log(torch.diagonal(var_z_t1_single[0], dim1=-2, dim2=-1))
+                    h_i = h_next
+
+            q_z["z"] = z_obs_roll.reshape(-1, *z_obs_roll.shape[2:])
+            q_z["mu"] = mu_z_obs_roll.reshape(-1, *mu_z_obs_roll.shape[2:])
+            q_z["cov"] = torch.diag_embed(torch.exp(logvar_z_obs_roll.reshape(-1, *logvar_z_obs_roll.shape[2:])))
+            return q_z, p_z
+        else:
+            # Mix modalities with product of experts
+            mu_z_obs_enc, logvar_z_obs_enc  = poe(
+                mu=torch.cat((
+                    q_z_img["mu"].unsqueeze(1), 
+                    q_z_context["mu"].unsqueeze(1)
+                ), axis=1),
+                logvar=torch.cat((
+                    q_z_img["logvar"].unsqueeze(1), 
+                    q_z_context["logvar"].unsqueeze(1)
+                ), axis=1) 
+            )
+            std_z_obs_enc = torch.exp(logvar_z_obs_enc / 2.0)
+            eps = torch.randn_like(std_z_obs_enc)
+
+            q_z["z"] = mu_z_obs_enc + eps * std_z_obs_enc
+            q_z["mu"] = mu_z_obs_enc
+            q_z["cov"] = torch.diag_embed(torch.exp(logvar_z_obs_enc))
+            return q_z
+    else:
+        q_z["z"] = q_z_img["z"]
+        q_z["mu"] = q_z_img["mu"]
+        q_z["cov"] = torch.diag_embed(torch.exp(q_z_img["logvar"]))
+        return q_z 
 
 def setup_opt_iter(args):
     # Loss functions
@@ -45,7 +189,7 @@ def setup_opt_iter(args):
     else:
         loss_REC = nn.MSELoss(reduction='none')
 
-    def opt_iter(loader, nets, device, opt=None, n_step=1):
+    def opt_iter(loader, nets, device, opt=None, n_step=1, kl_annealing_factor=1.0):
         """Single training epoch."""
         if opt:
             for k, v in nets.items():
@@ -56,6 +200,8 @@ def setup_opt_iter(args):
         
         # Keep track of losses
         running_stats = {"total_l": [], "kl_l": [], "img_rec_l": []}
+        if args.reconstruct_context and args.context_modality != "none":
+            running_stats["context_rec_l"] = []
 
         for idx, data in enumerate(loader):
             if idx == args.n_example:
@@ -66,9 +212,9 @@ def setup_opt_iter(args):
             x['img'] = data['img'].float().to(device=device) # (n, l, c, h, w)
             x['img'] = frame_stack(x['img'], frames=args.frame_stacks)
             ep_len = x['img'].shape[1]
-
             u = data['action'].float().to(device=device)
             u = u[:, args.frame_stacks:]
+
             if args.context_modality != "none":
                 if args.context_modality == "joint": 
                     x["context"] = torch.cat((data['ft'], data['arm']), dim=-1) # (n, l, f, 12)
@@ -77,103 +223,40 @@ def setup_opt_iter(args):
                 x["context"] = x["context"].float().to(device=device) # (n, l, f, 6)
                 if args.use_context_frame_stack:
                     x['context'] = frame_stack(x['context'], frames=args.frame_stacks)
-                x["context"] = x["context"].transpose(-1, -2)
-                if not args.use_context_frame_stack:
+                else:
                     x["context"] = x["context"][:, args.frame_stacks:]
-
-            # Randomly and uniformly sample?
-            # ll = np.random.randint(ep_len-1)
+                x["context"] = x["context"].transpose(-1, -2)
 
             # Train from index 0 all the time
-            ll = 0
+            range_ll = range(0, ep_len)
             x_ll = {}
-
             for k in x:
-                x_ll[k] = x[k][:, ll:]
-            u_ll = u[:, ll:]
+                x_ll[k] = x[k][:, range_ll]
+            u_ll = u[:, range_ll]
             n, l = x_ll['img'].shape[0], x_ll['img'].shape[1]
-
             x_ll = {k:v.reshape(-1, *v.shape[2:]) for k, v in x_ll.items()}
-
-            # 1. Encoding q(z) distribution
-            z_all_enc = []
-            z_img = nets["img_enc"](x_ll['img'])
-            z_all_enc.append(z_img)
-
-            if args.context_modality != "none":
-                z_context = nets["context_enc"](x_ll["context"])
-                z_all_enc.append(z_context)
-
-            # Concatenate modalities and mix
-            z_cat_enc = torch.cat(z_all_enc, dim=1)
-
-            if args.context == "none":
-                # If only CNN is used for recognition, process in batch instead of roll out
-                z, mu_z, logvar_z = nets["mix"](z_cat_enc)
-                var_z = torch.diag_embed(torch.exp(logvar_z))
-                # Group sample, mean, covariance
-                q_z = {"z": z, "mu": mu_z, "cov": var_z}
-            elif args.context == "ssm" or "rssm":
-                q_z = {
-                    "z": torch.empty((n, l, args.dim_z), device=device),
-                    "mu": torch.empty((n, l, args.dim_z), device=device),
-                    "cov": torch.empty((n, l, args.dim_z, args.dim_z), device=device)
-                }
-
-                z_cat_enc = z_cat_enc.reshape(
-                    n, l, *z_cat_enc.shape[1:]
-                ).transpose(1,0)
-
-                z_0 =torch.zeros(
-                    args.dim_z, 
-                    requires_grad=False, 
-                    device=device
-                ).repeat(n, 1)
-
-                if args.context == "rssm":
-                    h_0 = None
-
-                # Roll out
-                for ii in range(l):
-                    if args.context == "ssm":
-                        inp = z_0
-                    elif args.context == "rssm":
-                        z_0 = z_0.unsqueeze(0)
-                        out, h = nets["rssm_enc"](z_0, h_0)
-                        inp = out[0]
-                        h_0 = h
-
-                    z, mu_z, logvar_z = nets["mix"](
-                        torch.cat((inp, z_cat_enc[ii]), axis=-1)
-                    )
-                    var_z = torch.diag_embed(torch.exp(logvar_z))
-                    q_z["z"][:, ii] = z 
-                    q_z["mu"][:, ii] = mu_z
-                    q_z["cov"][:, ii] = var_z
-                    z_0 = z
-                q_z = {k:v.reshape(-1, *v.shape[2:]) for k, v in q_z.items()}
+            print(x_ll["img"].shape, u_ll.shape)
+            if args.use_prior_expert:
+                q_z, p_z = encode(nets, args, x_ll, u_ll, device=device)
+            else:
+                q_z = encode(nets, args, x_ll, u_ll, device=device)
 
             # 2. Reconstruction
-            z_all_dec = []
-            z_all_dec.append(q_z["z"])
-
-            #TODO: Append CVAE stuff
-
-            # Concatenate modalities and decode
-            z_cat_dec = torch.cat(z_all_dec, dim=1)
-            x_hat_img = nets["img_dec"](z_cat_dec)
+            x_hat_img = nets["img_dec"](q_z["z"])
             loss_rec_img = (torch.sum(
                 loss_REC(x_hat_img, x_ll['img'])
-            )) / n
-
+            )) / (n * l)
             running_stats['img_rec_l'].append(loss_rec_img.item())
+
+            if args.context_modality != "none" and args.reconstruct_context:
+                x_hat_context = nets["context_dec"](q_z["z"])
+                loss_rec_context = (torch.sum(
+                    loss_REC(x_hat_context, x_ll['context'])
+                )) / (n * l)
+                running_stats['context_rec_l'].append(loss_rec_context.item())
 
             # 3. Dynamics constraint with KL
             loss_kl = 0
-
-            # Unflatten and transpose seq_len and batch for convenience
-            q_z = {k:v.reshape(n, l, *v.shape[1:]).transpose(1,0) for k, v in q_z.items()}
-            u_ll = u_ll.transpose(1,0)
 
             # Initial distribution
             mu_z_i = torch.zeros(
@@ -188,29 +271,34 @@ def setup_opt_iter(args):
                 device=device
             ).repeat(1, n, 1, 1)
 
-            # Prior transition distributions
-            z_t1_hat, mu_z_t1_hat, var_z_t1_hat, (h_t, _) = nets["dyn"](
-                z_t=q_z["z"][:-1], 
-                mu_t=q_z["mu"][:-1], 
-                var_t=q_z["cov"][:-1], 
-                u=u_ll[1:],
-                h_0=None,
-                return_all_hidden=True
-            )
-            p_z = {"z": z_t1_hat, "mu": mu_z_t1_hat, "cov": var_z_t1_hat}
+            # Unflatten and transpose seq_len and batch for convenience
+            q_z = {k:v.reshape(n, l, *v.shape[1:]).transpose(1,0) for k, v in q_z.items()}
 
-            loss_kl += torch_kl(
+            # Prior transition distributions without rollout
+            if not args.use_prior_expert:
+                u_ll = u_ll.transpose(1,0)
+                z_t1_hat, mu_z_t1_hat, var_z_t1_hat, (h_t, _) = nets["dyn"](
+                    z_t=q_z["z"][:-1], 
+                    mu_t=q_z["mu"][:-1], 
+                    var_t=q_z["cov"][:-1], 
+                    u=u_ll[1:],
+                    h_0=None,
+                    return_all_hidden=True
+                )
+                p_z = {"z": z_t1_hat, "mu": mu_z_t1_hat, "cov": var_z_t1_hat}
+
+            loss_kl += kl(
                 mu0=q_z["mu"],
                 cov0=q_z["cov"],
                 mu1=torch.cat((mu_z_i, p_z["mu"]), axis=0),
                 cov1=torch.cat((var_z_i, p_z["cov"]), axis=0)
-            ) / n
+            ) / (n * l)
 
             # Original length before calculating n-step predictions
             length = p_z["mu"].shape[0]
 
             # N-step transition distributions
-            #XXX: This doesn't work with LSTM
+            # XXX: This doesn't work with an LSTM
             if n_step > 1:
                 # New references for convenience
                 p_z_nstep = p_z
@@ -251,25 +339,37 @@ def setup_opt_iter(args):
                     u_nstep = u_nstep.reshape(l_nstep, n_nstep, *u_nstep.shape[1:])
                     h_t = h_t.reshape(l_nstep, n_nstep, *h_t.shape[1:])
 
-                    loss_kl += torch_kl(
+                    loss_kl += kl(
                         mu0=q_z_nstep["mu"],
                         cov0=q_z_nstep["cov"],
                         mu1=p_z_nstep["mu"],
                         cov1=p_z_nstep["cov"]
-                    ) / n
+                    ) / (n_nstep * l_nstep)
 
             running_stats['kl_l'].append(
                 loss_kl.item()
             )
 
-            running_stats['total_l'].append(
-                loss_rec_img.item() +
-                loss_kl.item()
-            )
-
-            # Jointly optimize everything
-            total_loss = args.lam_rec * loss_rec_img + \
-                args.lam_kl * loss_kl 
+            if args.context_modality != "none" and args.reconstruct_context:
+                running_stats['total_l'].append(
+                    loss_rec_img.item() +
+                    loss_rec_context.item() +
+                    loss_kl.item()
+                )
+                # Jointly optimize everything
+                total_loss = \
+                    args.lam_rec * loss_rec_img + \
+                    args.lam_rec * loss_rec_context + \
+                    kl_annealing_factor * args.lam_kl * loss_kl 
+            else:
+                running_stats['total_l'].append(
+                    loss_rec_img.item() +
+                    loss_kl.item()
+                )
+                # Jointly optimize everything
+                total_loss = \
+                    args.lam_rec * loss_rec_img + \
+                    kl_annealing_factor * args.lam_kl * loss_kl 
 
             if opt:
                 opt.zero_grad()
@@ -299,14 +399,13 @@ def train(args):
 
     device = torch.device(args.device)
 
-    # Keeping track of results and hyperparameters
-    save_dir = os.path.join(args.storage_base_path, args.comment)
-
     slurm_id = os.environ.get('SLURM_JOB_ID')
     if slurm_id is not None:
+        save_dir = os.path.join(args.storage_base_path, slurm_id + "_" + args.comment)
         user = os.environ.get('USER')
         checkpoint_dir = f"/checkpoint/{user}/{slurm_id}"
     else:
+        save_dir = os.path.join(args.storage_base_path, args.comment)
         checkpoint_dir = os.path.join(save_dir, "checkpoints/")
 
     if not args.debug:
@@ -343,11 +442,6 @@ def train(args):
         base_params = []
     else:
         raise NotImplementedError()
-    
-    if args.context == "rssm":
-        extra_params = list(nets["mix"].parameters())
-    else:
-        extra_params = []
 
     enc_params = [list(v.parameters()) for k, v in nets.items() if "enc" in k]
     enc_params = [v for sl in enc_params for v in sl] # remove nested list
@@ -357,24 +451,24 @@ def train(args):
 
     opt_vae = opt_type(
         enc_params + 
-        dec_params +
-        extra_params,
+        dec_params,
         lr=args.lr
     )
     opt_vae_base = opt_type(
         enc_params +
         dec_params +
-        extra_params +
         base_params, 
         lr=args.lr
     )
     opt_all = opt_type(
         enc_params +
         dec_params +
-        extra_params +
         list(nets["dyn"].parameters()), 
         lr=args.lr
     )
+
+    if args.use_scheduler:
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(opt_all)
 
     # Setup dataset
     if args.task == "push64vh":
@@ -425,6 +519,8 @@ def train(args):
         opt_vae.load_state_dict(checkpoint['opt_vae'])
         opt_vae_base.load_state_dict(checkpoint['opt_vae_base'])
         opt_all.load_state_dict(checkpoint['opt_all'])
+        if args.use_scheduler:
+            scheduler.load_state_dict(checkpoint['lr_scheduler'])
         checkpoint_epochs = checkpoint['epoch']
         print(f"Resuming training from checkpoint at epoch {checkpoint_epochs}")
         assert (checkpoint_epochs < args.n_epoch), \
@@ -432,26 +528,34 @@ def train(args):
             than the already trained checkpoint epochs {checkpoint_epochs}"""
     
     opt_iter = setup_opt_iter(args)
-    n_step_lookup = list(args.opt_n_step_pred_epochs)
 
     # Training loop
     try:
         opt = opt_vae
         for epoch in range(checkpoint_epochs + 1, args.n_epoch + 1):
             tic = time.time()
+
+            # Optimizer used
             if epoch >= args.opt_vae_base_epochs:
                 opt = opt_all
             elif epoch >= args.opt_vae_epochs:
                 opt = opt_vae_base
-            n_step_pred = bisect.bisect_left(n_step_lookup, epoch) + 1
 
+            # Training iteration settings
+            n_step_pred = bisect.bisect_left(args.opt_n_step_pred_epochs, epoch) + 1
+            if args.n_annealing_epoch > 0:
+                annealing_factor = min(epoch / args.n_annealing_epoch, 1.0)
+            else:
+                annealing_factor = 1.0
+                
             # Train for one epoch        
             summary_train = opt_iter(
                 loader=train_loader, 
                 nets=nets, 
                 device=device,
                 opt=opt,
-                n_step=n_step_pred
+                n_step=n_step_pred,
+                kl_annealing_factor=annealing_factor
             )
 
             # Calculate validtion loss
@@ -461,15 +565,27 @@ def train(args):
                         loader=val_loader,
                         nets=nets,
                         device=device,
-                        n_step=n_step_pred
+                        n_step=n_step_pred,
+                        kl_annealing_factor=annealing_factor
                     )
+                if args.use_scheduler and epoch >= args.opt_vae_base_epochs:
+                    scheduler.step(summary_val['avg_total_l'])
 
             epoch_time = time.time() - tic
 
-            print((f"Epoch {epoch}/{args.n_epoch}: " 
-                f"Avg train loss: {summary_train['avg_total_l']}, "
-                f"Avg val loss: {summary_val['avg_total_l'] if args.val_split > 0 else 'N/A'}, "
-                f"Time per epoch: {epoch_time}"))
+            print((
+                f"Epoch {epoch}/{args.n_epoch}, Time per epoch: {epoch_time}: "
+                f"\n[Train] "
+                f"Total: {summary_train['avg_total_l']}, "
+                f"Image rec: {summary_train['avg_img_rec_l']}, "
+                f"Context rec: {summary_train['avg_context_rec_l'] if (args.reconstruct_context and args.context_modality != 'none') else 'N/A'}, "
+                f"KL: {summary_train['avg_kl_l']}"
+                f"\n[Val] "
+                f"Total: : {summary_val['avg_total_l'] if (args.val_split > 0) else 'N/A'}, "
+                f"Image rec: {summary_val['avg_img_rec_l'] if (args.val_split > 0) else 'N/A'}, "
+                f"Context rec: {summary_val['avg_context_rec_l'] if (args.val_split > 0 and args.reconstruct_context and args.context_modality != 'none') else 'N/A'}, "
+                f"KL: {summary_val['avg_kl_l'] if (args.val_split > 0) else 'N/A'}"
+            ))
 
             if not args.debug:
                 # Temporarily store tensorboard data
@@ -487,12 +603,17 @@ def train(args):
                     tb_data = []
 
                     # Save model at intermittent checkpoints 
-                    torch.save(
-                        {**{k: v.state_dict() for k, v in nets.items()},
+                    save_dict = {
+                        **{k: v.state_dict() for k, v in nets.items()},
                         'opt_all': opt_all.state_dict(),
                         'opt_vae': opt_vae.state_dict(),
                         'opt_vae_base': opt_vae_base.state_dict(),
-                        'epoch': epoch}, 
+                        'epoch': epoch
+                    }
+                    if args.use_scheduler:
+                        save_dict['lr_scheduler'] = scheduler.state_dict()
+                    torch.save(
+                        save_dict, 
                         checkpoint_dir + "checkpoint.pth"
                     )
     finally:
@@ -502,7 +623,7 @@ def train(args):
                 torch.save(v.state_dict(), save_dir + f"/{k}.pth")
             if args.val_split > 0:
                 with open(save_dir + "/val_idx.pkl", "wb") as f:
-                    pkl.dump(dataset_idx[split:], f)
+                    pkl.dump(dataset_idx[:split], f)
             writer.close()
 
 def main():

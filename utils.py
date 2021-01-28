@@ -11,6 +11,7 @@ from networks import (FullyConvEncoderVAE,
                         FCNEncoderVAE,
                         FCNDecoderVAE,
                         CNNEncoder1D,
+                        CNNDecoder1D,
                         RNNEncoder)
 from models import (LinearMixSSM, 
                     NonLinearSSM)
@@ -18,46 +19,6 @@ import gym
 from collections import deque
 from gym import spaces
 import os 
-
-class FrameStack(gym.Wrapper):
-    def __init__(self, env, k):
-        """Stack k last frames.
-        Returns lazy array, which is much more memory efficient.
-        See Also
-        --------
-        baselines.common.atari_wrappers.LazyFrames
-        """
-        gym.Wrapper.__init__(self, env)
-        self.k = k
-        self.frames = deque([], maxlen=k)
-        shp = env.observation_space.shape
-        self.observation_space = spaces.Box(low=0, high=255, shape=((k,) + shp), dtype=env.observation_space.dtype)
-
-    def reset(self):
-        ob = self.env.reset()
-        for _ in range(self.k):
-            self.frames.append(ob)
-        return self._get_ob()
-
-    def step(self, action):
-        ob, reward, done, info = self.env.step(action)
-        self.frames.append(ob)
-        return self._get_ob(), reward, done, info
-
-    def _get_ob(self):
-        assert len(self.frames) == self.k
-        return np.array(self.frames)
-
-class Normalize:
-    def __init__(self, mean, var):
-        self.mean = mean
-        self.var = var
-
-    def __call__(self, x):
-        return (x - self.mean) / self.var
-
-    def __repr__(self):
-        return self.__class__.__name__ + '(mean={self.mean}, var={self.var})'
 
 def rgb2gray(x):
     """
@@ -101,14 +62,6 @@ def set_seed_torch(seed):
     torch.cuda.manual_seed_all(seed) 
     random.seed(seed)
     os.environ['PYTHONHASHSEED'] = str(seed)
-        
-def to_img(x, shape):
-    assert len(shape) == 2
-    sig = nn.Sigmoid()
-    x = sig(x)
-    x = x.clamp(0, 1)
-    x = x.view(x.size(0), 1, *shape)
-    return x
 
 def common_init_weights(m):
     if type(m) == nn.Linear:
@@ -116,7 +69,7 @@ def common_init_weights(m):
         if m.bias is not None:
             nn.init.zeros_(m.bias)
         # consider also xavier_uniform_, kaiming_uniform_ , orthogonal_
-    elif type(m) == nn.Conv2d or type(m) == nn.Conv3d:
+    elif type(m) == nn.Conv1d or type(m) == nn.Conv2d or type(m) == nn.Conv3d:
         nn.init.kaiming_uniform_(m.weight)
         if m.bias is not None:
             m.bias.data.fill_(0)
@@ -125,134 +78,20 @@ def common_init_weights(m):
         nn.init.xavier_uniform_(m.weight_ih_l0)
         nn.init.zeros_(m.bias_hh_l0)
         nn.init.zeros_(m.bias_ih_l0)
-
-def load_models(path, args, mode='eval', device='cuda:0'):
-    """Load the trained models based on args."""
-    print("Loading models in path: ", path)
-    obs_flatten_dim = int(np.product(args.dim_x))  
-
-    if args.non_linearity=="relu":
-        nl = nn.ReLU()
-    elif args.non_linearity=="elu":
-        nl = nn.ELU()
-    elif args.non_linearity=="softplus":
-        nl = nn.Softplus()
-    else:
-        raise NotImplementedError()
-
-    if args.enc_dec_net == "fcn":
-        true_dim_x = args.dim_x[0] + args.frame_stacks, args.dim_x[1], args.dim_x[2]
-        enc = FCNEncoderVAE(
-            dim_in=int(np.product(true_dim_x)),
-            dim_out=args.dim_z,
-            bn=args.use_batch_norm,
-            drop=args.use_dropout,
-            nl=nl,
-            hidden_size=args.fc_hidden_size,
-            stochastic=True
-        ).to(device=device)
-    elif args.enc_dec_net == "cnn":
-        enc = FullyConvEncoderVAE(
-            input=args.dim_x[0] + args.frame_stacks,
-            latent_size=args.dim_z,
-            bn=args.use_batch_norm,
-            drop=args.use_dropout,
-            img_dim=args.dim_x[1],
-            nl=nl,
-            stochastic=True
-        ).to(device=device)
-    else:
-        raise NotImplementedError()
         
-    try:
-        enc.load_state_dict(torch.load(path + "/enc.pth", map_location=device))
-        if mode == 'eval':
-            enc.eval()
-        elif mode == 'train':
-            enc.train()
-        else:
-            raise NotImplementedError()
-    except Exception as e: 
-        print(e)            
-        
-    output_nl = None if args.use_binary_ce else nn.Sigmoid()
-    
-    if args.enc_dec_net == "fcn":
-        dec = FCNDecoderVAE(
-            dim_in=args.dim_z,
-            dim_out=true_dim_x,
-            bn=args.use_batch_norm,
-            drop=args.use_dropout,
-            nl=nl,
-            output_nl=output_nl,
-            hidden_size=args.fc_hidden_size
-        ).to(device=device)
-    elif args.enc_dec_net == "cnn":
-        dec = FullyConvDecoderVAE(
-            input=args.dim_x[0] + args.frame_stacks,
-            latent_size=args.dim_z,
-            bn=args.use_batch_norm,
-            drop=args.use_dropout,
-            img_dim=args.dim_x[1],
-            nl=nl,
-            output_nl=output_nl
-        ).to(device=device)
-    else:
-        raise NotImplementedError()
-        
-    try:
-        dec.load_state_dict(torch.load(path + "/dec.pth", map_location=device))
-        if mode == 'eval':
-            dec.eval()
-        elif mode == 'train':
-            dec.train()
-        else:
-            raise NotImplementedError()
-    except Exception as e: 
-        print(e)            
+def weight_norm(m):
+    weight_norm_layers = [
+        nn.Linear, 
+        nn.Conv1d, 
+        nn.Conv2d, 
+        nn.Conv3d,
+        nn.ConvTranspose1d,
+        nn.ConvTranspose2d,
+        nn.ConvTranspose3d,
+    ]
 
-    # Dynamics network
-    if args.dyn_net == "linearmix":
-        dyn = LinearMixSSM(
-            dim_z=args.dim_z,
-            dim_u=args.dim_u,
-            hidden_size=args.rnn_hidden_size,
-            bidirectional=args.use_bidirectional,
-            net_type=args.rnn_net,
-            K=args.K
-        ).to(device=device)
-    elif args.dyn_net == "linearrank1":
-        dyn = LinearSSM(
-            dim_z=args.dim_z,
-            dim_u=args.dim_u,
-            hidden_size=args.rnn_hidden_size,
-            bidirectional=args.use_bidirectional,
-            net_type=args.rnn_net
-        ).to(device=device)
-    elif args.dyn_net == "nonlinear":
-        dyn = NonLinearSSM(
-            dim_z=args.dim_z,
-            dim_u=args.dim_u,
-            hidden_size=args.rnn_hidden_size,
-            bidirectional=args.use_bidirectional,
-            net_type=args.rnn_net
-        ).to(device=device)
-    else:
-        raise NotImplementedError()
-
-    try:
-        dyn.load_state_dict(torch.load(path + "/dyn.pth", map_location=device))
-        if mode == 'eval':
-            dyn.eval()
-        elif mode == 'train':
-            dyn.train()
-        else:
-            raise NotImplementedError()
-        
-    except Exception as e: 
-        print(e)             
-    
-    return enc, dec, dyn
+    if type(m) in weight_norm_layers:
+        torch.nn.utils.weight_norm(m)
 
 def load_vh_models(args, path=None, mode='eval', device='cuda:0'):
     """Load the trained visual haptic models based on args."""
@@ -270,7 +109,6 @@ def load_vh_models(args, path=None, mode='eval', device='cuda:0'):
         raise NotImplementedError()
 
     nets = {}
-    z_dim_in = 0
 
     # Networks
     nets["img_enc"] = FullyConvEncoderVAE(
@@ -280,9 +118,8 @@ def load_vh_models(args, path=None, mode='eval', device='cuda:0'):
         drop=args.use_dropout,
         nl=nl,
         img_dim=args.dim_x[1],
-        stochastic=False
+        stochastic=(args.inference_network == "none")
     ).to(device=device)
-    z_dim_in += args.dim_z_img
 
     if args.context_modality != "none":
         if args.context_modality == "joint": 
@@ -304,23 +141,49 @@ def load_vh_models(args, path=None, mode='eval', device='cuda:0'):
             bn=args.use_batch_norm,
             drop=args.use_dropout,
             nl=nl,
-            stochastic=False
+            stochastic=(args.inference_network == "none")
         ).to(device=device)
-        z_dim_in += args.dim_z_context
 
-    if args.context == "ssm":
-        # Only sample from previous step
-        z_dim_in += args.dim_z_context
-    elif args.context == "rssm":
-        nets["rssm_enc"] = RNNEncoder(
-            dim_in=args.dim_z_context,
-            dim_out=args.dim_z_context,
-            train_initial_hidden=args.train_initial_hidden
+    if args.inference_network == "none":
+        pass
+    elif args.inference_network == "ssm":
+        nets["img_ssm_enc"] = FCNEncoderVAE(
+            dim_in=2*args.dim_z_img,
+            dim_out=args.dim_z_img,
+            bn=args.use_batch_norm,
+            drop=args.use_dropout,
+            nl=nl,
+            hidden_size=args.fc_hidden_size,
+            stochastic=True
+        )
+
+        if args.context_modality != "none":
+            nets["context_ssm_enc"] = FCNEncoderVAE(
+                dim_in=2*args.dim_z_context,
+                dim_out=args.dim_z_context,
+                bn=args.use_batch_norm,
+                drop=args.use_dropout,
+                nl=nl,
+                hidden_size=args.fc_hidden_size,
+                stochastic=True
+            )
+    elif args.inference_network == "rssm":
+        nets["img_rssm_enc"] = RNNEncoder(
+            dim_in=args.dim_z_img,
+            dim_out=args.dim_z_img,
+            train_initial_hidden=args.train_initial_hidden,
+            hidden_size=args.rnn_hidden_size,
+            stochastic=True
         ).to(device=device)
-        # Sample from previous step and recurrent hidden state
-        z_dim_in += args.dim_z_context
+        
+        if args.context_modality != "none":
+            nets["context_rssm_enc"] = RNNEncoder(
+                dim_in=args.dim_z_context,
+                dim_out=args.dim_z_context,
+                train_initial_hidden=args.train_initial_hidden,
+                stochastic=True
+            ).to(device=device)
 
-    dim_z_rec = args.dim_z
     if args.use_binary_ce:
         output_nl = None
     else:
@@ -328,7 +191,7 @@ def load_vh_models(args, path=None, mode='eval', device='cuda:0'):
 
     nets["img_dec"] = FullyConvDecoderVAE(
         input=args.dim_x[0] * (args.frame_stacks + 1),
-        latent_size=dim_z_rec,
+        latent_size=args.dim_z_img,
         bn=args.use_batch_norm,
         drop=args.use_dropout,
         nl=nl,
@@ -336,15 +199,16 @@ def load_vh_models(args, path=None, mode='eval', device='cuda:0'):
         output_nl=output_nl
     ).to(device=device)
 
-    nets["mix"] = FCNEncoderVAE(
-        dim_in=z_dim_in,
-        dim_out=args.dim_z,
-        bn=args.use_batch_norm,
-        drop=args.use_dropout,
-        nl=nl,
-        hidden_size=args.fc_hidden_size,
-        stochastic=True
-    ).to(device=device)
+    if args.context_modality != "none" and args.reconstruct_context:
+        nets["context_dec"] = CNNDecoder1D(
+            input=data_dim, 
+            latent_size=args.dim_z_context, 
+            bn=args.use_batch_norm, 
+            drop=args.use_dropout, 
+            nl=nl, 
+            output_nl=None, 
+            datalength=data_len
+        ).to(device=device)
 
     # Dynamics network
     if args.dyn_net == "linearmix":
@@ -369,7 +233,11 @@ def load_vh_models(args, path=None, mode='eval', device='cuda:0'):
         ).to(device=device)
     else:
         raise NotImplementedError()
-    
+
+    if args.use_weight_norm:
+        for k, v in nets.items():
+            v.apply(weight_norm)
+
     if path is not None:
         for k, model in nets.items():
             try:
