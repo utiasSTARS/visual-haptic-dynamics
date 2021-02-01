@@ -156,7 +156,7 @@ def encode(nets, args, x_ll, u_ll, device):
             q_z["z"] = z_obs_roll.reshape(-1, *z_obs_roll.shape[2:])
             q_z["mu"] = mu_z_obs_roll.reshape(-1, *mu_z_obs_roll.shape[2:])
             q_z["cov"] = torch.diag_embed(torch.exp(logvar_z_obs_roll.reshape(-1, *logvar_z_obs_roll.shape[2:])))
-            return q_z, p_z
+            return q_z, p_z, h_t
         else:
             # Mix modalities with product of experts
             mu_z_obs_enc, logvar_z_obs_enc  = poe(
@@ -235,9 +235,9 @@ def setup_opt_iter(args):
             u_ll = u[:, range_ll]
             n, l = x_ll['img'].shape[0], x_ll['img'].shape[1]
             x_ll = {k:v.reshape(-1, *v.shape[2:]) for k, v in x_ll.items()}
-            print(x_ll["img"].shape, u_ll.shape)
+
             if args.use_prior_expert:
-                q_z, p_z = encode(nets, args, x_ll, u_ll, device=device)
+                q_z, p_z, h_t = encode(nets, args, x_ll, u_ll, device=device)
             else:
                 q_z = encode(nets, args, x_ll, u_ll, device=device)
 
@@ -275,8 +275,8 @@ def setup_opt_iter(args):
             q_z = {k:v.reshape(n, l, *v.shape[1:]).transpose(1,0) for k, v in q_z.items()}
 
             # Prior transition distributions without rollout
+            u_ll = u_ll.transpose(1,0)
             if not args.use_prior_expert:
-                u_ll = u_ll.transpose(1,0)
                 z_t1_hat, mu_z_t1_hat, var_z_t1_hat, (h_t, _) = nets["dyn"](
                     z_t=q_z["z"][:-1], 
                     mu_t=q_z["mu"][:-1], 
