@@ -9,6 +9,3 @@ __pycache__/
 *.swp
 *.code-workspace
 saved_models/
-experiments/data/
-experiments/results/
-experiments/goal_imgs/
