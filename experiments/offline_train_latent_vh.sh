@@ -20,17 +20,17 @@ opt=('adam')
 opt_vae_base_epochs=(0)
 opt_n_step_pred_epochs=(0)
 n_annealing_epoch=(0)
-debug=('True')
-nl=('elu')
+debug=('False')
+nl=('relu')
 frame_stack=(1)
 val_split=(0.1)
 lam_rec=(1.00)
 lam_kl=(1.00)
 n_checkpoint_epoch=(64)
 task="push64vh"
-comment="${task}_prior_expert"
+comment="${task}_stack_baseline"
 context_modality="joint"
-reconstruct_context=('True')
+reconstruct_context=('False')
 inference_network="none"
 use_context_frame_stack=('False')
 train_initial_hidden=('False')
@@ -42,11 +42,7 @@ ft_normalization=(100.0)
 dim_arm=(6)
 dim_ft=(6)
 context_seq_len=(32)
-# ft_normalization=(1.0)
-# dim_arm=(2)
-# dim_ft=(3)
-# context_seq_len=(10)
-use_prior_expert=("True")
+use_prior_expert=("False")
 
 for n in {1..1}; do
     for dyn_net in ${dyn_nets[@]}; do
@@ -86,7 +82,7 @@ for n in {1..1}; do
                                                 --device $device \
                                                 --lr $lr \
                                                 --weight_init $weight_init \
-                                                --dataset $dataset \
+                                                --dataset $dataset $dataset1 $dataset2 \
                                                 --lam_rec $lam_rec \
                                                 --lam_kl $lam_kl \
                                                 --storage_base_path $storage_base_path \
