@@ -1,7 +1,6 @@
 from utils import (
     set_seed_torch, 
     common_init_weights, 
-    weight_norm,
     frame_stack,
     load_vh_models
 )
@@ -9,35 +8,22 @@ import numpy as np
 import random
 from args.parser import parse_vh_training_args
 from collections import OrderedDict
-from datetime import datetime
 from torch.utils.tensorboard import SummaryWriter
 import json
-import os, sys, time
-import re
+import os, time
 import pickle as pkl
 import bisect
 
 import torch
 import torch.nn as nn
-import torchvision as tv
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
 
-from networks import (
-    FullyConvEncoderVAE,
-    FullyConvDecoderVAE,
-    FCNEncoderVAE,
-    FCNDecoderVAE,
-    CNNEncoder1D,
-    RNNEncoder
-)
 from models import (
-    LinearMixSSM, 
-    NonLinearSSM,
     ProductOfExperts
 )
-from datasets import VisualHaptic, ImgCached
-from losses import torch_kl, kl
+from datasets import VisualHaptic
+from losses import kl
 
 def encode(nets, args, x_ll, u_ll, device):
     if args.context_modality != "none":
@@ -51,30 +37,13 @@ def encode(nets, args, x_ll, u_ll, device):
 
     # 1.a. Encoding q(z) distribution for image
     q_z_img = {"z": None, "mu": None, "logvar": None}
-    if args.inference_network == "none":
-        q_z_img["z"], q_z_img["mu"], q_z_img["logvar"] = nets["img_enc"](x_ll['img'])
-    elif args.inference_network == "ssm":
-        #TODO: SSM implementation
-        pass
-    elif args.inference_network == "rssm":
-        z_img_inp = nets["img_enc"](x_ll['img'])
-        z_img_inp = z_img_inp.reshape(n, l, *z_img_inp.shape[1:]).transpose(1,0)
-        q_z_img["z"], q_z_img["mu"], q_z_img["logvar"], _ = nets["img_rssm_enc"](z_img_inp)
-        q_z_img = {k:v.transpose(1,0).reshape(-1, *v.shape[2:]) for k, v in q_z_img.items()}
+    q_z_img["z"], q_z_img["mu"], q_z_img["logvar"] = nets["img_enc"](x_ll['img'])
+
     
     # 1.b. Encoding q(z) distribution for extra modalities
     if args.context_modality != "none":
         q_z_context = {"z": None, "mu": None, "logvar": None}
-        if args.inference_network == "none":
-            q_z_context["z"], q_z_context["mu"], q_z_context["logvar"] = nets["context_enc"](x_ll["context"])
-        elif args.inference_network == "ssm":
-            #TODO: SSM implementation
-            pass
-        elif args.inference_network == "rssm":
-            z_context_inp  = nets["context_enc"](x_ll["context"])
-            z_context_inp = z_context_inp.reshape(n, l, *z_context_inp.shape[1:]).transpose(1,0)
-            q_z_context["z"], q_z_context["mu"], q_z_context["logvar"], _ = nets["context_rssm_enc"](z_context_inp)
-            q_z_context = {k:v.transpose(1,0).reshape(-1, *v.shape[2:]) for k, v in q_z_context.items()}
+        q_z_context["z"], q_z_context["mu"], q_z_context["logvar"] = nets["context_enc"](x_ll["context"])
         
         # Include prior expert factorization
         if args.use_prior_expert:
@@ -471,17 +440,11 @@ def train(args):
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(opt_all)
 
     # Setup dataset
-    if args.task == "push64vh":
-        dataset = VisualHaptic(
-            args.dataset[0],
-            rgb=args.dim_x[0] == 3,
-            normalize_ft = args.ft_normalization
-        )
-    elif args.task == "pendulum64":
-        dataset = ImgCached(
-            args.dataset[0],
-            rgb=args.dim_x[0] == 3,
-        )
+    dataset = VisualHaptic(
+        args.dataset[0],
+        rgb=args.dim_x[0] == 3,
+        normalize_ft = args.ft_normalization
+    )
 
     # Append any extra datasets
     for extra_dataset in args.dataset[1:]:

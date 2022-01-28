@@ -118,7 +118,7 @@ def load_vh_models(args, path=None, mode='eval', device='cuda:0'):
         drop=args.use_dropout,
         nl=nl,
         img_dim=args.dim_x[1],
-        stochastic=(args.inference_network == "none")
+        stochastic=True
     ).to(device=device)
 
     if args.context_modality != "none":
@@ -141,48 +141,8 @@ def load_vh_models(args, path=None, mode='eval', device='cuda:0'):
             bn=args.use_batch_norm,
             drop=args.use_dropout,
             nl=nl,
-            stochastic=(args.inference_network == "none")
-        ).to(device=device)
-
-    if args.inference_network == "none":
-        pass
-    elif args.inference_network == "ssm":
-        nets["img_ssm_enc"] = FCNEncoderVAE(
-            dim_in=2*args.dim_z_img,
-            dim_out=args.dim_z_img,
-            bn=args.use_batch_norm,
-            drop=args.use_dropout,
-            nl=nl,
-            hidden_size=args.fc_hidden_size,
-            stochastic=True
-        )
-
-        if args.context_modality != "none":
-            nets["context_ssm_enc"] = FCNEncoderVAE(
-                dim_in=2*args.dim_z_context,
-                dim_out=args.dim_z_context,
-                bn=args.use_batch_norm,
-                drop=args.use_dropout,
-                nl=nl,
-                hidden_size=args.fc_hidden_size,
-                stochastic=True
-            )
-    elif args.inference_network == "rssm":
-        nets["img_rssm_enc"] = RNNEncoder(
-            dim_in=args.dim_z_img,
-            dim_out=args.dim_z_img,
-            train_initial_hidden=args.train_initial_hidden,
-            hidden_size=args.rnn_hidden_size,
             stochastic=True
         ).to(device=device)
-        
-        if args.context_modality != "none":
-            nets["context_rssm_enc"] = RNNEncoder(
-                dim_in=args.dim_z_context,
-                dim_out=args.dim_z_context,
-                train_initial_hidden=args.train_initial_hidden,
-                stochastic=True
-            ).to(device=device)
 
     if args.use_binary_ce:
         output_nl = None

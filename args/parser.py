@@ -13,7 +13,6 @@ def parse_common_training_args(parser=None):
     parser.add_argument('--device', type=str, default='cuda', help='Device to use for PyTorch')
     parser.add_argument('--cudnn_deterministic', type=str2bool, default=True, help='Use cudnn deterministic')
     parser.add_argument('--cudnn_benchmark', type=str2bool, default=False, help='Use cudnn benchmark')
-    parser.add_argument('--task', type=str, default="push64vh", help='The task that is being trained on')
     parser.add_argument('--comment', type=str, default="None", help='Comment to describe model')
     parser.add_argument('--random_seed', type=int, default=333, help='Random seed')
 
@@ -58,7 +57,6 @@ def parse_vh_training_args():
     parser.add_argument('--context_modality', choices=['none', 'arm', 'ft', 'joint'], default='none', help='Context modality')
     parser.add_argument('--context_seq_len', type=int, default=32, help='Sequence length of high frequency data per image')
     parser.add_argument('--use_context_frame_stack', type=str2bool, default=False, help='Stack context modality')
-    parser.add_argument('--inference_network', choices=['none', 'ssm', 'rssm'], default='none', help='Extra information for recognition network')
     parser.add_argument('--ft_normalization', type=float, default=100.0, help='Normalize ft data by this')
     parser.add_argument('--dim_arm', type=int, default=6, help='Feature length of arm sensors')
     parser.add_argument('--dim_ft', type=int, default=6, help='Feature length of ft data')
