@@ -10,7 +10,6 @@ weight_norm=('True')
 bi_directionals=('False')
 weight_inits=('default')
 Ks=(15)
-rnn_nets=('gru')
 dyn_nets=('linearmix')
 n_epochs=(3072)
 opt=('adam')
@@ -91,7 +90,6 @@ for n in {1..1}; do
                                                 --opt_vae_base_epochs $opt_vae_base_epoch \
                                                 --opt_n_step_pred_epochs $opt_n_step_pred_epochs 3072 \
                                                 --opt $opt \
-                                                --rnn_net $rnn_net \
                                                 --dyn_net $dyn_net \
                                                 --task $task \
                                                 --val_split $val_split \

@@ -1,7 +1,5 @@
 import torch
 import torch.nn as nn
-from torch.distributions import MultivariateNormal
-from networks import FullyConvEncoderVAE, FullyConvDecoderVAE
 
 class LinearMixSSM(nn.Module):
     """
@@ -20,8 +18,7 @@ class LinearMixSSM(nn.Module):
     """
     def __init__(
         self, dim_z, dim_u, hidden_size=128, 
-        K=1, layers=1, bidirectional=False, 
-        net_type="lstm", learn_uncertainty=False,
+        K=1, layers=1, bidirectional=False, learn_uncertainty=False,
         train_initial_hidden=False
     ):
         super(LinearMixSSM, self).__init__()
@@ -33,34 +30,19 @@ class LinearMixSSM(nn.Module):
         self.hidden_size = hidden_size
         self.bidirectional = bidirectional
         self.train_initial_hidden = train_initial_hidden
-        self.net_type = net_type
 
-        if net_type == "gru":
-            self.rnn = nn.GRU(
-                input_size=dim_z + dim_u, 
-                hidden_size=hidden_size, 
-                num_layers=layers, 
-                bidirectional=bidirectional
-            )
-            if self.train_initial_hidden:
-                if bidirectional:
-                    self.h_0 = nn.Parameter(torch.randn(layers * 2, 1, hidden_size))
-                else:
-                    self.h_0 = nn.Parameter(torch.randn(layers, 1, hidden_size))
-        elif net_type =="lstm":
-            self.rnn = nn.LSTM(
-                input_size=dim_z + dim_u, 
-                hidden_size=hidden_size, 
-                num_layers=layers, 
-                bidirectional=bidirectional
-            )
-            if self.train_initial_hidden:
-                if bidirectional:
-                    self.h_0 = nn.Parameter(torch.randn(layers * 2, 1, hidden_size))
-                    self.c_0 = nn.Parameter(torch.randn(layers * 2, 1, hidden_size))
-                else:
-                    self.h_0 = nn.Parameter(torch.randn(layers * 1, 1, hidden_size))
-                    self.c_0 = nn.Parameter(torch.randn(layers * 1, 1, hidden_size))
+        self.rnn = nn.GRU(
+            input_size=dim_z + dim_u, 
+            hidden_size=hidden_size, 
+            num_layers=layers, 
+            bidirectional=bidirectional
+        )
+        if self.train_initial_hidden:
+            if bidirectional:
+                self.h_0 = nn.Parameter(torch.randn(layers * 2, 1, hidden_size))
+            else:
+                self.h_0 = nn.Parameter(torch.randn(layers, 1, hidden_size))
+
 
         if bidirectional:
             self.linear = nn.Linear(in_features=2*hidden_size, out_features=K)
@@ -107,13 +89,7 @@ class LinearMixSSM(nn.Module):
         inp = torch.cat([z_t, u], dim=-1)
         if h_0 is None:
             if self.train_initial_hidden:
-                if self.net_type == "gru":
-                    h_0 = self.h_0.repeat(1, n, 1)
-                elif self.net_type == "lstm":
-                    h_0 = (
-                        self.h_0.repeat(1, n, 1),
-                        self.c_0.repeat(1, n, 1)
-                    )
+                h_0 = self.h_0.repeat(1, n, 1)
                 h_t, h_n = self.rnn(inp, h_0)
             else:
                 h_t, h_n = self.rnn(inp)
@@ -196,8 +172,8 @@ class NonLinearSSM(nn.Module):
     """
     def __init__(
         self, dim_z, dim_u, hidden_size=128,
-        layers=1, bidirectional=False, 
-        net_type="lstm", train_initial_hidden=False
+        layers=1, bidirectional=False,
+        train_initial_hidden=False
     ):    
         super(NonLinearSSM, self).__init__()
         self.dim_z = dim_z
@@ -205,34 +181,18 @@ class NonLinearSSM(nn.Module):
         self.hidden_size = hidden_size
         self.bidirectional = bidirectional
         self.train_initial_hidden = train_initial_hidden
-        self.net_type = net_type
 
-        if net_type == "gru":
-            self.rnn = nn.GRU(
-                input_size=dim_z + dim_u, 
-                hidden_size=hidden_size, 
-                num_layers=layers, 
-                bidirectional=bidirectional
-            )
-            if self.train_initial_hidden:
-                if bidirectional:
-                    self.h_0 = nn.Parameter(torch.randn(layers * 2, 1, hidden_size))
-                else:
-                    self.h_0 = nn.Parameter(torch.randn(layers, 1, hidden_size))
-        elif net_type =="lstm":
-            self.rnn = nn.LSTM(
-                input_size=dim_z + dim_u, 
-                hidden_size=hidden_size, 
-                num_layers=layers, 
-                bidirectional=bidirectional
-            )
-            if self.train_initial_hidden:
-                if bidirectional:
-                    self.h_0 = nn.Parameter(torch.randn(layers * 2, 1, hidden_size))
-                    self.c_0 = nn.Parameter(torch.randn(layers * 2, 1, hidden_size))
-                else:
-                    self.h_0 = nn.Parameter(torch.randn(layers * 1, 1, hidden_size))
-                    self.c_0 = nn.Parameter(torch.randn(layers * 1, 1, hidden_size))
+        self.rnn = nn.GRU(
+            input_size=dim_z + dim_u, 
+            hidden_size=hidden_size, 
+            num_layers=layers, 
+            bidirectional=bidirectional
+        )
+        if self.train_initial_hidden:
+            if bidirectional:
+                self.h_0 = nn.Parameter(torch.randn(layers * 2, 1, hidden_size))
+            else:
+                self.h_0 = nn.Parameter(torch.randn(layers, 1, hidden_size))
 
         if bidirectional:
             self.fc_mu = nn.Linear(2*hidden_size, dim_z)
@@ -271,13 +231,7 @@ class NonLinearSSM(nn.Module):
         inp = torch.cat([z_t, u], dim=-1)
         if h_0 is None:
             if self.train_initial_hidden:
-                if self.net_type == "gru":
-                    h_0 = self.h_0.repeat(1, n, 1)
-                elif self.net_type == "lstm":
-                    h_0 = (
-                        self.h_0.repeat(1, n, 1),
-                        self.c_0.repeat(1, n, 1)
-                    )
+                h_0 = self.h_0.repeat(1, n, 1)
                 h_t, h_n = self.rnn(inp, h_0)
             else:
                 h_t, h_n = self.rnn(inp)

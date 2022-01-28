@@ -58,7 +58,7 @@ def visual_haptic_2D_osc(frameskip=2):
         for m in mag_list:
             env.reset()
             for _ in range(5):
-                env.step(action=np.array([0, h]))
+                obs, reward, done, info = env.step(action=np.array([0, h]))
             for jj in range(ll): 
                 u_x = np.clip(np.random.normal(0.35 * m, 0.20), 0.00, 1.00) 
                 u_y = np.clip(np.random.normal(0, 0.25), -0.30, 0.30) 

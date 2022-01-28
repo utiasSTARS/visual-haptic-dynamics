@@ -217,7 +217,6 @@ def load_vh_models(args, path=None, mode='eval', device='cuda:0'):
             dim_u=args.dim_u,
             hidden_size=args.rnn_hidden_size,
             bidirectional=args.use_bidirectional,
-            net_type=args.rnn_net,
             K=args.K,
             train_initial_hidden=args.train_initial_hidden,
             learn_uncertainty=args.learn_uncertainty
@@ -228,7 +227,6 @@ def load_vh_models(args, path=None, mode='eval', device='cuda:0'):
             dim_u=args.dim_u,
             hidden_size=args.rnn_hidden_size,
             bidirectional=args.use_bidirectional,
-            net_type=args.rnn_net,
             train_initial_hidden=args.train_initial_hidden
         ).to(device=device)
     else:
